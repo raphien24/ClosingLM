@@ -167,7 +167,7 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
               <TH label="Avg / Target" sortable sk="avgDaily" />
               <TH label="Total Deliv"  sortable sk="totalDelivered" />
               <TH label="Success %"    sortable sk="successRate" />
-              <TH label="Hari Aktif" />
+              <TH label="Hari Aktif"   sortable sk="shiftsCount" />
               <TH label="Shift"        sortable sk="shiftsCount" />
             </tr>
           </thead>

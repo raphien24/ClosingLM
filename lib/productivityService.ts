@@ -68,18 +68,18 @@ export function parseDate(dateStr: string | undefined): Date | null {
     const num = Number(s);
     if (num > 40000 && num < 70000) {
       const ymd = serialToYMD(num);
-      const d = new Date(ymd + "T00:00:00+07:00");
-      return isNaN(d.getTime()) ? null : d;
+      const [y, m, d] = ymd.split("-").map(Number);
+      return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
     }
   }
 
   // Format YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-    const d = new Date(s + "T00:00:00+07:00");
-    return isNaN(d.getTime()) ? null : d;
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
   }
 
-  // Format MM/DD/YYYY (default di sheet PRODUCTIVITY)
+  // Format MM/DD/YYYY atau DD/MM/YYYY (default di sheet PRODUCTIVITY)
   const parts = s.split(/[\/\-]/);
   if (parts.length !== 3) return null;
   let [m, d, y] = parts.map(Number);
@@ -90,9 +90,7 @@ export function parseDate(dateStr: string | undefined): Date | null {
     m = d;
     d = tmp;
   }
-  const iso = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}T00:00:00+07:00`;
-  const date = new Date(iso);
-  return isNaN(date.getTime()) ? null : date;
+  return new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
 }
 
 /** Konversi row Sheets ke CourierRecord */
@@ -144,7 +142,10 @@ function filterActive(
 export function normalizeDateKey(dateStr: string | undefined): string {
   const d = parseDate(dateStr);
   if (!d) return (dateStr || "").trim();
-  return format(d, "yyyy-MM-dd");
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /** Dedup: 1 kurir per tanggal (ambil baris terbaru jika ada duplikat) */
@@ -575,7 +576,7 @@ export async function getCourierSchedule(
     row.totalOnhold      = (row.totalOnhold || 0) + (r.onhold || 0);
     const d = parseDate(r.date);
     if (d) {
-      const dow = d.getDay();
+      const dow = d.getUTCDay();
       const idx = dow === 0 ? 6 : dow - 1;
       const dayKey = DAY[idx];
       row.activeDays[dayKey] = true;
@@ -583,9 +584,13 @@ export async function getCourierSchedule(
       const tgt = resolveTarget(r, weekStart, appealMap, mondayMap);
       const deliv = r.delivered || 0;
       const ho = r.handed_over || 0;
+      const dateKey = normalizeDateKey(r.date);
+      const MONTHS = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+      const dateLabel = `${String(d.getUTCDate()).padStart(2, "0")} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+
       row.dailyDetails!.push({
-        dateKey: format(d, "yyyy-MM-dd"),
-        dateLabel: format(d, "dd MMM yyyy"),
+        dateKey,
+        dateLabel,
         dayKey,
         dayName: DAY_NAMES_BY_IDX[idx],
         zone_id: r.zone_id || row.zone_id || "-",

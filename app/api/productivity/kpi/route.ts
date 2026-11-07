@@ -21,9 +21,9 @@ export async function GET(req: NextRequest) {
   const vehicle        = searchParams.get("vehicle")    || "all";
 
   try {
-    const weekStartDate = new Date(weekStartParam + "T00:00:00+07:00");
-    const weekEndDate   = endOfWeek(weekStartDate, { weekStartsOn: 1 });
-    weekEndDate.setHours(23, 59, 59, 999);
+    const [y, m, d] = weekStartParam.split("-").map(Number);
+    const weekStartDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+    const weekEndDate   = new Date(Date.UTC(y, m - 1, d + 6, 23, 59, 59, 999));
 
     const kpi = await getKpiMetrics(
       user.hubName,
