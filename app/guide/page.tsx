@@ -74,7 +74,6 @@ const STEPS: Step[] = [
       "Periksa tabel preview hasil OCR, koreksi jika ada angka yang keliru.",
       "Sistem menandai anomali (angka tidak wajar) sebelum disimpan.",
     ],
-    tip: "Hub yang sudah memakai Auto Sync (Apps Script) tidak perlu input manual.",
   },
   {
     phase: "Setiap Hari",
