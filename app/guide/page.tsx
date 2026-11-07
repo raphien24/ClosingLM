@@ -46,18 +46,18 @@ const STEPS: Step[] = [
   },
   {
     phase: "Setiap Minggu (Senin)",
-    title: "Atur Target Produktivitas",
-    desc: "Tentukan target per shift untuk setiap segmen sebelum minggu berjalan.",
+    title: "Target Produktivitas & Adjust Target",
+    desc: "Target otomatis mengambil target di hari Senin. Jika ada perubahan target, lakukan perubahan pada menu Adjust Target.",
     icon: Target,
     color: "from-amber-500 to-orange-600",
     href: "/productivity/targets",
     cta: "Buka Adjust Target",
     points: [
-      "Isi target 2W Dedicated, 2W Kurir Plus, dan 4W Dedicated.",
-      "Target hari Senin menjadi acuan untuk seluruh minggu (Senin–Minggu).",
-      "Jika target belum diisi, dashboard akan menampilkan banner peringatan kuning.",
+      "Target otomatis mengambil target di hari Senin sebagai acuan satu minggu berjalan.",
+      "Jika ada perubahan target, lakukan perubahan target pada menu Adjust Target.",
+      "Target mencakup segmen 2W Dedicated, 2W Kurir Plus, dan 4W Dedicated.",
     ],
-    tip: "Lakukan di awal minggu agar perhitungan achievement langsung akurat.",
+    tip: "Gunakan menu Adjust Target kapan saja jika terdapat penyesuaian target di tengah minggu.",
   },
   {
     phase: "Setiap Hari",
@@ -326,7 +326,7 @@ export default function UserGuidePage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 -mt-6 relative z-10">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { icon: Target, label: "Senin", text: "Set Target", c: "text-amber-600" },
+            { icon: Target, label: "Senin", text: "Target & Adjust", c: "text-amber-600" },
             { icon: Upload, label: "Harian", text: "Input Data", c: "text-violet-600" },
             { icon: LayoutDashboard, label: "Monitoring", text: "Dashboard Closing", c: "text-emerald-600" },
             { icon: Rocket, label: "Evaluasi", text: "Weekly & Monthly", c: "text-blue-600" },
