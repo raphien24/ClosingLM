@@ -16,6 +16,8 @@ import {
   Sun,
   Moon,
   BookOpen,
+  Menu,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -38,7 +40,25 @@ export function Navbar() {
   const { user, hubName, hubUser } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [prodMenuOpen, setProdMenuOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Lock body scroll when mobile sidebar is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     const saved = localStorage.getItem("jtt08_theme");
@@ -66,24 +86,36 @@ export function Navbar() {
 
       <div className="w-full px-3 sm:px-6">
         <div className="flex items-center h-16 gap-2">
+          {/* Mobile Hamburger Button */}
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="sm:hidden p-2 -ml-1 rounded-xl text-slate-700 hover:bg-slate-100 active:bg-slate-200 transition-colors focus:outline-none"
+            aria-label="Buka menu navigasi"
+          >
+            <Menu className="h-6 w-6 text-slate-800" />
+          </button>
+
           {/* Logo + Title */}
           <Link
             href="/dashboard"
-            className="group flex items-center gap-3 mr-4 py-1 focus:outline-none"
+            className="group flex items-center gap-2.5 sm:gap-3 mr-2 sm:mr-4 py-1 focus:outline-none"
           >
-            <div className="relative flex items-center justify-center w-11 h-11 rounded-xl bg-gradient-to-br from-slate-900 to-blue-950 p-1 shadow-md shadow-blue-950/15 ring-1 ring-amber-400/40 group-hover:scale-105 group-hover:shadow-lg group-hover:ring-amber-400 transition-all duration-300">
+            <div className="relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-slate-900 to-blue-950 p-1 shadow-md shadow-blue-950/15 ring-1 ring-amber-400/40 group-hover:scale-105 group-hover:shadow-lg group-hover:ring-amber-400 transition-all duration-300">
               <img
                 src="/logo-jtt08.png"
                 alt="Logo JTT08"
                 className="w-full h-full object-contain drop-shadow-xs"
               />
             </div>
-            <div className="hidden sm:block">
-              <p className="text-sm font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-blue-900 to-blue-700 bg-clip-text text-transparent group-hover:from-blue-700 group-hover:to-indigo-600 transition-all">
-                Closing Report LM JTT08
+            <div className="flex flex-col">
+              <p className="text-xs sm:text-sm font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-blue-900 to-blue-700 bg-clip-text text-transparent group-hover:from-blue-700 group-hover:to-indigo-600 transition-all">
+                <span className="sm:hidden">Closing LM</span>
+                <span className="hidden sm:inline">Closing Report LM JTT08</span>
               </p>
-              <p className="text-[11px] font-medium text-slate-400 leading-tight">
-                Last Mile Operations Portal
+              <p className="text-[10px] sm:text-[11px] font-medium text-slate-400 leading-tight">
+                <span className="sm:hidden">{hubName || "JTT08"}</span>
+                <span className="hidden sm:inline">Last Mile Operations Portal</span>
               </p>
             </div>
           </Link>
@@ -237,35 +269,6 @@ export function Navbar() {
                   </span>
                 </div>
 
-                {/* Mobile nav */}
-                <div className="sm:hidden border-b border-slate-100 py-1">
-                  {mainLinks.map(({ href, label, icon: Icon }) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50"
-                    >
-                      <Icon className="h-4 w-4 text-slate-400" />
-                      {label}
-                    </Link>
-                  ))}
-                  <div className="px-4 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                    Productivity
-                  </div>
-                  {productivityLinks.map(({ href, label, icon: Icon }) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      onClick={() => setUserMenuOpen(false)}
-                      className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 pl-6 hover:bg-slate-50"
-                    >
-                      <Icon className="h-4 w-4 text-slate-400" />
-                      {label}
-                    </Link>
-                  ))}
-                </div>
-
                 <button
                   onClick={() => signOut({ callbackUrl: "/login" })}
                   className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
@@ -280,16 +283,183 @@ export function Navbar() {
         </div>
       </div>
 
-      {/* Click outside to close */}
+      {/* Click outside to close desktop dropdowns */}
       {(prodMenuOpen || userMenuOpen) && (
         <div
-          className="fixed inset-0 z-40"
+          className="fixed inset-0 z-40 hidden sm:block"
           onClick={() => {
             setProdMenuOpen(false);
             setUserMenuOpen(false);
           }}
         />
       )}
+
+      {/* Mobile Drawer (Sidebar) */}
+      <div
+        className={cn(
+          "fixed inset-0 z-50 sm:hidden transition-all duration-300",
+          mobileOpen
+            ? "visible opacity-100 pointer-events-auto"
+            : "invisible opacity-0 pointer-events-none"
+        )}
+      >
+        {/* Backdrop overlay */}
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity duration-300"
+          onClick={() => setMobileOpen(false)}
+        />
+
+        {/* Sliding Sidebar Panel */}
+        <aside
+          className={cn(
+            "fixed top-0 bottom-0 left-0 w-[285px] max-w-[85vw] bg-white border-r border-slate-200 shadow-2xl flex flex-col z-50 transition-transform duration-300 ease-out",
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
+          {/* Drawer Header with Logo and Minimize / Close Button */}
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+            <div className="flex items-center gap-2.5">
+              <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-slate-900 to-blue-950 p-1 shadow-md shadow-blue-950/15 ring-1 ring-amber-400/40">
+                <img
+                  src="/logo-jtt08.png"
+                  alt="Logo JTT08"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+              <div>
+                <p className="text-xs font-extrabold tracking-tight text-slate-900 leading-tight">
+                  Closing LM JTT08
+                </p>
+                <p className="text-[10px] font-medium text-slate-500 leading-tight">
+                  Last Mile Operations
+                </p>
+              </div>
+            </div>
+
+            {/* Minimize / Close Button */}
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition-colors focus:outline-none"
+              aria-label="Tutup menu navigasi"
+              title="Minimize Menu"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Hub Badge Indicator */}
+          {hubName && (
+            <div className="mx-3 mt-3 px-3 py-2 rounded-xl bg-blue-50/80 border border-blue-200/60 flex items-center justify-between text-xs">
+              <span className="text-slate-500 text-[11px] font-medium">Hub Operasional:</span>
+              <span className="font-bold text-blue-700 text-xs">{hubName}</span>
+            </div>
+          )}
+
+          {/* Scrollable Navigation Menu List */}
+          <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4">
+            {/* Main Menu Section */}
+            <div>
+              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Menu Utama
+              </p>
+              <div className="space-y-1">
+                {mainLinks.map(({ href, label, icon: Icon }) => {
+                  const active =
+                    pathname === href ||
+                    (href !== "/dashboard" && pathname.startsWith(href));
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150",
+                        active
+                          ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-4 w-4 flex-shrink-0",
+                          active ? "text-white" : "text-slate-500"
+                        )}
+                      />
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Productivity Section */}
+            <div>
+              <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Fleet Productivity
+              </p>
+              <div className="space-y-1">
+                {productivityLinks.map(({ href, label, icon: Icon }) => {
+                  const active = pathname === href;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150",
+                        active
+                          ? "bg-blue-600 text-white shadow-sm shadow-blue-600/30"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-4 w-4 flex-shrink-0",
+                          active ? "text-white" : "text-slate-500"
+                        )}
+                      />
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          {/* Drawer Footer with User Info & Sign Out */}
+          <div className="p-3 border-t border-slate-100 bg-slate-50/80 space-y-2">
+            <div className="flex items-center gap-2.5 px-2 py-1.5">
+              {user?.image ? (
+                <img
+                  src={user.image}
+                  alt=""
+                  className="w-8 h-8 rounded-full ring-2 ring-blue-500/20"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-bold text-xs shadow-xs">
+                  {(user?.name || user?.email || "U")[0].toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-900 truncate">
+                  {hubUser || user?.name}
+                </p>
+                <p className="text-[10px] text-slate-500 truncate">
+                  {user?.email}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              Keluar Akun
+            </button>
+          </div>
+        </aside>
+      </div>
     </header>
   );
 }
