@@ -86,15 +86,18 @@ export async function POST(req: NextRequest) {
     // 4. Parse baris data FMS secara aman
     const parseResult = parseFmsRows(rawData, manualDate);
 
+    // Jika saat ini belum ada kurir yang mulai shift / belum ada aktivitas pengiriman
     if (parseResult.rows.length === 0) {
-      return NextResponse.json(
-        {
-          error:
-            "Tidak ada data kurir valid yang terbaca. Pastikan file adalah hasil export FMS Fleet Productivity.",
-          details: parseResult.errors,
-        },
-        { status: 400 }
-      );
+      return NextResponse.json({
+        success: true,
+        message:
+          "File Excel berhasil diterima dan dibaca. Belum ada kurir aktif / aktivitas pengiriman pada data saat ini (0 kurir). Database RAW tetap aman dan tidak diubah.",
+        hub: hubName.toUpperCase().trim(),
+        dateDetected: parseResult.dateDetected || null,
+        totalCouriersProcessed: 0,
+        savedNew: 0,
+        updatedExisting: 0,
+      });
     }
 
     // 5. Konversi ke struktur CourierRecord
