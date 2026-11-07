@@ -5,6 +5,13 @@ export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
   const session = req.auth;
 
+  // Izinkan semua file asset statis gambar / font di public
+  if (
+    pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|woff|woff2|ttf|eot)$/i)
+  ) {
+    return NextResponse.next();
+  }
+
   // Halaman publik / webhook yang tidak perlu session login
   const publicPaths = [
     "/login",
@@ -37,6 +44,6 @@ export const proxy = auth((req) => {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

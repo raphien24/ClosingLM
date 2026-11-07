@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import {
   Ocean,
@@ -10,7 +10,7 @@ import {
   PirateShip,
   Seagull,
 } from "./PirateModels";
-import { Compass, FastForward, Ship, Sparkles } from "lucide-react";
+import { Compass, FastForward, Sparkles } from "lucide-react";
 
 const DURATION_SEC = 3.8;
 
@@ -25,6 +25,7 @@ function CaptainPovScene({
   const shipRef = useRef<THREE.Group>(null);
   const speedRef = useRef(1.5);
   const elapsedRef = useRef(0);
+  const { size } = useThree();
 
   useFrame(({ clock, camera }, delta) => {
     elapsedRef.current += delta;
@@ -52,16 +53,30 @@ function CaptainPovScene({
     }
 
     // Kamera POV orang pertama (posisi mata kapten di anjungan buritan)
-    // Berada tepat di belakang kemudi (x = -2.3, y = 2.45, z = 0), memandang ke haluan (+X)
+    // Disesuaikan secara dinamis agar pas sempurna di HP (portrait) maupun laptop/tablet (landscape)
+    const aspect = size.width / Math.max(1, size.height);
+    const isPortrait = aspect < 1.0;
+
     const bobbingY = Math.sin(t * 2.8) * 0.06;
     const swayZ = Math.sin(t * 2.2) * 0.04;
-    const fovTarget = 52 + progress * 14; // FOV melebar seiring kecepatan bertambah
 
-    camera.position.set(-2.4, 2.45 + bobbingY, swayZ);
-    camera.lookAt(12, 2.3 + bobbingY * 0.5, swayZ * 0.3);
+    // Posisi kamera: mundur lebih jauh pada layar HP portrait agar kemudi dan tangan masuk frame sempurna
+    const baseCamX = isPortrait ? -3.45 : -2.65;
+    const baseCamY = isPortrait ? 2.82 : 2.52;
+    const lookTargetY = isPortrait ? 2.15 : 2.25;
+
+    // FOV responsif: pada HP portrait FOV vertikal dinaikkan agar sudut horizontal tidak terpotong
+    const baseFov = isPortrait
+      ? Math.min(84, Math.max(68, (52 / aspect) * 0.72))
+      : 50;
+    const fovTarget = baseFov + progress * (isPortrait ? 8 : 12);
+
+    camera.position.set(baseCamX, baseCamY + bobbingY, swayZ);
+    camera.lookAt(14, lookTargetY + bobbingY * 0.4, swayZ * 0.25);
 
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov = fovTarget;
+      camera.aspect = aspect;
       camera.updateProjectionMatrix();
     }
   });
@@ -141,19 +156,20 @@ export function CaptainPovTransition({
 
   return (
     <div
-      className={`fixed inset-0 z-[100000] overflow-hidden select-none transition-opacity duration-500 ${
+      className={`fixed inset-0 w-screen h-screen h-[100dvh] z-[100000] overflow-hidden select-none transition-opacity duration-500 ${
         fadeWhite ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
       {/* 3D Canvas */}
       <Canvas
+        className="w-full h-full block"
         camera={{
-          position: [-2.4, 2.45, 0],
-          fov: 52,
+          position: [-2.85, 2.65, 0],
+          fov: 54,
           near: 0.1,
           far: 500,
         }}
-        dpr={[1, 2]}
+        dpr={typeof window !== "undefined" && window.innerWidth < 768 ? [1, 1.5] : [1, 2]}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
       >
         <CaptainPovScene flowRef={flowRef} onProgress={setProgress} />
@@ -169,35 +185,35 @@ export function CaptainPovTransition({
       />
 
       {/* Top Bar: Skip Button */}
-      <div className="absolute top-5 right-5 z-20">
+      <div className="absolute top-4 sm:top-5 right-4 sm:right-5 z-20">
         <button
           onClick={finish}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-amber-400/50 hover:border-amber-400 text-amber-300 hover:text-white text-xs font-bold shadow-xl backdrop-blur-md transition-all cursor-pointer group hover:scale-105 active:scale-95"
+          className="flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-slate-950/80 hover:bg-slate-900 border border-amber-400/50 hover:border-amber-400 text-amber-300 hover:text-white text-xs font-bold shadow-xl backdrop-blur-md transition-all cursor-pointer group hover:scale-105 active:scale-95"
         >
           <span>Lewati</span>
-          <FastForward className="h-4 w-4 group-hover:translate-x-0.5 transition-transform" />
+          <FastForward className="h-3.5 w-3.5 sm:h-4 sm:w-4 group-hover:translate-x-0.5 transition-transform" />
         </button>
       </div>
 
-      {/* Center Cinematic Welcome Card */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-[92%] max-w-xl z-20 pointer-events-none">
-        <div className="bg-slate-950/80 backdrop-blur-md rounded-2xl border border-amber-400/40 p-4 sm:p-5 shadow-2xl text-center text-white">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-extrabold uppercase tracking-widest mb-2">
-            <Compass className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "8s" }} />
+      {/* Center Cinematic Welcome Card (Responsive & Compact on Mobile) */}
+      <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[92%] sm:w-[85%] max-w-lg z-20 pointer-events-none">
+        <div className="bg-slate-950/85 backdrop-blur-md rounded-2xl border border-amber-400/40 p-3 sm:p-4 shadow-2xl text-center text-white">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-widest mb-1.5">
+            <Compass className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" style={{ animationDuration: "8s" }} />
             <span>KAPAL SIAP BERLAYAR · POV KAPTEEN</span>
           </div>
 
-          <h2 className="text-lg sm:text-xl font-extrabold text-white tracking-tight flex items-center justify-center gap-2">
+          <h2 className="text-base sm:text-xl font-extrabold text-white tracking-tight flex items-center justify-center gap-1.5">
             <span>Selamat Datang, Kapten {userName ? userName.split(" ")[0] : "JTT08"}!</span>
-            <Sparkles className="h-4 w-4 text-amber-400" />
+            <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400" />
           </h2>
 
-          <p className="text-xs sm:text-sm text-blue-200/90 mt-1">
-            Mengarungi operasional Last Mile Closing & Fleet Productivity...
+          <p className="text-[11px] sm:text-xs text-blue-200/90 mt-0.5">
+            Mengarungi operasional Last Mile Closing &amp; Fleet Productivity...
           </p>
 
           {/* Progress Bar */}
-          <div className="mt-3.5 w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden border border-slate-700">
+          <div className="mt-2.5 sm:mt-3 w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden border border-slate-700">
             <div
               className="h-full bg-gradient-to-r from-amber-400 via-blue-400 to-emerald-400 rounded-full transition-all duration-100 ease-linear shadow-[0_0_8px_rgba(251,191,36,0.6)]"
               style={{ width: `${Math.round(progress * 100)}%` }}
