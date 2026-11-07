@@ -10,8 +10,10 @@ import { FilterBar } from "@/components/dashboard/FilterBar";
 import { ClosingData, KpiSummary } from "@/types/closing";
 import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
-import { LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, Compass } from "lucide-react";
 import toast from "react-hot-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { CaptainPovTransition } from "@/components/pirate/CaptainPovTransition";
 
 const defaultKpi: KpiSummary = {
   totalDelivered: 0,
@@ -45,6 +47,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
 
   const today = todayWIB();
   const [selectedDate, setSelectedDate] = useState(
@@ -58,6 +61,23 @@ function DashboardContent() {
   const [allHubs, setAllHubs] = useState<string[]>([]);
   const [kpi, setKpi] = useState<KpiSummary>(defaultKpi);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Animasi 3D POV Kapten setelah login (?sail=1)
+  const [showSail, setShowSail] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("sail") === "1") {
+      setShowSail(true);
+    }
+  }, [searchParams]);
+
+  const handleSailComplete = () => {
+    setShowSail(false);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("sail");
+    const query = params.toString();
+    router.replace(`/dashboard${query ? `?${query}` : ""}`, { scroll: false });
+  };
 
   const fetchDashboard = useCallback(async () => {
     setIsLoading(true);
@@ -100,63 +120,82 @@ function DashboardContent() {
   const isToday = selectedDate === today;
 
   return (
-    <div className="w-full px-2 sm:px-4 py-4 space-y-4">
-      {/* Page Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-blue-900 text-white rounded-2xl px-5 py-4 shadow-md flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-xs p-1 border border-white/15 flex items-center justify-center shadow-inner">
-            <img
-              src="/logo-jtt08.png"
-              alt="Logo JTT08"
-              className="w-full h-full object-contain"
-            />
+    <>
+      {showSail && (
+        <CaptainPovTransition
+          userName={user?.name}
+          onComplete={handleSailComplete}
+        />
+      )}
+      <div className="w-full px-2 sm:px-4 py-4 space-y-4">
+        {/* Page Header */}
+        <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-blue-900 text-white rounded-2xl px-5 py-4 shadow-md flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-xs p-1 border border-white/15 flex items-center justify-center shadow-inner">
+              <img
+                src="/logo-jtt08.png"
+                alt="Logo JTT08"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <h1 className="text-xl font-extrabold tracking-tight">
+                Closing Report LM JTT08
+              </h1>
+              <p className="text-xs text-blue-200 mt-0.5 flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-emerald-300 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Monitoring
+                </span>
+                <span>•</span>
+                <span>
+                  {isToday
+                    ? "Hari ini — " + formatDate(selectedDate)
+                    : formatDate(selectedDate)}
+                </span>
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-extrabold tracking-tight">
-              Closing Report LM JTT08
-            </h1>
-            <p className="text-xs text-blue-200 mt-0.5 flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 text-emerald-300 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live Monitoring
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSail(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400/15 hover:bg-amber-400/25 border border-amber-300/40 text-amber-300 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
+              title="Putar Animasi Berlayar POV Kapten"
+            >
+              <Compass className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "12s" }} />
+              <span>POV Berlayar</span>
+            </button>
+
+            {!isToday && (
+              <span className="px-3 py-1 bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-semibold rounded-full">
+                Mode History
               </span>
-              <span>•</span>
-              <span>
-                {isToday
-                  ? "Hari ini — " + formatDate(selectedDate)
-                  : formatDate(selectedDate)}
-              </span>
-            </p>
+            )}
           </div>
         </div>
 
-        {!isToday && (
-          <span className="px-3 py-1 bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-semibold rounded-full">
-            Mode History
-          </span>
-        )}
+        {/* KPI Cards */}
+        <KpiCards kpi={kpi} isLoading={isLoading} />
+
+        {/* 5 Operational Insight Cards */}
+        <ClosingInsightCards data={closingData} isLoading={isLoading} />
+
+        {/* Filter Bar */}
+        <FilterBar
+          allHubs={allHubs}
+          missingHubs={closingData.filter((d) => !d.submitted_at).map((d) => d.nama_hub)}
+          selectedDate={selectedDate}
+          selectedHubs={selectedHubs}
+          onDateChange={setSelectedDate}
+          onHubsChange={setSelectedHubs}
+          onRefresh={fetchDashboard}
+          isLoading={isLoading}
+        />
+
+        {/* Hub Table */}
+        <HubTable data={closingData} isLoading={isLoading} />
       </div>
-
-      {/* KPI Cards */}
-      <KpiCards kpi={kpi} isLoading={isLoading} />
-
-      {/* 5 Operational Insight Cards */}
-      <ClosingInsightCards data={closingData} isLoading={isLoading} />
-
-      {/* Filter Bar */}
-      <FilterBar
-        allHubs={allHubs}
-        missingHubs={closingData.filter((d) => !d.submitted_at).map((d) => d.nama_hub)}
-        selectedDate={selectedDate}
-        selectedHubs={selectedHubs}
-        onDateChange={setSelectedDate}
-        onHubsChange={setSelectedHubs}
-        onRefresh={fetchDashboard}
-        isLoading={isLoading}
-      />
-
-      {/* Hub Table */}
-      <HubTable data={closingData} isLoading={isLoading} />
-    </div>
+    </>
   );
 }
