@@ -25,7 +25,8 @@ const defaultKpi: KpiSummary = {
 function DashboardFallback() {
   const isSail =
     typeof window !== "undefined" &&
-    window.location.search.includes("sail=1");
+    window.location.search.includes("sail=1") &&
+    !sessionStorage.getItem("jtt08_sail_played");
 
   if (isSail) {
     return (
@@ -76,11 +77,19 @@ function DashboardContent() {
   const [kpi, setKpi] = useState<KpiSummary>(defaultKpi);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Animasi 3D POV Kapten setelah login (?sail=1)
-  // State diinisialisasi sinkron dari URL agar tidak ada flash dashboard sama sekali
+  // Animasi 3D POV Kapten hanya berjalan saat sudah BENAR-BENAR BERHASIL LOGIN (?sail=1)
+  // dan belum pernah diputar pada sesi ini
   const isSailParam = searchParams.get("sail") === "1";
-  const [showSail, setShowSail] = useState(isSailParam);
-  const [dashboardReady, setDashboardReady] = useState(!isSailParam);
+  const [showSail, setShowSail] = useState(() => {
+    if (typeof window !== "undefined" && isSailParam) {
+      if (sessionStorage.getItem("jtt08_sail_played")) {
+        return false;
+      }
+      return true;
+    }
+    return isSailParam;
+  });
+  const [dashboardReady, setDashboardReady] = useState(() => !showSail);
 
   const handleReadyForDashboard = useCallback(() => {
     setDashboardReady(true);
@@ -89,6 +98,9 @@ function DashboardContent() {
   const handleSailComplete = useCallback(() => {
     setShowSail(false);
     setDashboardReady(true);
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("jtt08_sail_played", "1");
+    }
     const params = new URLSearchParams(searchParams.toString());
     params.delete("sail");
     const query = params.toString();

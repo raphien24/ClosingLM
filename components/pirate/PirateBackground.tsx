@@ -11,13 +11,7 @@ import {
   Seagull,
 } from "./PirateModels";
 
-function AnimatedScene({
-  isMobile,
-  isZooming = false,
-}: {
-  isMobile: boolean;
-  isZooming?: boolean;
-}) {
+function AnimatedScene({ isMobile }: { isMobile: boolean }) {
   const shipRef = useRef<THREE.Group>(null);
   const mouseTarget = useRef({ x: 0, y: 0 });
 
@@ -45,27 +39,17 @@ function AnimatedScene({
         Math.sin(t * 0.5) * 0.035; // gentle yaw
     }
 
-    // Parallax kamera normal mengikuti mouse, atau zoom in mendekat ke kapten saat login ditekan
-    const normalTargetX = isMobile ? -0.5 : -2.5 + mouseTarget.current.x;
-    const normalTargetY = isMobile ? 4.5 : 4.0 - mouseTarget.current.y;
-    const normalTargetZ = isMobile ? 12 : 9.5;
+    // Parallax kamera normal mengikuti pergerakan kursor mouse
+    const targetX = isMobile ? -0.5 : -2.5 + mouseTarget.current.x;
+    const targetY = isMobile ? 4.5 : 4.0 - mouseTarget.current.y;
+    const targetZ = isMobile ? 12 : 9.5;
 
-    // Target zoom in ke arah kapten di anjungan buritan
-    const zoomTargetX = -1.9;
-    const zoomTargetY = 2.8;
-    const zoomTargetZ = 3.8;
+    camera.position.x += (targetX - camera.position.x) * 0.03;
+    camera.position.y += (targetY - camera.position.y) * 0.03;
+    camera.position.z += (targetZ - camera.position.z) * 0.03;
 
-    const targetX = isZooming ? zoomTargetX : normalTargetX;
-    const targetY = isZooming ? zoomTargetY : normalTargetY;
-    const targetZ = isZooming ? zoomTargetZ : normalTargetZ;
-
-    const lerpSpeed = isZooming ? 0.055 : 0.03;
-    camera.position.x += (targetX - camera.position.x) * lerpSpeed;
-    camera.position.y += (targetY - camera.position.y) * lerpSpeed;
-    camera.position.z += (targetZ - camera.position.z) * lerpSpeed;
-
-    const lookTargetX = isZooming ? -1.8 : isMobile ? 0 : 0.8;
-    const lookTargetY = isZooming ? 2.2 : 1.6;
+    const lookTargetX = isMobile ? 0 : 0.8;
+    const lookTargetY = 1.6;
     const lookTargetZ = 0;
     camera.lookAt(lookTargetX, lookTargetY, lookTargetZ);
   });
@@ -125,11 +109,7 @@ function AnimatedScene({
   );
 }
 
-export function PirateBackground({
-  isZooming = false,
-}: {
-  isZooming?: boolean;
-}) {
+export function PirateBackground() {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -158,7 +138,7 @@ export function PirateBackground({
             powerPreference: "high-performance",
           }}
         >
-          <AnimatedScene isMobile={isMobile} isZooming={isZooming} />
+          <AnimatedScene isMobile={isMobile} />
         </Canvas>
       )}
 
