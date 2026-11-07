@@ -5,8 +5,13 @@ export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
   const session = req.auth;
 
-  // Halaman publik yang tidak perlu auth
-  const publicPaths = ["/login", "/unauthorized", "/api/auth"];
+  // Halaman publik / webhook yang tidak perlu session login
+  const publicPaths = [
+    "/login",
+    "/unauthorized",
+    "/api/auth",
+    "/api/productivity/auto-upload",
+  ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   if (isPublic) {
