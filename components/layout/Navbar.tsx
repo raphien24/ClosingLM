@@ -15,6 +15,7 @@ import {
   ClipboardList,
   Sun,
   Moon,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -22,6 +23,7 @@ import { useState, useEffect } from "react";
 const mainLinks = [
   { href: "/dashboard", label: "Dashboard Closing", icon: LayoutDashboard },
   { href: "/input",     label: "Input Data",        icon: Upload },
+  { href: "/guide",     label: "User Guide",        icon: BookOpen },
 ];
 
 const productivityLinks = [
