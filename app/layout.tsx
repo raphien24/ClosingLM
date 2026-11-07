@@ -40,7 +40,11 @@ export default async function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col text-slate-900">
-        <SessionProvider session={session}>
+        <SessionProvider
+          session={session}
+          refetchInterval={5 * 60}
+          refetchOnWindowFocus={true}
+        >
           <Toaster
             position="top-right"
             toastOptions={{

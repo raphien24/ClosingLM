@@ -9,30 +9,66 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
+  // Konfigurasi sesi login: berlaku tepat 24 jam (86.400 detik)
+  session: {
+    strategy: "jwt",
+    maxAge: 24 * 60 * 60, // 24 jam
+    updateAge: 24 * 60 * 60, // Tidak memperpanjang sesi sebelum 24 jam
+  },
+  jwt: {
+    maxAge: 24 * 60 * 60, // 24 jam
+  },
   callbacks: {
     async session({ session, token }) {
+      const now = Date.now();
+      const MAX_SESSION_MS = 24 * 60 * 60 * 1000; // 24 jam
+      const isExpired =
+        !token?.loginAt || now - Number(token.loginAt) > MAX_SESSION_MS;
+
       if (session.user && token) {
         // Attach custom fields dari token ke session
         (session.user as typeof session.user & {
           hubName: string | null;
           hubUser: string | null;
           isAuthorized: boolean;
+          isExpired: boolean;
         }).hubName = (token.hubName as string | null) ?? null;
         (session.user as typeof session.user & {
           hubName: string | null;
           hubUser: string | null;
           isAuthorized: boolean;
+          isExpired: boolean;
         }).hubUser = (token.hubUser as string | null) ?? null;
         (session.user as typeof session.user & {
           hubName: string | null;
           hubUser: string | null;
           isAuthorized: boolean;
-        }).isAuthorized = (token.isAuthorized as boolean) ?? false;
+          isExpired: boolean;
+        }).isAuthorized = !isExpired && ((token.isAuthorized as boolean) ?? false);
+        (session.user as typeof session.user & {
+          hubName: string | null;
+          hubUser: string | null;
+          isAuthorized: boolean;
+          isExpired: boolean;
+        }).isExpired = isExpired;
       }
       return session;
     },
     async jwt({ token, user }) {
       const now = Date.now();
+      const MAX_SESSION_MS = 24 * 60 * 60 * 1000; // 24 jam
+
+      // Catat timestamp login saat pertama kali autentikasi
+      if (user) {
+        token.loginAt = now;
+      }
+
+      // Validasi mutlak 24 jam: jika sudah melewati 24 jam sejak login,
+      // kembalikan null untuk mengakhiri sesi dan membersihkan cookie login
+      if (token.loginAt && now - Number(token.loginAt) > MAX_SESSION_MS) {
+        return null;
+      }
+
       const RECHECK_MS = 60 * 60 * 1000; // 1 jam
       const email = (user?.email || token.email) as string | undefined;
       const shouldCheck =
@@ -76,6 +112,7 @@ declare module "next-auth" {
       hubName: string | null;
       hubUser: string | null;
       isAuthorized: boolean;
+      isExpired?: boolean;
     };
   }
 }

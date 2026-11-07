@@ -10,7 +10,6 @@ import { FilterBar } from "@/components/dashboard/FilterBar";
 import { ClosingData, KpiSummary } from "@/types/closing";
 import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
-import { LayoutDashboard, Compass } from "lucide-react";
 import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { CaptainPovTransition } from "@/components/pirate/CaptainPovTransition";
@@ -189,25 +188,13 @@ function DashboardContent() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setDashboardReady(false);
-                  setShowSail(true);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-400/15 hover:bg-amber-400/25 border border-amber-300/40 text-amber-300 hover:text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs"
-                title="Putar Animasi Berlayar POV Kapten"
-              >
-                <Compass className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "12s" }} />
-                <span>POV Berlayar</span>
-              </button>
-
-              {!isToday && (
+            {!isToday && (
+              <div className="flex items-center gap-2">
                 <span className="px-3 py-1 bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-semibold rounded-full">
                   Mode History
                 </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* KPI Cards */}

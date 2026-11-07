@@ -27,14 +27,25 @@ export const proxy = auth((req) => {
   }
 
   // Belum login → redirect ke login
-  if (!session) {
+  if (!session?.user) {
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  const user = session.user as typeof session.user & {
+    isAuthorized?: boolean;
+    isExpired?: boolean;
+  };
+
+  // Sesi telah berakhir (> 24 jam) → redirect ke login ulang
+  if (user.isExpired) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("callbackUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
   // Sudah login tapi email tidak terdaftar di USER_MAPPING → unauthorized
-  const user = session.user as typeof session.user & { isAuthorized: boolean };
   if (!user.isAuthorized) {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
