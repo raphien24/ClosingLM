@@ -11,6 +11,7 @@ export const proxy = auth((req) => {
     "/unauthorized",
     "/api/auth",
     "/api/productivity/auto-upload",
+    "/api/closing/auto-upload",
   ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
