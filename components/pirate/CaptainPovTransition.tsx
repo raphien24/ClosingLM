@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import {
@@ -127,37 +128,69 @@ function CaptainPovScene({
 
 export function CaptainPovTransition({
   userName,
+  onReadyForDashboard,
   onComplete,
 }: {
   userName?: string | null;
+  onReadyForDashboard?: () => void;
   onComplete: () => void;
 }) {
   const [progress, setProgress] = useState(0);
-  const [fadeWhite, setFadeWhite] = useState(false);
+  const [dissolve, setDissolve] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const flowRef = useRef(0);
   const completedRef = useRef(false);
+  const revealedRef = useRef(false);
 
-  const finish = () => {
+  useEffect(() => {
+    setMounted(true);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
+  const handleProgress = useCallback(
+    (p: number) => {
+      setProgress(p);
+      // Ketika flash putih sudah mulai menutupi layar (>= 92%),
+      // mount dashboard secara tersembunyi di balik layer putih agar siap instan
+      if (p >= 0.92 && !revealedRef.current) {
+        revealedRef.current = true;
+        onReadyForDashboard?.();
+      }
+    },
+    [onReadyForDashboard]
+  );
+
+  const finish = useCallback(() => {
     if (completedRef.current) return;
     completedRef.current = true;
-    setFadeWhite(true);
+
+    // Pastikan dashboard di-mount di latar belakang sebelum transisi dissolve
+    if (!revealedRef.current) {
+      revealedRef.current = true;
+      onReadyForDashboard?.();
+    }
+
+    setDissolve(true);
     setTimeout(() => {
       onComplete();
-    }, 450);
-  };
+    }, 480);
+  }, [onReadyForDashboard, onComplete]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       finish();
     }, DURATION_SEC * 1000);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [finish]);
 
-  return (
+  const content = (
     <div
-      className={`fixed inset-0 w-screen h-screen h-[100dvh] z-[100000] overflow-hidden select-none transition-opacity duration-500 ${
-        fadeWhite ? "opacity-0 pointer-events-none" : "opacity-100"
+      className={`fixed inset-0 w-screen h-screen h-[100dvh] z-[999999] overflow-hidden select-none bg-[#020617] transition-opacity duration-500 ease-out ${
+        dissolve ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
       {/* 3D Canvas */}
@@ -172,7 +205,7 @@ export function CaptainPovTransition({
         dpr={typeof window !== "undefined" && window.innerWidth < 768 ? [1, 1.5] : [1, 2]}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
       >
-        <CaptainPovScene flowRef={flowRef} onProgress={setProgress} />
+        <CaptainPovScene flowRef={flowRef} onProgress={handleProgress} />
       </Canvas>
 
       {/* Vignette & Cinematic Overlay */}
@@ -224,11 +257,19 @@ export function CaptainPovTransition({
 
       {/* Final Flash into Dashboard */}
       <div
-        className="absolute inset-0 bg-white pointer-events-none transition-opacity duration-500"
+        className="absolute inset-0 bg-white pointer-events-none transition-opacity duration-300"
         style={{
-          opacity: progress > 0.88 ? Math.min(1, (progress - 0.88) * 8.3) : 0,
+          opacity: dissolve ? 1 : progress > 0.85 ? Math.min(1, (progress - 0.85) * 6.6) : 0,
         }}
       />
     </div>
   );
+
+  if (!mounted) {
+    return (
+      <div className="fixed inset-0 w-screen h-screen h-[100dvh] z-[999999] bg-[#020617]" />
+    );
+  }
+
+  return createPortal(content, document.body);
 }
