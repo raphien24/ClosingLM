@@ -362,9 +362,9 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                 {/* 2 Sub-cards: Dedicated 2WH & Kurir Plus 2WH */}
                 <div className="grid grid-cols-2 gap-2 mt-2.5">
                   {/* Dedicated 2WH */}
-                  <div className="bg-slate-50/70 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-700/80 rounded-lg p-2">
+                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-lg p-2">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold text-gray-600 dark:text-slate-300">Ded. 2WH</span>
+                      <span className="font-semibold text-gray-600">Ded. 2WH</span>
                       <span className={`font-bold ${ded2wStatus.textClass}`}>
                         {afterThreshold.kpi2w.dedicated2wh.achievement.toFixed(1)}%
                       </span>
@@ -374,16 +374,16 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                       color={ded2wStatus.color}
                       heightClass="h-1"
                     />
-                    <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-400 mt-1">
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 mt-1">
                       <span>avg {afterThreshold.kpi2w.dedicated2wh.avgProductivity.toFixed(1)}</span>
                       <span>tgt {afterThreshold.kpi2w.dedicated2wh.target.toFixed(1)}</span>
                     </div>
                   </div>
 
                   {/* Kurir Plus 2WH */}
-                  <div className="bg-slate-50/70 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-700/80 rounded-lg p-2">
+                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-lg p-2">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold text-gray-600 dark:text-slate-300">Plus 2WH</span>
+                      <span className="font-semibold text-gray-600">Plus 2WH</span>
                       <span className={`font-bold ${kp2wStatus.textClass}`}>
                         {afterThreshold.kpi2w.kurirPlus2wh.achievement.toFixed(1)}%
                       </span>
@@ -393,7 +393,7 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                       color={kp2wStatus.color}
                       heightClass="h-1"
                     />
-                    <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-400 mt-1">
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 mt-1">
                       <span>avg {afterThreshold.kpi2w.kurirPlus2wh.avgProductivity.toFixed(1)}</span>
                       <span>tgt {afterThreshold.kpi2w.kurirPlus2wh.target.toFixed(1)}</span>
                     </div>
@@ -448,9 +448,9 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
 
                 {/* 1 Sub-card: Dedicated 4WH */}
                 <div className="mt-2.5">
-                  <div className="bg-slate-50/70 dark:bg-slate-900/80 border border-slate-200/70 dark:border-slate-700/80 rounded-lg p-2">
+                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-lg p-2">
                     <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold text-gray-600 dark:text-slate-300">Dedicated 4WH</span>
+                      <span className="font-semibold text-gray-600">Dedicated 4WH</span>
                       <span className={`font-bold ${kpi4wStatus.textClass}`}>
                         {afterThreshold.kpi4w.dedicated4wh.achievement.toFixed(1)}%
                       </span>
@@ -460,7 +460,7 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                       color={kpi4wStatus.color}
                       heightClass="h-1"
                     />
-                    <div className="flex items-center justify-between text-[10px] text-gray-400 dark:text-slate-400 mt-1">
+                    <div className="flex items-center justify-between text-[10px] text-gray-400 mt-1">
                       <span>avg {afterThreshold.kpi4w.dedicated4wh.avgProductivity.toFixed(1)}</span>
                       <span>tgt {afterThreshold.kpi4w.dedicated4wh.target.toFixed(1)}</span>
                     </div>
@@ -617,51 +617,51 @@ function ActionPlanCard({ actionPlan }: { actionPlan: WeeklyActionPlan }) {
   const items = [actionPlan.riderDed, actionPlan.riderPlus, actionPlan.driverDed];
 
   return (
-    <div className="hover-lift bg-white dark:bg-slate-800/95 rounded-xl border border-slate-200/80 dark:border-slate-700/80 p-3.5 sm:p-4 shadow-xs flex flex-col justify-between">
+    <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs flex flex-col justify-between">
       <div>
         {/* Card Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-50 dark:bg-amber-950/60 border border-amber-200/70 dark:border-amber-800/60 flex items-center justify-center flex-shrink-0">
-              <Lightbulb className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+            <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200/70 flex items-center justify-center flex-shrink-0">
+              <Lightbulb className="h-3.5 w-3.5 text-amber-600" />
             </div>
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200 leading-tight">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 leading-tight">
                 ACTION PLAN
               </h3>
-              <p className="text-[10px] text-slate-400 dark:text-slate-400">
+              <p className="text-[10px] text-slate-400">
                 Target besok agar avg = target
               </p>
             </div>
           </div>
-          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-800/60">
+          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/70">
             PLAN
           </span>
         </div>
 
         {/* 3 Action Plan Items (Compact) */}
-        <div className="mt-2.5 space-y-2">
+        <div className="mt-2.5 space-y-1.5">
           {items.map((item) => {
             const isCatchUp = item.status === "Catch Up";
             return (
               <div
                 key={item.title}
-                className="rounded-lg border border-slate-200/80 dark:border-slate-700/80 bg-slate-50/70 dark:bg-slate-900/90 p-2.5 space-y-1.5"
+                className="rounded-lg border border-slate-200/70 bg-slate-50/70 p-2 space-y-1"
               >
                 {/* Title & Status Badge */}
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 dark:bg-blue-400 inline-block" />
-                    <span className="font-bold text-slate-800 dark:text-slate-100">{item.title}</span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 inline-block" />
+                    <span className="font-bold text-slate-800">{item.title}</span>
                   </div>
                   {isCatchUp ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700/60">
-                      <TrendingUp className="h-2.5 w-2.5 text-amber-500 dark:text-amber-400" />
+                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      <TrendingUp className="h-2.5 w-2.5 text-amber-600" />
                       Catch Up
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700/60">
-                      <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500 dark:text-emerald-400" />
+                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 className="h-2.5 w-2.5 text-emerald-600" />
                       On Track
                     </span>
                   )}
@@ -670,22 +670,22 @@ function ActionPlanCard({ actionPlan }: { actionPlan: WeeklyActionPlan }) {
                 {/* Numbers: Target Besok vs Avg skrg */}
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-400">BESOK:</span>
-                    <span className="text-sm font-extrabold text-amber-600 dark:text-amber-400 leading-none">
+                    <span className="text-[10px] font-semibold text-slate-400">BESOK:</span>
+                    <span className="text-sm font-extrabold text-amber-600 leading-none">
                       {item.targetBesok}
                     </span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-400">pkgs</span>
+                    <span className="text-[10px] text-slate-400">pkgs</span>
                   </div>
-                  <div className="text-right text-[11px] text-slate-500 dark:text-slate-400">
-                    <span>Avg: <strong className="text-blue-600 dark:text-blue-400 font-bold">{item.avgSkrg.toFixed(1)}</strong></span>
-                    <span className="text-slate-400 dark:text-slate-500 ml-1">/ {item.target}</span>
+                  <div className="text-right text-[11px] text-slate-500">
+                    <span>Avg: <strong className="text-blue-600 font-bold">{item.avgSkrg.toFixed(1)}</strong></span>
+                    <span className="text-slate-400 ml-1">/ {item.target}</span>
                   </div>
                 </div>
 
                 {/* Progress bar */}
-                <div className="h-1.5 bg-gray-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-blue-600 dark:bg-blue-500 transition-all duration-700"
+                    className="h-full rounded-full bg-blue-600 transition-all duration-700"
                     style={{ width: `${item.progressPct}%` }}
                   />
                 </div>
@@ -696,7 +696,7 @@ function ActionPlanCard({ actionPlan }: { actionPlan: WeeklyActionPlan }) {
       </div>
 
       {/* Formula Footer */}
-      <p className="text-[10px] italic text-gray-400 dark:text-slate-400 mt-2.5 pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
+      <p className="text-[10px] italic text-gray-400 mt-2.5 pt-1.5 border-t border-gray-100">
         Tgt Besok = Tgt × (Hari+1) − Avg × Hari
       </p>
     </div>
