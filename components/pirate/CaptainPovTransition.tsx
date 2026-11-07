@@ -13,7 +13,8 @@ import {
 } from "./PirateModels";
 import { Compass, FastForward, Sparkles } from "lucide-react";
 
-const DURATION_SEC = 3.8;
+const DURATION_SEC = 4.2;
+const ZOOM_DURATION = 1.35; // Durasi fase zoom in ke arah kapten (detik)
 
 function CaptainPovScene({
   flowRef,
@@ -27,21 +28,44 @@ function CaptainPovScene({
   const speedRef = useRef(1.5);
   const elapsedRef = useRef(0);
   const { size } = useThree();
+  const [inPov, setInPov] = useState(false);
 
   useFrame(({ clock, camera }, delta) => {
     elapsedRef.current += delta;
     const progress = Math.min(1, elapsedRef.current / DURATION_SEC);
     onProgress(progress);
 
-    // Kecepatan kapal meningkat (akselerasi berlayar)
-    speedRef.current = THREE.MathUtils.lerp(1.5, 14.0, Math.pow(progress, 1.4));
+    // Zoom in progress: 0 -> 1 selama ZOOM_DURATION detik
+    const zoomProgress = Math.min(1, elapsedRef.current / ZOOM_DURATION);
+    // Smooth cubic ease-in-out
+    const easeZoom =
+      zoomProgress < 0.5
+        ? 4 * zoomProgress * zoomProgress * zoomProgress
+        : 1 - Math.pow(-2 * zoomProgress + 2, 3) / 2;
+
+    // Transisi pergantian model: dari kapten berdiri di luar menjadi tangan POV di kemudi
+    if (easeZoom >= 0.85 && !inPov) {
+      setInPov(true);
+    } else if (easeZoom < 0.85 && inPov) {
+      setInPov(false);
+    }
+
+    // Kecepatan kapal: saat fase zoom in masih pelan (1.5 - 3.0),
+    // setelah masuk POV kamera berakselerasi kencang hingga 14.5
+    const baseSpeed = THREE.MathUtils.lerp(1.5, 3.2, easeZoom);
+    const accelProgress = Math.max(
+      0,
+      (progress - ZOOM_DURATION / DURATION_SEC) / (1 - ZOOM_DURATION / DURATION_SEC)
+    );
+    speedRef.current = baseSpeed + Math.pow(accelProgress, 1.35) * 11.5;
     flowRef.current += delta * speedRef.current;
 
     const t = clock.elapsedTime;
 
     // Roda kemudi berputar dikendalikan kapten
     if (wheelRef.current) {
-      wheelRef.current.rotation.x = Math.sin(t * 2.2) * 0.45 + Math.sin(t * 1.1) * 0.2;
+      wheelRef.current.rotation.x =
+        Math.sin(t * 2.2) * 0.45 + Math.sin(t * 1.1) * 0.2;
     }
 
     // Gerak kapal memecah ombak
@@ -53,30 +77,55 @@ function CaptainPovScene({
         Math.sin(t * 2.6) * 0.04 - Math.min(0.08, progress * 0.06); // pitch haluan sedikit terangkat
     }
 
-    // Kamera POV orang pertama (posisi mata kapten di anjungan buritan)
-    // Disesuaikan secara dinamis agar pas sempurna di HP (portrait) maupun laptop/tablet (landscape)
+    // Perhitungan kamera: responsif portrait HP vs landscape desktop
     const aspect = size.width / Math.max(1, size.height);
     const isPortrait = aspect < 1.0;
 
     const bobbingY = Math.sin(t * 2.8) * 0.06;
     const swayZ = Math.sin(t * 2.2) * 0.04;
 
-    // Posisi kamera: mundur lebih jauh pada layar HP portrait agar kemudi dan tangan masuk frame sempurna
-    const baseCamX = isPortrait ? -3.45 : -2.65;
-    const baseCamY = isPortrait ? 2.82 : 2.52;
-    const lookTargetY = isPortrait ? 2.15 : 2.25;
+    // Target POV orang pertama di mata kapten
+    const targetCamX = isPortrait ? -3.45 : -2.65;
+    const targetCamY = isPortrait ? 2.82 : 2.52;
+    const targetLookY = isPortrait ? 2.15 : 2.25;
 
-    // FOV responsif: pada HP portrait FOV vertikal dinaikkan agar sudut horizontal tidak terpotong
+    // Posisi awal kamera: zoom in dari atas dan belakang kapal mengarah ke kapten
+    const startCamX = isPortrait ? -6.8 : -6.2;
+    const startCamY = isPortrait ? 4.6 : 4.2;
+    const startCamZ = isPortrait ? 2.2 : 3.4;
+
+    const startLookX = -1.8; // Koordinat kapten & roda kemudi
+    const startLookY = 2.2;
+    const startLookZ = 0.2;
+
+    // Interpolasi posisi kamera (zoom in mulus ke arah kapten)
+    const camX = THREE.MathUtils.lerp(startCamX, targetCamX, easeZoom);
+    const camY =
+      THREE.MathUtils.lerp(startCamY, targetCamY, easeZoom) + bobbingY * easeZoom;
+    const camZ = THREE.MathUtils.lerp(startCamZ, swayZ, easeZoom);
+
+    // Interpolasi arah pandang (dari memandangi kapten -> beralih melihat horizon samudra)
+    const lookX = THREE.MathUtils.lerp(startLookX, 14, easeZoom);
+    const lookY = THREE.MathUtils.lerp(
+      startLookY,
+      targetLookY + bobbingY * 0.4,
+      easeZoom
+    );
+    const lookZ = THREE.MathUtils.lerp(startLookZ, swayZ * 0.25, easeZoom);
+
+    // FOV responsif yang ikut bertransisi secara dinamis
     const baseFov = isPortrait
       ? Math.min(84, Math.max(68, (52 / aspect) * 0.72))
       : 50;
+    const startFov = isPortrait ? 66 : 56;
     const fovTarget = baseFov + progress * (isPortrait ? 8 : 12);
+    const currentFov = THREE.MathUtils.lerp(startFov, fovTarget, easeZoom);
 
-    camera.position.set(baseCamX, baseCamY + bobbingY, swayZ);
-    camera.lookAt(14, lookTargetY + bobbingY * 0.4, swayZ * 0.25);
+    camera.position.set(camX, camY, camZ);
+    camera.lookAt(lookX, lookY, lookZ);
 
     if (camera instanceof THREE.PerspectiveCamera) {
-      camera.fov = fovTarget;
+      camera.fov = currentFov;
       camera.aspect = aspect;
       camera.updateProjectionMatrix();
     }
@@ -98,14 +147,14 @@ function CaptainPovScene({
       <Seagull radius={7} height={6} speed={0.6} phase={0.5} />
       <Seagull radius={10} height={7.5} speed={0.45} phase={2.8} />
 
-      {/* Kapal bajak laut dengan tangan kapten di kemudi */}
+      {/* Kapal bajak laut: menampilkan figur kapten saat zoom in, lalu beralih ke tangan kapten saat POV */}
       <group ref={shipRef} position={[0, 0, 0]}>
         <PirateShip
           showCrew={true}
           crewCount={4}
           wheelRef={wheelRef}
-          withHands={true}
-          showCaptain={false} // Kapten adalah user sendiri (POV)
+          withHands={inPov}
+          showCaptain={!inPov}
           sailLabel="JTT08"
         />
       </group>
@@ -137,6 +186,7 @@ export function CaptainPovTransition({
 }) {
   const [progress, setProgress] = useState(0);
   const [dissolve, setDissolve] = useState(false);
+  const [introFade, setIntroFade] = useState(true);
   const [mounted, setMounted] = useState(false);
   const flowRef = useRef(0);
   const completedRef = useRef(false);
@@ -146,7 +196,14 @@ export function CaptainPovTransition({
     setMounted(true);
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
+    // Mulai animasi fade in yang mulus dari gelap
+    const fadeTimer = setTimeout(() => {
+      setIntroFade(false);
+    }, 40);
+
     return () => {
+      clearTimeout(fadeTimer);
       document.body.style.overflow = originalOverflow;
     };
   }, []);
@@ -197,8 +254,8 @@ export function CaptainPovTransition({
       <Canvas
         className="w-full h-full block"
         camera={{
-          position: [-2.85, 2.65, 0],
-          fov: 54,
+          position: [-6.2, 4.2, 3.4],
+          fov: 56,
           near: 0.1,
           far: 500,
         }}
@@ -208,13 +265,20 @@ export function CaptainPovTransition({
         <CaptainPovScene flowRef={flowRef} onProgress={handleProgress} />
       </Canvas>
 
+      {/* Smooth Intro Fade Overlay (Fade in dari gelap ke terang dengan mulus) */}
+      <div
+        className={`absolute inset-0 bg-[#020617] pointer-events-none transition-opacity duration-700 ease-out z-30 ${
+          introFade ? "opacity-100" : "opacity-0"
+        }`}
+      />
+
       {/* Vignette & Cinematic Overlay */}
       <div className="absolute inset-0 bg-radial-[circle_at_50%_45%]_from-transparent_via-slate-950/20_to-slate-950/80 pointer-events-none" />
 
       {/* Speed lines / Motion mist effect saat kecepatan tinggi */}
       <div
         className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-blue-500/10 pointer-events-none transition-opacity duration-700"
-        style={{ opacity: Math.max(0, (progress - 0.3) * 1.5) }}
+        style={{ opacity: Math.max(0, (progress - 0.35) * 1.5) }}
       />
 
       {/* Top Bar: Skip Button */}
@@ -228,8 +292,12 @@ export function CaptainPovTransition({
         </button>
       </div>
 
-      {/* Center Cinematic Welcome Card (Responsive & Compact on Mobile) */}
-      <div className="absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[92%] sm:w-[85%] max-w-lg z-20 pointer-events-none">
+      {/* Center Cinematic Welcome Card (Muncul mulus setelah fase zoom in selesai) */}
+      <div
+        className={`absolute bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[92%] sm:w-[85%] max-w-lg z-20 pointer-events-none transition-all duration-700 ease-out ${
+          progress > 0.22 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+        }`}
+      >
         <div className="bg-slate-950/85 backdrop-blur-md rounded-2xl border border-amber-400/40 p-3 sm:p-4 shadow-2xl text-center text-white">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] sm:text-[11px] font-extrabold uppercase tracking-widest mb-1.5">
             <Compass className="h-3 w-3 sm:h-3.5 sm:w-3.5 animate-spin" style={{ animationDuration: "8s" }} />

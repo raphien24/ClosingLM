@@ -11,17 +11,30 @@ export default function LoginPage() {
 
   const handleLogin = async () => {
     setLoading(true);
-    // Redirect ke dashboard dengan parameter sail=1 untuk memicu animasi POV kapten
-    await signIn("google", { callbackUrl: "/dashboard?sail=1" });
+    // Beri jeda 450ms untuk transisi kamera zoom-in ke arah kapten sebelum redirect OAuth
+    setTimeout(async () => {
+      await signIn("google", { callbackUrl: "/dashboard?sail=1" });
+    }, 450);
   };
 
   return (
     <div className="min-h-screen relative overflow-hidden flex flex-col justify-between">
       {/* 3D Animated Pirate Ship & Ocean Background */}
-      <PirateBackground />
+      <PirateBackground isZooming={loading} />
+
+      {/* Smooth Darkening Backdrop saat login ditekan (menyambung ke POV berlayar) */}
+      <div
+        className={`fixed inset-0 bg-[#020617] pointer-events-none transition-opacity duration-700 ease-out z-20 ${
+          loading ? "opacity-70" : "opacity-0"
+        }`}
+      />
 
       {/* Top Header / Branding Bar */}
-      <header className="relative z-10 w-full px-4 sm:px-8 py-5 flex items-center justify-between pointer-events-none">
+      <header
+        className={`relative z-10 w-full px-4 sm:px-8 py-5 flex items-center justify-between pointer-events-none transition-all duration-500 ${
+          loading ? "opacity-0 -translate-y-2" : "opacity-100 translate-y-0"
+        }`}
+      >
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-slate-950/70 border border-amber-400/40 p-1 shadow-lg flex items-center justify-center">
             <Anchor className="h-5 w-5 text-amber-400" />
@@ -45,7 +58,13 @@ export default function LoginPage() {
       {/* Main Content Area */}
       <main className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-8 py-6 flex-1 flex flex-col lg:flex-row items-center justify-between gap-8 lg:gap-12">
         {/* Left Side: Cinematic Title & Pirate Slogan (Desktop) */}
-        <div className="hidden lg:flex flex-col max-w-xl text-white space-y-4 select-none pr-4">
+        <div
+          className={`hidden lg:flex flex-col max-w-xl text-white space-y-4 select-none pr-4 transition-all duration-500 ease-out ${
+            loading
+              ? "opacity-0 -translate-x-6 pointer-events-none"
+              : "opacity-100 translate-x-0"
+          }`}
+        >
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/70 border border-amber-400/40 text-amber-300 text-xs font-bold uppercase tracking-wider backdrop-blur-md w-fit shadow-lg">
             <Compass className="h-4 w-4 animate-spin text-amber-400" style={{ animationDuration: "12s" }} />
             <span>Kapal Komando Last Mile JTT08</span>
@@ -75,7 +94,13 @@ export default function LoginPage() {
         </div>
 
         {/* Right Side: Floating Login Box */}
-        <div className="w-full sm:w-[420px] max-w-md lg:ml-auto">
+        <div
+          className={`w-full sm:w-[420px] max-w-md lg:ml-auto transition-all duration-500 ease-out ${
+            loading
+              ? "opacity-0 scale-95 translate-y-3 pointer-events-none"
+              : "opacity-100 scale-100 translate-y-0"
+          }`}
+        >
           <div className="bg-slate-950/85 backdrop-blur-xl rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.85)] border border-amber-400/35 p-6 sm:p-8 hover-lift text-white transition-all duration-300">
             {/* Pirate Logo (Uploaded Image) */}
             <div className="flex flex-col items-center mb-6">
@@ -145,7 +170,11 @@ export default function LoginPage() {
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 w-full px-4 py-4 text-center text-xs text-blue-200/70 select-none">
+      <footer
+        className={`relative z-10 w-full px-4 py-4 text-center text-xs text-blue-200/70 select-none transition-opacity duration-500 ${
+          loading ? "opacity-0" : "opacity-100"
+        }`}
+      >
         <span>Made with 💖 by </span>
         <strong className="text-amber-300 font-bold">EW Team JTT08</strong>
         <span className="hidden sm:inline"> · Selamat Bertugas di Lautan Operasional</span>
