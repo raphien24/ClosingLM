@@ -10,7 +10,6 @@ import {
   Target,
   BarChart2,
   Calendar,
-  Bot,
   UserCheck,
   CheckCircle2,
   Sparkles,
@@ -18,7 +17,6 @@ import {
   ArrowRight,
   Lightbulb,
   Rocket,
-  Moon,
 } from "lucide-react";
 
 type Step = {
@@ -88,19 +86,6 @@ const STEPS: Step[] = [
       "Upload di tab Productivity, data kurir akan tersimpan ke database RAW Hub.",
       "Data yang sudah ada di tanggal yang sama akan diperbarui (tidak dobel).",
     ],
-  },
-  {
-    phase: "Otomatis (23:10 WIB)",
-    title: "Auto Sync Malam Hari",
-    desc: "Google Apps Script menarik data SPX dan mengirim ke web app setiap malam.",
-    icon: Bot,
-    color: "from-slate-600 to-slate-800",
-    points: [
-      "Langkah 1: Sync Fleet Productivity (Excel) → database RAW.",
-      "Langkah 2: Sync Closing Report (Progress, Headcount, Expedite, Backlog, Parcel Sweeper).",
-      "Pastikan cookie SPX di sheet Config selalu valid agar sync tidak gagal.",
-    ],
-    tip: "Cek Execution Log di Apps Script jika data malam tidak muncul.",
   },
   {
     phase: "Monitoring",
@@ -343,7 +328,7 @@ export default function UserGuidePage() {
           {[
             { icon: Target, label: "Senin", text: "Set Target", c: "text-amber-600" },
             { icon: Upload, label: "Harian", text: "Input Data", c: "text-violet-600" },
-            { icon: Moon, label: "23:10 WIB", text: "Auto Sync", c: "text-slate-700 dark:text-slate-200" },
+            { icon: LayoutDashboard, label: "Monitoring", text: "Dashboard Closing", c: "text-emerald-600" },
             { icon: Rocket, label: "Evaluasi", text: "Weekly & Monthly", c: "text-blue-600" },
           ].map((q, i) => (
             <div
