@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
   const weekStartParam = searchParams.get("week_start") || format(defaultMonday, "yyyy-MM-dd");
   const contract       = searchParams.get("contract")   || "all";
   const vehicle        = searchParams.get("vehicle")    || "all";
+  const excludeNew     = searchParams.get("exclude_new") === "true";
 
   try {
     const [y, m, d] = weekStartParam.split("-").map(Number);
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
       user.hubName,
       { start: weekStartDate, end: weekEndDate },
       weekStartParam,
-      { contract, vehicle }
+      { contract, vehicle, excludeNew }
     );
 
     return NextResponse.json({ success: true, kpi, week_start: weekStartParam });

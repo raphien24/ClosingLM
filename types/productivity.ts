@@ -134,6 +134,9 @@ export interface ProductivityKpi {
     actionPlan: WeeklyActionPlan;
   };
   missingWeekTarget?: boolean;
+  hasL15D?: boolean;
+  dataDaysCount?: number;
+  excludedNewCount?: number;
 }
 
 export interface CourierDailyDetail {
@@ -174,6 +177,9 @@ export interface CourierScheduleRow {
     jum: boolean; sab: boolean; min: boolean;
   };
   dailyDetails?: CourierDailyDetail[];
+  isNewCourier?: boolean;
+  daysSinceJoin?: number;
+  firstJoinDate?: string;
 }
 
 /** Static fallback targets (dari repo Soko) */

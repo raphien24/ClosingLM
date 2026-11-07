@@ -180,10 +180,20 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
                   title={`Klik untuk melihat rincian produktivitas ${row.courier_name}`}
                 >
                   <div className="flex flex-col">
-                    <span className="font-semibold text-blue-600 group-hover:text-blue-700 group-hover:underline text-sm inline-flex items-center gap-1.5 transition-colors">
-                      <span>{row.courier_name}</span>
-                      <ExternalLink className="h-3.5 w-3.5 text-blue-500 opacity-70 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-blue-600 group-hover:text-blue-700 group-hover:underline text-sm inline-flex items-center gap-1.5 transition-colors">
+                        <span>{row.courier_name}</span>
+                        <ExternalLink className="h-3.5 w-3.5 text-blue-500 opacity-70 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                      </span>
+                      {row.isNewCourier && (
+                        <span
+                          className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200"
+                          title={`Kurir Baru bergabung ${row.firstJoinDate || ""} (Hari ke-${row.daysSinceJoin || 1}). Selama 14 hari tidak dihitung ke skor rata-rata Hub saat filter aktif.`}
+                        >
+                          Kurir Baru (H-{row.daysSinceJoin || 1})
+                        </span>
+                      )}
+                    </div>
                     <span className="text-xs text-gray-400 mt-0.5">{row.courier_id}</span>
                   </div>
                 </td>
@@ -326,6 +336,14 @@ function CourierDetailModal({
                 <span className="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">
                   {courier.vehicle_type}
                 </span>
+                {courier.isNewCourier && (
+                  <span
+                    className="px-2 py-0.5 rounded text-xs font-bold bg-teal-100 text-teal-800 border border-teal-300 flex items-center gap-1"
+                    title={`Bergabung ${courier.firstJoinDate || ""} (Hari ke-${courier.daysSinceJoin || 1} dari masa Grace Period 14 hari)`}
+                  >
+                    🌱 Kurir Baru (Hari ke-{courier.daysSinceJoin || 1})
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
                 <span>ID: <strong className="text-gray-700">{courier.courier_id}</strong></span>

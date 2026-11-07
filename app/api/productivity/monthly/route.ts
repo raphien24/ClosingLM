@@ -15,11 +15,12 @@ export async function GET(req: NextRequest) {
   const [defaultYear, defaultMonth] = todayWIB().split("-").map(Number);
   const year     = parseInt(searchParams.get("year")     || String(defaultYear));
   const month    = parseInt(searchParams.get("month")    || String(defaultMonth));
-  const contract = searchParams.get("contract") || "all";
-  const vehicle  = searchParams.get("vehicle")  || "all";
+  const contract   = searchParams.get("contract") || "all";
+  const vehicle    = searchParams.get("vehicle")  || "all";
+  const excludeNew = searchParams.get("exclude_new") === "true";
 
   try {
-    const data = await getMonthlyMetrics(user.hubName, year, month, contract, vehicle);
+    const data = await getMonthlyMetrics(user.hubName, year, month, contract, vehicle, { excludeNew });
     return NextResponse.json({ success: true, data });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Error" }, { status: 500 });

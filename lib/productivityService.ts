@@ -158,6 +158,81 @@ function dedup(records: CourierRecord[]): CourierRecord[] {
   return Array.from(seen.values());
 }
 
+// ── Grace Period 14 Hari (Kurir Baru) & L15D Database Helper ─────────
+
+/**
+ * Cek apakah kontrak kurir memenuhi syarat Grace Period 14 Hari:
+ * - 2W Dedicated
+ * - 4W Dedicated
+ * - 2W Plus (Kurir Plus)
+ */
+export function isEligibleNewCourierContract(contractType: string, vehicleType: string): boolean {
+  const c = (contractType || "").toLowerCase().trim();
+  const v = (vehicleType || "").toUpperCase().trim();
+  if (c.includes("dedicated") && v.includes("2WH")) return true;
+  if (c.includes("dedicated") && v.includes("4WH")) return true;
+  if ((c.includes("plus") || c.includes("kurir plus")) && v.includes("2WH")) return true;
+  return false;
+}
+
+/**
+ * Peta tanggal join pertama kali (earliest date) per courier_id dari database raw
+ */
+export function buildCourierFirstJoinMap(allRaw: CourierRecord[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const r of allRaw) {
+    if (!r.courier_id) continue;
+    const ymd = normalizeDateKey(r.date);
+    if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue;
+    const id = r.courier_id.trim();
+    const curr = map.get(id);
+    if (!curr || ymd < curr) {
+      map.set(id, ymd);
+    }
+  }
+  return map;
+}
+
+/**
+ * Hitung selisih hari kalender sejak tanggal pertama join (1-indexed: hari ke-1, ke-2, dst)
+ */
+export function getDaysSinceJoin(currentDateStr: string, firstDateStr: string): number {
+  const dCur = parseDate(currentDateStr);
+  const dFirst = parseDate(firstDateStr);
+  if (!dCur || !dFirst) return 999;
+  const diffDays = Math.floor((dCur.getTime() - dFirst.getTime()) / (24 * 3600 * 1000));
+  return Math.max(1, diffDays + 1);
+}
+
+/**
+ * Cek apakah database Hub sudah memiliki histori L15D (minimal 15 hari)
+ */
+export function checkHubL15D(allRaw: CourierRecord[]): {
+  hasL15D: boolean;
+  uniqueDaysCount: number;
+  daySpan: number;
+} {
+  const dates = new Set<string>();
+  for (const r of allRaw) {
+    const ymd = normalizeDateKey(r.date);
+    if (ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+      dates.add(ymd);
+    }
+  }
+  const uniqueDaysCount = dates.size;
+  let daySpan = 0;
+  if (dates.size >= 2) {
+    const sorted = Array.from(dates).sort();
+    const minD = parseDate(sorted[0]);
+    const maxD = parseDate(sorted[sorted.length - 1]);
+    if (minD && maxD) {
+      daySpan = Math.round((maxD.getTime() - minD.getTime()) / (24 * 3600 * 1000)) + 1;
+    }
+  }
+  const hasL15D = uniqueDaysCount >= 15 || daySpan >= 15;
+  return { hasL15D, uniqueDaysCount, daySpan };
+}
+
 // ── Appeal Targets ───────────────────────────────────────────
 
 export async function getTargetAppeals(hubName: string): Promise<TargetAppeal[]> {
@@ -297,7 +372,7 @@ export async function getKpiMetrics(
   hubName: string,
   dateRange: { start: Date; end: Date },
   weekStart: string,
-  filters: { contract?: string; vehicle?: string } = {}
+  filters: { contract?: string; vehicle?: string; excludeNew?: boolean } = {}
 ): Promise<ProductivityKpi> {
   const [allRaw, appeals] = await Promise.all([
     getRawData(hubName),
@@ -307,11 +382,37 @@ export async function getKpiMetrics(
   const mondayMap     = buildMondayTargetMap(allRaw);
   const allWeekActive = dedup(filterActive(allRaw, dateRange));
 
+  const { hasL15D, uniqueDaysCount } = checkHubL15D(allRaw);
+  const firstJoinMap = buildCourierFirstJoinMap(allRaw);
+
+  // Cek apakah record berada dalam Grace Period 14 hari
+  const isGracePeriodRecord = (r: CourierRecord): boolean => {
+    if (!isEligibleNewCourierContract(r.contract_type, r.vehicle_type)) return false;
+    const firstDate = firstJoinMap.get(r.courier_id.trim()) || r.date;
+    return getDaysSinceJoin(r.date, firstDate) <= 14;
+  };
+
+  const shouldExcludeNew = Boolean(filters.excludeNew && hasL15D);
+
+  const excludedNewCouriers = new Set<string>();
+  if (shouldExcludeNew) {
+    allWeekActive.forEach((r) => {
+      if (isGracePeriodRecord(r)) {
+        excludedNewCouriers.add(r.courier_id.trim());
+      }
+    });
+  }
+
+  // Active records untuk perhitungan produktivitas (jika toggle aktif, kurir baru dikeluarkan)
+  const prodActive = shouldExcludeNew
+    ? allWeekActive.filter((r) => !isGracePeriodRecord(r))
+    : allWeekActive;
+
   const isFiltered =
     (filters.contract && filters.contract !== "all") ||
     (filters.vehicle && filters.vehicle !== "all");
 
-  let active = allWeekActive;
+  let active = prodActive;
   if (filters.contract && filters.contract !== "all") {
     active = active.filter((r) => r.contract_type === filters.contract);
   }
@@ -337,7 +438,7 @@ export async function getKpiMetrics(
     : 0;
   const productivityProgress = avgTarget > 0 ? (weeklyAvg / avgTarget) * 100 : 0;
 
-  // Daily Active Rate (Static: selalu 2WH · Dedicated + Kurir Plus, tidak terpengaruh filter tipe)
+  // Daily Active Rate (Static: selalu 2WH · Dedicated + Kurir Plus, TETAP menghitung kurir baru)
   const da = allWeekActive.filter(
     (r) =>
       r.vehicle_type === "2WH" &&
@@ -375,7 +476,7 @@ export async function getKpiMetrics(
     vehicleType: string,
     predicate: (r: CourierRecord) => boolean
   ): WeeklyThresholdSegment => {
-    const segRecords = allWeekActive.filter(predicate);
+    const segRecords = prodActive.filter(predicate);
     const shifts = segRecords.length;
     const deliv = segRecords.reduce((s, r) => s + (r.delivered || 0), 0);
     const avg = shifts > 0 ? deliv / shifts : 0;
@@ -531,6 +632,9 @@ export async function getKpiMetrics(
       actionPlan,
     },
     missingWeekTarget: !hasWeekTarget(weekStart, appealMap, mondayMap, filters),
+    hasL15D,
+    dataDaysCount: uniqueDaysCount,
+    excludedNewCount: excludedNewCouriers.size,
   };
 }
 
@@ -540,7 +644,7 @@ export async function getCourierSchedule(
   hubName: string,
   dateRange: { start: Date; end: Date },
   weekStart: string,
-  filters: { contract?:string; vehicle?:string; zone?:string } = {}
+  filters: { contract?:string; vehicle?:string; zone?:string; excludeNew?: boolean } = {}
 ): Promise<CourierScheduleRow[]> {
   const [allRaw, appeals] = await Promise.all([
     getRawData(hubName),
@@ -549,6 +653,8 @@ export async function getCourierSchedule(
   const appealMap = buildAppealMap(appeals);
   const mondayMap = buildMondayTargetMap(allRaw);
   const active    = dedup(filterActive(allRaw, dateRange));
+
+  const firstJoinMap = buildCourierFirstJoinMap(allRaw);
 
   const DAY: (keyof CourierScheduleRow["activeDays"])[] = ["sen","sel","rab","kam","jum","sab","min"];
   const DAY_NAMES_BY_IDX = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"];
@@ -610,6 +716,12 @@ export async function getCourierSchedule(
     const tgt = resolveTarget(sample, weekStart, appealMap, mondayMap);
     const avg = row.shiftsCount > 0 ? row.totalDelivered / row.shiftsCount : 0;
     const sortedDaily = (row.dailyDetails || []).sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+    // Informasi Grace Period
+    const firstDate = firstJoinMap.get(row.courier_id.trim()) || (sortedDaily[0]?.dateKey || "");
+    const latestDate = sortedDaily[sortedDaily.length - 1]?.dateKey || firstDate;
+    const daysSince = getDaysSinceJoin(latestDate, firstDate);
+    const isNew = isEligibleNewCourierContract(row.contract_type, row.vehicle_type) && daysSince <= 14;
+
     return {
       ...row,
       avgDaily:        Math.round(avg*10)/10,
@@ -617,6 +729,9 @@ export async function getCourierSchedule(
       productivityPct: tgt>0 ? Math.round((avg/tgt)*1000)/10 : 0,
       successRate:     row.totalHandedOver>0 ? Math.round((row.totalDelivered/row.totalHandedOver)*1000)/10 : 0,
       dailyDetails:    sortedDaily,
+      isNewCourier:    isNew,
+      daysSinceJoin:   daysSince,
+      firstJoinDate:   firstDate,
     };
   });
 
@@ -664,7 +779,8 @@ export async function getMonthlyMetrics(
   year: number,
   month: number,
   contract: string,
-  vehicle: string
+  vehicle: string,
+  filters: { excludeNew?: boolean } = {}
 ): Promise<{
   totalDelivered: number;
   totalShifts: number;
@@ -688,11 +804,12 @@ export async function getMonthlyMetrics(
   dailyBreakdown: DailyBreakdownRow[];
   weeklyBreakdown: { week: string; avgProductivity: number; shifts: number }[];
   missingTargetWeeks: string[];
+  hasL15D?: boolean;
+  dataDaysCount?: number;
+  excludedNewCount?: number;
 }> {
-  const monthStart = new Date(year, month - 1, 1);
-  monthStart.setHours(0, 0, 0, 0);
-  const monthEnd = new Date(year, month, 0);
-  monthEnd.setHours(23, 59, 59, 999);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+  const monthEnd   = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
   const weekStartStr = format(startOfWeek(monthStart, { weekStartsOn: 1 }), "yyyy-MM-dd");
 
@@ -703,7 +820,33 @@ export async function getMonthlyMetrics(
   const appealMap = buildAppealMap(appeals);
   const mondayMap = buildMondayTargetMap(allRaw);
 
+  const { hasL15D, uniqueDaysCount } = checkHubL15D(allRaw);
+  const firstJoinMap = buildCourierFirstJoinMap(allRaw);
+
   const allMonthActive = dedup(filterActive(allRaw, { start: monthStart, end: monthEnd }));
+
+  // Cek apakah record berada dalam Grace Period 14 hari
+  const isGracePeriodRecord = (r: CourierRecord): boolean => {
+    if (!isEligibleNewCourierContract(r.contract_type, r.vehicle_type)) return false;
+    const firstDate = firstJoinMap.get(r.courier_id.trim()) || r.date;
+    return getDaysSinceJoin(r.date, firstDate) <= 14;
+  };
+
+  const shouldExcludeNew = Boolean(filters.excludeNew && hasL15D);
+
+  const excludedNewCouriers = new Set<string>();
+  if (shouldExcludeNew) {
+    allMonthActive.forEach((r) => {
+      if (isGracePeriodRecord(r)) {
+        excludedNewCouriers.add(r.courier_id.trim());
+      }
+    });
+  }
+
+  // Active records untuk perhitungan produktivitas bulanan
+  const prodMonthActive = shouldExcludeNew
+    ? allMonthActive.filter((r) => !isGracePeriodRecord(r))
+    : allMonthActive;
 
   // Hitung target setiap shift berdasarkan hari Senin di minggu shift tersebut (Senin–Minggu)
   const getShiftTarget = (r: { date: string; contract_type: string; vehicle_type: string }): number => {
@@ -759,13 +902,13 @@ export async function getMonthlyMetrics(
     };
   };
 
-  const ded2whRecords = allMonthActive.filter(
+  const ded2whRecords = prodMonthActive.filter(
     (r) => r.contract_type === "Dedicated" && r.vehicle_type === "2WH"
   );
-  const kp2whRecords = allMonthActive.filter(
+  const kp2whRecords = prodMonthActive.filter(
     (r) => r.contract_type.includes("Kurir Plus") && r.vehicle_type === "2WH"
   );
-  const ded4whRecords = allMonthActive.filter(
+  const ded4whRecords = prodMonthActive.filter(
     (r) => r.contract_type === "Dedicated" && r.vehicle_type === "4WH"
   );
 
@@ -781,9 +924,14 @@ export async function getMonthlyMetrics(
       : kurirPlus2wh.achievement;
 
   // Filter data sesuai pilihan Contract Type & Vehicle Type untuk Summary Cards & Daily Breakdown
-  let active = allMonthActive;
+  let active = prodMonthActive;
   if (contract !== "all") active = active.filter((r) => r.contract_type === contract);
   if (vehicle  !== "all") active = active.filter((r) => r.vehicle_type  === vehicle);
+
+  // Seluruh kurir aktif di bulan ini untuk Headcount (tetap menghitung kurir baru)
+  let allMonthCouriers = allMonthActive;
+  if (contract !== "all") allMonthCouriers = allMonthCouriers.filter((r) => r.contract_type === contract);
+  if (vehicle  !== "all") allMonthCouriers = allMonthCouriers.filter((r) => r.vehicle_type  === vehicle);
 
   const totalDelivered  = active.reduce((s, r) => s + (r.delivered || 0), 0);
   const totalShifts     = active.length;
@@ -846,7 +994,7 @@ export async function getMonthlyMetrics(
   const lastUpdate =
     allMonthDates.length > 0 ? format(allMonthDates[0], "d MMM yyyy") : null;
 
-  const uniqueHeadcount = new Set(active.map((r) => r.courier_id)).size;
+  const uniqueHeadcount = new Set(allMonthCouriers.map((r) => r.courier_id)).size;
   const cMap: Record<string, { d: number; s: number; tSum: number }> = {};
   active.forEach((r) => {
     if (!cMap[r.courier_id]) cMap[r.courier_id] = { d: 0, s: 0, tSum: 0 };
@@ -906,6 +1054,9 @@ export async function getMonthlyMetrics(
       };
     }),
     missingTargetWeeks,
+    hasL15D,
+    dataDaysCount: uniqueDaysCount,
+    excludedNewCount: excludedNewCouriers.size,
   };
 }
 

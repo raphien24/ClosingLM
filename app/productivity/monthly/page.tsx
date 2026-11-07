@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { GracePeriodToggle } from "@/components/productivity/GracePeriodToggle";
 import { format } from "date-fns";
 
 interface CoreSegmentMetrics {
@@ -58,6 +59,9 @@ interface MonthlyData {
   dailyBreakdown: DailyBreakdownRow[];
   weeklyBreakdown: { week: string; avgProductivity: number; shifts: number }[];
   missingTargetWeeks?: string[];
+  hasL15D?: boolean;
+  dataDaysCount?: number;
+  excludedNewCount?: number;
 }
 
 function formatWeekLabel(weekStart: string): string {
@@ -129,6 +133,19 @@ export default function DashboardMonthlyPage() {
   const [data, setData] = useState<MonthlyData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showFormula, setShowFormula] = useState(false);
+  const [excludeNew, setExcludeNew] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("spx_grace_period_14d");
+    if (saved !== null) {
+      setExcludeNew(saved === "true");
+    }
+  }, []);
+
+  const handleToggleExcludeNew = (val: boolean) => {
+    setExcludeNew(val);
+    localStorage.setItem("spx_grace_period_14d", String(val));
+  };
 
   const fetchData = useCallback(async () => {
     if (!selectedMonth) return;
@@ -138,7 +155,7 @@ export default function DashboardMonthlyPage() {
       const res = await fetch(
         `/api/productivity/monthly?year=${year}&month=${month}&contract=${encodeURIComponent(
           contract
-        )}&vehicle=${vehicle}`
+        )}&vehicle=${vehicle}&exclude_new=${excludeNew}`
       );
       const json = await res.json();
       if (json.success) setData(json.data);
@@ -148,7 +165,7 @@ export default function DashboardMonthlyPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedMonth, contract, vehicle]);
+  }, [selectedMonth, contract, vehicle, excludeNew]);
 
   useEffect(() => {
     fetchData();
@@ -172,9 +189,18 @@ export default function DashboardMonthlyPage() {
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md">
         <div className="w-full px-4 sm:px-6 py-5 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              Monthly Productivity Dashboard
-            </h1>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl font-bold tracking-tight">
+                Monthly Productivity Dashboard
+              </h1>
+              <GracePeriodToggle
+                hasL15D={Boolean(data?.hasL15D)}
+                dataDaysCount={data?.dataDaysCount ?? 0}
+                enabled={excludeNew}
+                onToggle={handleToggleExcludeNew}
+                excludedCount={data?.excludedNewCount}
+              />
+            </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-2.5 text-xs text-blue-100">
               <span>Monthly Aggregated Performance Metrics</span>
               <span>•</span>

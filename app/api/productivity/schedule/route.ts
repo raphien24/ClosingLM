@@ -16,9 +16,10 @@ export async function GET(req: NextRequest) {
   const today = nowWIBDate();
   const defaultMonday = startOfWeek(today, { weekStartsOn: 1 });
   const weekStartParam = searchParams.get("week_start") || format(defaultMonday, "yyyy-MM-dd");
-  const contract = searchParams.get("contract") || "all";
-  const vehicle  = searchParams.get("vehicle")  || "all";
-  const zone     = searchParams.get("zone")     || "all";
+  const contract   = searchParams.get("contract")   || "all";
+  const vehicle    = searchParams.get("vehicle")    || "all";
+  const zone       = searchParams.get("zone")       || "all";
+  const excludeNew = searchParams.get("exclude_new") === "true";
 
   try {
     const [y, m, d] = weekStartParam.split("-").map(Number);
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
       user.hubName,
       { start: weekStartDate, end: weekEndDate },
       weekStartParam,
-      { contract, vehicle, zone }
+      { contract, vehicle, zone, excludeNew }
     );
 
     return NextResponse.json({ success: true, schedule, week_start: weekStartParam });

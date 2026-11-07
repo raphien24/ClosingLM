@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { ProductivityKpiCards } from "@/components/productivity/ProductivityKpiCards";
 import { CourierTable } from "@/components/productivity/CourierTable";
+import { GracePeriodToggle } from "@/components/productivity/GracePeriodToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { ProductivityKpi, CourierScheduleRow } from "@/types/productivity";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
@@ -50,6 +51,19 @@ function DashboardWeeklyContent() {
   const [fleetType, setFleetType]   = useState<FleetTypeValue>(
     (searchParams.get("fleet") as FleetTypeValue) || "all"
   );
+  const [excludeNew, setExcludeNew] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("spx_grace_period_14d");
+    if (saved !== null) {
+      setExcludeNew(saved === "true");
+    }
+  }, []);
+
+  const handleToggleExcludeNew = (val: boolean) => {
+    setExcludeNew(val);
+    localStorage.setItem("spx_grace_period_14d", String(val));
+  };
 
   const [kpi, setKpi]               = useState<ProductivityKpi | null>(null);
   const [schedule, setSchedule]     = useState<CourierScheduleRow[]>([]);
@@ -62,8 +76,8 @@ function DashboardWeeklyContent() {
     const { contract, vehicle } = getContractVehicle(fleetType);
     try {
       const [kpiRes, schRes] = await Promise.all([
-        fetch(`/api/productivity/kpi?week_start=${weekStart}&contract=${encodeURIComponent(contract)}&vehicle=${vehicle}`),
-        fetch(`/api/productivity/schedule?week_start=${weekStart}&contract=${encodeURIComponent(contract)}&vehicle=${vehicle}`),
+        fetch(`/api/productivity/kpi?week_start=${weekStart}&contract=${encodeURIComponent(contract)}&vehicle=${vehicle}&exclude_new=${excludeNew}`),
+        fetch(`/api/productivity/schedule?week_start=${weekStart}&contract=${encodeURIComponent(contract)}&vehicle=${vehicle}&exclude_new=${excludeNew}`),
       ]);
       const kpiJson = await kpiRes.json();
       const schJson = await schRes.json();
@@ -75,7 +89,7 @@ function DashboardWeeklyContent() {
       setKpiLoading(false);
       setSchLoading(false);
     }
-  }, [weekStart, fleetType]);
+  }, [weekStart, fleetType, excludeNew]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -103,7 +117,16 @@ function DashboardWeeklyContent() {
             <BarChart2 className="h-5 w-5 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Dashboard Weekly Productivity</h1>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-bold text-gray-900">Dashboard Weekly Productivity</h1>
+              <GracePeriodToggle
+                hasL15D={Boolean(kpi?.hasL15D)}
+                dataDaysCount={kpi?.dataDaysCount ?? 0}
+                enabled={excludeNew}
+                onToggle={handleToggleExcludeNew}
+                excludedCount={kpi?.excludedNewCount}
+              />
+            </div>
             <p className="text-sm text-gray-500">
               Hub: <span className="font-medium text-blue-600">{hubName}</span>
             </p>
