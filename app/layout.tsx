@@ -59,7 +59,7 @@ export default async function RootLayout({
           />
           {session && <Navbar />}
           <main className="flex-1">{children}</main>
-          <Footer />
+          {session && <Footer />}
         </SessionProvider>
       </body>
     </html>
