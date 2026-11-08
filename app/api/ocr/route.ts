@@ -77,7 +77,7 @@ async function runPaddleService(imageBuffer: Buffer): Promise<string | null> {
     const res = await fetch(base.replace(/\/$/, "") + "/ocr", {
       method: "POST",
       body: form,
-      signal: AbortSignal.timeout(30000),
+      signal: AbortSignal.timeout(50000),
     });
     if (!res.ok) return null;
     const json = await res.json();
