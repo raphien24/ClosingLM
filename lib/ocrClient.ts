@@ -139,6 +139,28 @@ async function preprocessForOcr(
   return { dataUrl: canvas.toDataURL("image/png"), isFull };
 }
 
+/** Binarisasi (hitam-putih) dengan ambang tertentu untuk cross-check dua bacaan. */
+async function binarizeForOcr(dataUrl: string, threshold: number): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0);
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = imageData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    const v = lum < threshold ? 0 : 255;
+    d[i] = v;
+    d[i + 1] = v;
+    d[i + 2] = v;
+  }
+  ctx.putImageData(imageData, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
 export interface LocalOcrResult {
   texts: string[];
   sparseTexts: string[];
@@ -174,9 +196,20 @@ export async function runOcrLocally(
     const mainMode = isFull ? "3" : "6";
 
     await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
-    const { data } = await worker.recognize(processed);
-    texts.push(data.text);
-    confidences.push(data.confidence ?? 0);
+    // Baca 2 kali dengan binarisasi berbeda, lalu cocokkan silang
+    // (meniru pendekatan script referensi agar salah baca tidak lolos diam-diam).
+    const bin200 = await binarizeForOcr(processed, 200);
+    const bin225 = await binarizeForOcr(processed, 225);
+    const r200 = await worker.recognize(bin200);
+    const r225 = await worker.recognize(bin225);
+    const norm = (s: string) => s.replace(/ +/g, " ").trim();
+    const cocok = norm(r200.data.text) === norm(r225.data.text);
+    texts.push(r200.data.text);
+    confidences.push(
+      cocok
+        ? Math.round(((r200.data.confidence ?? 0) + (r225.data.confidence ?? 0)) / 2)
+        : 60
+    );
 
     try {
       await worker.setParameters({ tessedit_pageseg_mode: "11" as never });
