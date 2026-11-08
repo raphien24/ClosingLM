@@ -64,10 +64,38 @@ async function runOcrSparse(imageBuffer: Buffer): Promise<string> {
   }
 }
 
+function base64ToBuffer(b64: string): Buffer {
+  return Buffer.from(b64.replace(/^data:image\/\w+;base64,/,""), "base64");
+}
+
+async function runPaddleService(imageBuffer: Buffer): Promise<string | null> {
+  const base = process.env.PADDLE_OCR_SERVICE_URL;
+  if (!base) return null;
+  try {
+    const form = new FormData();
+    form.append("file", new Blob([new Uint8Array(imageBuffer)], { type: "image/png" }), "img.png");
+    const res = await fetch(base.replace(/\/$/, "") + "/ocr", {
+      method: "POST",
+      body: form,
+      signal: AbortSignal.timeout(30000),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return typeof json.text === "string" && json.text.length > 0 ? json.text : null;
+  } catch {
+    return null;
+  }
+}
 async function runOcrFast(base64Image: string): Promise<{ text: string; confidence: number; sparseText: string }> {
   const processed1 = await preprocessImageToBuffer(base64Image);
   const fullScreen1 = await isFullScreen(processed1);
-  const res1 = fullScreen1 ? await runOcrWithPsm(processed1, "3") : await runOcr(processed1);
+  let res1: { text: string; confidence: number };
+  if (fullScreen1) {
+    const svc = await runPaddleService(base64ToBuffer(base64Image));
+    res1 = svc ? { text: svc, confidence: 90 } : await runOcrWithPsm(processed1, "3");
+  } else {
+    res1 = await runOcr(processed1);
+  }
   const sparseText = await runOcrSparse(processed1).catch(() => "");
 
   const quality = (text: string) => {
