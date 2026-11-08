@@ -18,11 +18,12 @@ export async function preprocessImageToBuffer(base64Input: string): Promise<Buff
   const origWidth = meta.width || 1280;
 
   // Tentukan lebar target optimal untuk Tesseract (1200 - 1600px)
+  // Upscale agar tesseract bisa membaca angka kecil di dashboard (threshold agresif merusak teks abu-abu tipis)
   let targetWidth = origWidth;
-  if (origWidth > 1600) {
-    targetWidth = 1600;
-  } else if (origWidth < 900) {
-    targetWidth = Math.min(1400, Math.round(origWidth * 1.4));
+  if (origWidth < 2000) {
+    targetWidth = Math.min(3200, origWidth * 2);
+  } else if (origWidth > 3200) {
+    targetWidth = 3200;
   }
 
   const pipeline = sharp(inputBuffer);
@@ -33,9 +34,8 @@ export async function preprocessImageToBuffer(base64Input: string): Promise<Buff
 
   return pipeline
     .grayscale()
-    .sharpen({ sigma: 1.0 })
     .normalize()
-    .threshold(175)
+    .sharpen({ sigma: 1.0 })
     .png({ compressionLevel: 1 })
     .toBuffer();
 }
