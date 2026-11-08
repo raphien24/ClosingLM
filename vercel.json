@@ -1,0 +1,19 @@
+﻿{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app/api/ocr/route.ts": {
+      "memory": 2048,
+      "maxDuration": 60
+    },
+    "app/api/ocr/warmup/route.ts": {
+      "memory": 2048,
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/ocr/warmup",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

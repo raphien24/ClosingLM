@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseOcrText, detectParcelSweeperDates } from "@/lib/ocrParser";
 import { mergeOcrBatches } from "@/lib/ocrMerger";
@@ -8,56 +8,15 @@ import {
 } from "@/lib/imagePreprocess";
 import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
-import { createWorker, Worker } from "tesseract.js";
-import path from "path";
-import fs from "fs";
+import { getOcrWorker, resetOcrWorker } from "@/lib/ocrWorker";
+
+// Beri waktu cukup untuk cold start Tesseract di Vercel serverless.
+export const maxDuration = 60;
+// Jalankan fungsi di region terdekat user (Singapore).
+export const preferredRegion = ["sin1"];
 
 interface OcrRequestBody {
   images: string[]; // base64 encoded images
-}
-
-// Singleton worker di memori server agar tidak load traineddata berulang kali
-let cachedWorkerPromise: Promise<Worker> | null = null;
-
-async function getOcrWorker(): Promise<Worker> {
-  if (!cachedWorkerPromise) {
-    cachedWorkerPromise = (async () => {
-      const isVercel = !!process.env.VERCEL;
-      const cwd = process.cwd();
-      const localTrainedPath = path.join(cwd, "eng.traineddata");
-      const hasLocalData = fs.existsSync(localTrainedPath);
-
-      const options: Record<string, unknown> = {
-        logger: () => {},
-      };
-
-      // Jika ada file eng.traineddata lokal di root project, gunakan langsung dari disk (10x lebih cepat)
-      if (hasLocalData) {
-        options.langPath = cwd;
-      }
-
-      // Di Vercel serverless (AWS Lambda), filesystem selain /tmp bersifat read-only
-      if (isVercel) {
-        options.cachePath = "/tmp";
-      } else {
-        options.cachePath = cwd;
-      }
-
-      const worker = await createWorker("eng", 1, options);
-      await worker.setParameters({
-        tessedit_pageseg_mode: "6" as never,
-        tessedit_char_whitelist:
-          "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,%()-/: ",
-        preserve_interword_spaces: "1" as never,
-      });
-      return worker;
-    })().catch((err) => {
-      cachedWorkerPromise = null;
-      console.error("Gagal inisialisasi Tesseract worker:", err);
-      throw err;
-    });
-  }
-  return cachedWorkerPromise;
 }
 
 async function runOcr(imageBuffer: Buffer): Promise<{ text: string; confidence: number }> {
@@ -67,7 +26,7 @@ async function runOcr(imageBuffer: Buffer): Promise<{ text: string; confidence: 
     return { text: data.text, confidence: data.confidence ?? 0 };
   } catch (err) {
     console.error("Worker recognize error, me-reset worker:", err);
-    cachedWorkerPromise = null;
+    resetOcrWorker();
     const worker = await getOcrWorker();
     const { data } = await worker.recognize(imageBuffer);
     return { text: data.text, confidence: data.confidence ?? 0 };
