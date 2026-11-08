@@ -1,0 +1,12 @@
+services:
+  ocr:
+    build: .
+    container_name: closinglm-ocr
+    ports:
+      - "8001:8001"
+    restart: unless-stopped
+    volumes:
+      - paddle_cache:/root/.paddleocr
+
+volumes:
+  paddle_cache:
