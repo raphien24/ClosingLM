@@ -84,9 +84,7 @@ export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [
       {/* Toggle mode tampilan */}
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">
-          {previousData
-            ? `Placeholder abu-abu menampilkan angka closing sebelumnya (${previousData.tanggal}) sebagai pembanding.`
-            : "Klik pada kotak angka untuk mengoreksi hasil pembacaan."}
+          Klik pada kotak angka untuk mengoreksi hasil pembacaan.
         </p>
         <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
           <button
@@ -122,7 +120,6 @@ export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [
                 <div className="grid grid-cols-2 gap-2.5">
                   {groupCols.map((col) => {
                     const val = row[col.key] as number | string | null | undefined;
-                    const prevVal = previousData?.[col.key] as number | string | null | undefined;
                     const warn = anomalyMap.get(col.key);
                     const isEmpty = val === null || val === undefined || val === "";
                     const isManual = manualSet.has(col.key);
@@ -141,7 +138,7 @@ export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [
                         <input
                           type={col.type}
                           value={val == null ? "" : String(val)}
-                          placeholder={prevVal != null ? `Kemarin: ${prevVal}` : "0"}
+                          placeholder="0"
                           onChange={(e) => onUpdate(0, col.key, e.target.value)}
                           step={col.type === "number" ? "any" : undefined}
                           title={warn || (isManual ? "Angka ini diketik manual oleh user" : undefined)}
@@ -185,13 +182,12 @@ export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [
                     {COLS.map((col) => {
                       const val = r[col.key] as string | number | null | undefined;
                       const warn = anomalyMap.get(col.key);
-                      const prevVal = previousData?.[col.key];
                       return (
                         <td key={col.key} className="px-2 py-1.5">
                           <input
                             type={col.type}
                             value={val == null ? "" : String(val)}
-                            placeholder={prevVal != null ? String(prevVal) : ""}
+                            placeholder=""
                             onChange={(e) => onUpdate(ri, col.key, e.target.value)}
                             step={col.type === "number" ? "any" : undefined}
                             title={warn || undefined}
