@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { parseOcrText, detectParcelSweeperDates, extractExpediteSparse } from "@/lib/ocrParser";
+import { parseOcrText, detectParcelSweeperDates, extractExpediteSparse, isParcelSweeperPage } from "@/lib/ocrParser";
 import { mergeOcrBatches } from "@/lib/ocrMerger";
 import {
   preprocessImageToBuffer,
@@ -107,6 +107,17 @@ export async function POST(req: NextRequest) {
       const parsed = parseOcrText(rawText);
       const expSparse = extractExpediteSparse(sparseText);
       if (expSparse !== null) parsed.row.total_expedite = expSparse;
+
+      if (isParcelSweeperPage(rawText) && psDates.length === 0) {
+        return NextResponse.json(
+          {
+            error: `Tanggal Parcel Sweeper pada screenshot #${idx + 1} tidak terdeteksi. Pastikan tanggal terlihat jelas di screenshot.`,
+            date_missing: true,
+            today,
+          },
+          { status: 400 }
+        );
+      }
 
       const mismatchedDate = psDates.find((d) => d !== today);
       if (mismatchedDate) {

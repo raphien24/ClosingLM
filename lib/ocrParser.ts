@@ -37,6 +37,10 @@ export function detectDate(text: string): string | null {
  * Ekstrak tanggal khusus dari halaman Parcel Sweeper (untuk validasi wajib = hari ini).
  * Mengembalikan array kosong jika teks bukan berasal dari halaman Parcel Sweeper.
  */
+/** Apakah teks berasal dari halaman Parcel Sweeper (perlu validasi tanggal wajib hari ini). */
+export function isParcelSweeperPage(text: string): boolean {
+  return /Parcel\s+Sweeper|Expected\s+Order\s+Scanned|\bPS20\d{6,}/i.test(text);
+}
 export function detectParcelSweeperDates(text: string): string[] {
   if (!/Parcel\s+Sweeper|Expected\s+Order\s+Scanned|\bPS20\d{6,}/i.test(text)) {
     return [];
