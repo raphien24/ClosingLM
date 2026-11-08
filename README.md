@@ -26,7 +26,7 @@ OCR screenshot FMS → Google Sheets database → Dashboard terpusat.
 Di menu **APIs & Services → Library**, aktifkan:
 - **Google Sheets API**
 
-> OCR menggunakan **Tesseract.js** yang berjalan lokal di server — gratis, tidak perlu billing, tidak perlu Vision API.
+> OCR menggunakan **Tesseract.js** yang berjalan lokal di browser (perangkat pengguna) — gratis, tidak perlu billing, tidak perlu Vision API.
 
 ### 3. OAuth 2.0 (untuk Login Google)
 1. **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client IDs**
@@ -48,7 +48,7 @@ Di menu **APIs & Services → Library**, aktifkan:
 5. Salin hasilnya untuk `GOOGLE_SERVICE_ACCOUNT_KEY`
 
 ### 5. ~~Vision API Key~~ (Tidak diperlukan)
-OCR menggunakan Tesseract.js — gratis, berjalan di server, tidak perlu API key.
+OCR menggunakan Tesseract.js — gratis, berjalan di browser (perangkat pengguna), tidak perlu API key.
 
 ---
 
@@ -159,7 +159,7 @@ Buka `http://localhost:3000`
 - **Framework**: Next.js 16 (App Router)
 - **Styling**: Tailwind CSS v4
 - **Auth**: NextAuth.js v5 + Google OAuth
-- **OCR**: Tesseract.js (gratis, server-side, tidak perlu billing)
+- **OCR**: Tesseract.js (gratis, client-side di browser, tidak perlu billing)
 - **Database**: Google Sheets (via googleapis)
 - **UI Components**: Radix UI + Lucide Icons
 - **Hosting**: Vercel

@@ -10,7 +10,9 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDate, detectAnomalies } from "@/lib/utils";
 import { todayWIB } from "@/lib/dateUtils";
-import { parseOcrText, detectParcelSweeperDates } from "@/lib/ocrParser";
+import { parseOcrText, detectParcelSweeperDates, extractExpediteSparse, isParcelSweeperPage } from "@/lib/ocrParser";
+import { mergeOcrBatches } from "@/lib/ocrMerger";
+import { runOcrLocally, OcrCancelledError } from "@/lib/ocrClient";
 import { ClosingData, AnomalyField } from "@/types/closing";
 import {
   ScanText,
@@ -105,6 +107,7 @@ function UnifiedInputContent() {
   const [ocrStep, setOcrStep] = useState<string>("Mengoptimalkan gambar...");
   const [ocrElapsed, setOcrElapsed] = useState<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const cancelledRef = useRef(false);
 
   const isProcessing = pageState === "processing";
   const isSaving = pageState === "saving";
@@ -333,7 +336,8 @@ function UnifiedInputContent() {
       return;
     }
     setPageState("processing");
-    setOcrStep("Mengirim screenshot ke server...");
+    cancelledRef.current = false;
+    setOcrStep("Membaca screenshot di perangkat...");
     setOcrElapsed(0);
 
     const controller = new AbortController();
@@ -358,33 +362,54 @@ function UnifiedInputContent() {
     }, 90000);
 
     try {
-      const res = await fetch("/api/ocr", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: screenshots }),
-        signal: controller.signal,
-      });
+      const { texts, sparseTexts, confidences } = await runOcrLocally(
+        screenshots,
+        {
+          onProgress: (step) => setOcrStep(step),
+          isCancelled: () => cancelledRef.current,
+        }
+      );
 
       clearTimeout(timeoutId);
       clearInterval(timer);
       clearTimeout(stepTimeout1);
       clearTimeout(stepTimeout2);
 
-      if (res.status === 413) {
-        throw new Error(
-          "Ukuran screenshot terlalu besar. Coba kirim 1–2 gambar saja."
-        );
-      }
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Gagal OCR");
+      const today = todayWIB();
+      const batches = [];
+      let totalConf = 0;
 
-      if (typeof json.confidence === "number") {
-        setOcrConfidence(json.confidence);
+      for (let idx = 0; idx < texts.length; idx++) {
+        const rawText = texts[idx];
+        const psDates = detectParcelSweeperDates(rawText);
+        const parsed = parseOcrText(rawText);
+        const expSparse = extractExpediteSparse(sparseTexts[idx] || "");
+        if (expSparse !== null) parsed.row.total_expedite = expSparse;
+
+        if (isParcelSweeperPage(rawText) && psDates.length === 0) {
+          throw new Error(
+            `Tanggal Parcel Sweeper pada screenshot #${idx + 1} tidak terdeteksi. Pastikan tanggal terlihat jelas di screenshot.`
+          );
+        }
+        const mismatchedDate = psDates.find((d) => d !== today);
+        if (mismatchedDate) {
+          throw new Error(
+            `Tanggal Parcel Sweeper pada screenshot #${idx + 1} (${formatDate(
+              mismatchedDate
+            )}) tidak sesuai dengan tanggal hari ini (${formatDate(
+              today
+            )}). Wajib gunakan data Parcel Sweeper hari ini!`
+          );
+        }
+
+        batches.push(parsed);
+        totalConf += confidences[idx] ?? 0;
       }
-      if (json.engine === "paddle" || json.engine === "tesseract") {
-        setOcrEngine(json.engine);
-      }
-      mergeIntoOcrRow(json.row || {}, json.tanggal_detected);
+
+      const merged = mergeOcrBatches(batches);
+      setOcrConfidence(Math.round(totalConf / texts.length));
+      setOcrEngine("tesseract");
+      mergeIntoOcrRow(merged.row || {}, today);
       toast.success("OCR selesai! Periksa dan simpan data.");
     } catch (err: unknown) {
       clearTimeout(timeoutId);
@@ -392,7 +417,9 @@ function UnifiedInputContent() {
       clearTimeout(stepTimeout1);
       clearTimeout(stepTimeout2);
 
-      if (err instanceof DOMException && err.name === "AbortError") {
+      if (err instanceof OcrCancelledError) {
+        toast("Proses OCR dibatalkan");
+      } else if (err instanceof DOMException && err.name === "AbortError") {
         toast.error("Proses OCR dibatalkan atau waktu habis (timeout 90s).");
       } else {
         toast.error(err instanceof Error ? err.message : "Gagal OCR");
@@ -404,11 +431,12 @@ function UnifiedInputContent() {
   };
 
   const handleCancelOcr = () => {
+    cancelledRef.current = true;
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
-      toast("Proses OCR dibatalkan", { icon: "⏹️" });
     }
+    toast("Proses OCR dibatalkan");
     setPageState(ocrRow ? "preview" : "idle");
   };
 
