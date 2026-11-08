@@ -691,7 +691,7 @@ function UnifiedInputContent() {
       {/* ============================================================ */}
       <div className={activeTab === "closing" ? "space-y-6" : "hidden"}>
         {/* Tips Akurasi 100% Tanpa OCR */}
-        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="tips-banner bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
               <Sparkles className="h-4 w-4 text-emerald-700" />
