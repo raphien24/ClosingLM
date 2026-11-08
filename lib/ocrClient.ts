@@ -101,9 +101,11 @@ async function preprocessForOcr(
   // Jadi patokan "layar penuh" cukup dari lebar agar tabel tidak salah mode.
   const isFull = w >= 900;
   let targetW = w;
-  if (isFull && w < 2000) targetW = Math.min(3200, Math.round(w * 2.5));
-  else if (w < 2000) targetW = Math.min(3200, w * 2);
-  else if (w > 3200) targetW = 3200;
+  // Naikkan resolusi hingga lebar 3200 agar pemisah ribuan/desimal
+  // (contoh: 8.756 dan 100,0%) tidak hilang saat dibaca Tesseract.
+  if (w >= 3200) targetW = 3200;
+  else if (isFull) targetW = Math.min(3200, Math.round(w * 1.6));
+  else targetW = Math.min(3200, w * 2);
 
   const scale = targetW / w;
   const canvas = document.createElement("canvas");
