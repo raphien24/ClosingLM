@@ -105,6 +105,9 @@ export async function POST(req: NextRequest) {
       // Validasi tanggal wajib = hari ini HANYA untuk halaman Parcel Sweeper
       const psDates = detectParcelSweeperDates(rawText);
       const parsed = parseOcrText(rawText);
+      if (parsed.row.backlog_total == null) {
+        console.error("[OCR-NOBACKLOG] img=" + idx + " snippet=" + JSON.stringify(rawText.slice(0, 160)));
+      }
       const expSparse = extractExpediteSparse(sparseText);
       if (expSparse !== null) parsed.row.total_expedite = expSparse;
 
