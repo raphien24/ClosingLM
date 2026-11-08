@@ -352,10 +352,10 @@ function UnifiedInputContent() {
       setOcrStep("Mencocokkan data kolom FMS & Parcel Sweeper...");
     }, 4000);
 
-    // Timeout maksimal 35 detik mencegah hanging tak berujung
+    // Timeout maksimal 90 detik mencegah hanging tak berujung
     const timeoutId = setTimeout(() => {
       controller.abort();
-    }, 35000);
+    }, 90000);
 
     try {
       const res = await fetch("/api/ocr", {
@@ -393,7 +393,7 @@ function UnifiedInputContent() {
       clearTimeout(stepTimeout2);
 
       if (err instanceof DOMException && err.name === "AbortError") {
-        toast.error("Proses OCR dibatalkan atau waktu habis (timeout 35s).");
+        toast.error("Proses OCR dibatalkan atau waktu habis (timeout 90s).");
       } else {
         toast.error(err instanceof Error ? err.message : "Gagal OCR");
       }
