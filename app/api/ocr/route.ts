@@ -9,6 +9,25 @@ import {
 import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
 import { getOcrWorker, resetOcrWorker } from "@/lib/ocrWorker";
+import sharp from "sharp";
+
+async function isFullScreen(buf: Buffer): Promise<boolean> {
+  const meta = await sharp(buf).metadata();
+  const w = meta.width || 0, h = meta.height || 0;
+  return w >= 900 && h >= 600;
+}
+
+async function runOcrWithPsm(imageBuffer: Buffer, psm: string): Promise<{ text: string; confidence: number }> {
+  const worker = await getOcrWorker();
+  await worker.setParameters({ tessedit_pageseg_mode: psm as never });
+  try {
+    const { data } = await worker.recognize(imageBuffer);
+    return { text: data.text, confidence: data.confidence ?? 0 };
+  } finally {
+    await worker.setParameters({ tessedit_pageseg_mode: "6" as never });
+  }
+}
+
 
 // Beri waktu cukup untuk cold start Tesseract di Vercel serverless.
 export const maxDuration = 60;
@@ -47,7 +66,8 @@ async function runOcrSparse(imageBuffer: Buffer): Promise<string> {
 
 async function runOcrFast(base64Image: string): Promise<{ text: string; confidence: number; sparseText: string }> {
   const processed1 = await preprocessImageToBuffer(base64Image);
-  const res1 = await runOcr(processed1);
+  const fullScreen1 = await isFullScreen(processed1);
+  const res1 = fullScreen1 ? await runOcrWithPsm(processed1, "3") : await runOcr(processed1);
   const sparseText = await runOcrSparse(processed1).catch(() => "");
 
   const quality = (text: string) => {

@@ -1,0 +1,16 @@
+﻿import { createWorker } from "tesseract.js";
+import sharp from "sharp";
+import fs from "fs";
+const buf = fs.readFileSync("C:/Users/rafia/Downloads/Screenshot_9.png");
+const meta = await sharp(buf).metadata();
+const upW = Math.min(6000, meta.width * 3);
+const processed = await sharp(buf).resize({ width: upW, withoutEnlargement: false }).grayscale().normalize().sharpen({ sigma: 1.2 }).png({ compressionLevel: 1 }).toBuffer();
+console.log("3x w="+upW);
+const worker = await createWorker("eng", 1, { logger: () => {}, langPath: process.cwd(), cachePath: process.cwd() });
+await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,%()-/: ", preserve_interword_spaces: "1" });
+const { data } = await worker.recognize(processed);
+const t = data.text;
+const idx = t.search(/To\s*Expedite/i);
+console.log("=== EXPEDITE AREA ===");
+console.log(t.slice(idx, idx+500));
+await worker.terminate();

@@ -1,0 +1,21 @@
+﻿import { createWorker } from "tesseract.js";
+import sharp from "sharp";
+import fs from "fs";
+
+const buf = fs.readFileSync("C:/Users/rafia/Downloads/Screenshot_9.png");
+const meta = await sharp(buf).metadata();
+const origWidth = meta.width || 1280;
+let targetWidth = origWidth;
+if (origWidth > 1600) targetWidth = 1600;
+else if (origWidth < 900) targetWidth = Math.min(1400, Math.round(origWidth * 1.4));
+const pipeline = sharp(buf);
+if (targetWidth !== origWidth) pipeline.resize({ width: targetWidth, withoutEnlargement: true });
+const processed = await pipeline.grayscale().sharpen({ sigma: 1.0 }).normalize().threshold(175).png({ compressionLevel: 1 }).toBuffer();
+console.log("META w="+meta.width+" h="+meta.height+" target="+targetWidth+" processedBytes="+processed.length);
+const worker = await createWorker("eng", 1, { logger: () => {}, langPath: process.cwd(), cachePath: process.cwd() });
+await worker.setParameters({ tessedit_pageseg_mode: "6", tessedit_char_whitelist: "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,%()-/: ", preserve_interword_spaces: "1" });
+const { data } = await worker.recognize(processed);
+console.log("=== RAW OCR TEXT ===");
+console.log(data.text);
+console.log("=== END (conf "+data.confidence+") ===");
+await worker.terminate();

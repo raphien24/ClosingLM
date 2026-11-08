@@ -16,11 +16,16 @@ export async function preprocessImageToBuffer(base64Input: string): Promise<Buff
 
   const meta = await sharp(inputBuffer).metadata();
   const origWidth = meta.width || 1280;
+const origHeight = meta.height || 720;
 
   // Tentukan lebar target optimal untuk Tesseract (1200 - 1600px)
   // Upscale agar tesseract bisa membaca angka kecil di dashboard (threshold agresif merusak teks abu-abu tipis)
   let targetWidth = origWidth;
-  if (origWidth < 2000) {
+  const isFullScreenImg = origWidth >= 900 && origHeight >= 600;
+  if (isFullScreenImg && origWidth < 2000) {
+    // Layar penuh: font tabel kecil -> upscale lebih agresif
+    targetWidth = Math.min(3200, Math.round(origWidth * 2.5));
+  } else if (origWidth < 2000) {
     targetWidth = Math.min(3200, origWidth * 2);
   } else if (origWidth > 3200) {
     targetWidth = 3200;
@@ -54,6 +59,7 @@ export async function preprocessImageLightToBuffer(base64Input: string): Promise
 
   const meta = await sharp(inputBuffer).metadata();
   const origWidth = meta.width || 1280;
+const origHeight = meta.height || 720;
 
   let targetWidth = origWidth;
   if (origWidth > 1600) {
