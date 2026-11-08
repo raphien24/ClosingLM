@@ -218,6 +218,8 @@ function extractInHubVolume(text: string, label: string): number | null {
     const nextBlock = [lines[i + 1] || "", lines[i + 2] || ""].join(" ");
     const nextNums = allNumbers(nextBlock);
     if (nextNums.length > 0) return nextNums[0];
+    // Nilai "-" di FMS = 0
+    if (dashToZero(lines[i], null) !== null) return 0;
   }
   return null;
 }
@@ -287,8 +289,8 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
     nums = allNumbers(combined);
   }
   return {
-    oh_volume: nums[0] ?? null,  // Volume (kiri)
-    oh_total:  nums[1] ?? nums[0] ?? null,  // Total (kanan)
+    oh_volume: dashToZero(lines[idx], nums[0] ?? null),  // Volume (kiri)
+    oh_total:  dashToZero(lines[idx], nums[1] ?? nums[0] ?? null),  // Total (kanan)
   };
 }
 
