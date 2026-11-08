@@ -1,4 +1,4 @@
-import { ClosingData } from "@/types/closing";
+import type { ClosingData } from "@/types/closing";
 import { format } from "date-fns";
 
 // ── Parse angka dari string OCR ───────────────────────────────
@@ -328,7 +328,7 @@ function extractFleetHeadCounts(text: string): {
   // Cari section "2WH"
   const m2wh = hcSource.match(/(?:2|Z)\s*W\s*H([\s\S]{0,180}?)(?:(?:4|A)\s*W\s*H|Lainnya|$)/i);
   if (m2wh) {
-    const ratios = [...m2wh[1].matchAll(/((?:\d+|-)\s*\/\s*(?:\d+|-))/g)];
+    const ratios = [...m2wh[1].matchAll(/((?:\d+|-))\s*\/\s*(?:\d+|-)/g)];
     if (ratios[0]) result.dedicated_2wh  = ratioNum(ratios[0][1]);
     if (ratios[1]) result.kurir_plus_2wh = ratioNum(ratios[1][1]);
     if (ratios[2]) result.mitra_2wh      = ratioNum(ratios[2][1]);
@@ -337,7 +337,7 @@ function extractFleetHeadCounts(text: string): {
   // Cari section "4WH"
   const m4wh = hcSource.match(/(?:4|A)\s*W\s*H([\s\S]{0,180}?)(?:Lainnya|Fleet\s+Productivity|$)/i);
   if (m4wh) {
-    const ratios = [...m4wh[1].matchAll(/((?:\d+|-)\s*\/\s*(?:\d+|-))/g)];
+    const ratios = [...m4wh[1].matchAll(/((?:\d+|-))\s*\/\s*(?:\d+|-)/g)];
     if (ratios[0]) result.dedicated_4wh = ratioNum(ratios[0][1]);
     // ratios[1] = Kurir Plus 4WH (tidak diperlukan)
     if (ratios[2]) result.mitra_4wh     = ratioNum(ratios[2][1]);
