@@ -659,3 +659,18 @@ function extractParcelSweeper(text: string): {
     parcel_sweeper_scanned_pct: scanned_pct,
   };
 }
+
+/**
+ * Ekstrak angka To Expedite dari teks OCR sparse (PSM 11).
+ * Angka di tengah donut (mis. "63") muncul sebagai baris tersendiri.
+ * Nilai donut kecil (<= 999); ID trip & angka tabel lebih besar/diabaikan.
+ */
+export function extractExpediteSparse(text: string): number | null {
+  const m = text.match(/To\s+Expedite([\s\S]{0,800})/i);
+  if (!m) return null;
+  const block = m[1];
+  const standalone = [...block.matchAll(/^\s*(\d{1,4}(?:[.,]\d{3})*)\s*$/gm)]
+    .map((mm) => parseNumber(mm[1]))
+    .filter((n): n is number => n !== null && n >= 1 && n <= 999);
+  return standalone.length ? Math.max(...standalone) : null;
+}

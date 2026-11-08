@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { parseOcrText, detectParcelSweeperDates } from "@/lib/ocrParser";
+import { parseOcrText, detectParcelSweeperDates, extractExpediteSparse } from "@/lib/ocrParser";
 import { mergeOcrBatches } from "@/lib/ocrMerger";
 import {
   preprocessImageToBuffer,
@@ -34,9 +34,21 @@ async function runOcr(imageBuffer: Buffer): Promise<{ text: string; confidence: 
 /**
  * Preprocessing & OCR cepat berbasis Buffer (menghindari overhead decode/encode base64 berulang)
  */
-async function runOcrFast(base64Image: string): Promise<{ text: string; confidence: number }> {
+async function runOcrSparse(imageBuffer: Buffer): Promise<string> {
+  const worker = await getOcrWorker();
+  await worker.setParameters({ tessedit_pageseg_mode: "11" as never });
+  try {
+    const { data } = await worker.recognize(imageBuffer);
+    return data.text;
+  } finally {
+    await worker.setParameters({ tessedit_pageseg_mode: "6" as never });
+  }
+}
+
+async function runOcrFast(base64Image: string): Promise<{ text: string; confidence: number; sparseText: string }> {
   const processed1 = await preprocessImageToBuffer(base64Image);
   const res1 = await runOcr(processed1);
+  const sparseText = await runOcrSparse(processed1).catch(() => "");
 
   const quality = (text: string) => {
     const digits = (text.match(/\d/g) || []).length;
@@ -52,13 +64,13 @@ async function runOcrFast(base64Image: string): Promise<{ text: string; confiden
       const processed2 = await preprocessImageLightToBuffer(base64Image);
       const res2 = await runOcr(processed2);
       const q2 = quality(res2.text);
-      return q2 > q1 ? res2 : res1;
+      return { ...(q2 > q1 ? res2 : res1), sparseText };
     } catch {
-      return res1;
+      return { ...res1, sparseText };
     }
   }
 
-  return res1;
+  return { ...res1, sparseText };
 }
 
 export async function POST(req: NextRequest) {
@@ -87,12 +99,14 @@ export async function POST(req: NextRequest) {
 
     for (let idx = 0; idx < body.images.length; idx++) {
       const image = body.images[idx];
-      const { text: rawText, confidence } = await runOcrFast(image);
+      const { text: rawText, confidence, sparseText } = await runOcrFast(image);
       totalConf += confidence;
 
       // Validasi tanggal wajib = hari ini HANYA untuk halaman Parcel Sweeper
       const psDates = detectParcelSweeperDates(rawText);
       const parsed = parseOcrText(rawText);
+      const expSparse = extractExpediteSparse(sparseText);
+      if (expSparse !== null) parsed.row.total_expedite = expSparse;
 
       const mismatchedDate = psDates.find((d) => d !== today);
       if (mismatchedDate) {
