@@ -91,14 +91,12 @@ async function runOcrFast(base64Image: string): Promise<{ text: string; confiden
   const fullScreen1 = await isFullScreen(processed1);
   let res1: { text: string; confidence: number };
   let engine: "paddle" | "tesseract" = "tesseract";
-  if (fullScreen1) {
-    const svc = await runPaddleService(base64ToBuffer(base64Image));
-    if (svc) {
-      res1 = { text: svc, confidence: 90 };
-      engine = "paddle";
-    } else {
-      res1 = await runOcrWithPsm(processed1, "3");
-    }
+  const svc = await runPaddleService(base64ToBuffer(base64Image));
+  if (svc) {
+    res1 = { text: svc, confidence: 90 };
+    engine = "paddle";
+  } else if (fullScreen1) {
+    res1 = await runOcrWithPsm(processed1, "3");
   } else {
     res1 = await runOcr(processed1);
   }
