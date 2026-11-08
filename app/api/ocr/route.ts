@@ -2,24 +2,48 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { parseOcrText, detectParcelSweeperDates } from "@/lib/ocrParser";
 import { mergeOcrBatches } from "@/lib/ocrMerger";
-import { preprocessImage, preprocessImageLight } from "@/lib/imagePreprocess";
+import {
+  preprocessImageToBuffer,
+  preprocessImageLightToBuffer,
+} from "@/lib/imagePreprocess";
 import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
 import { createWorker, Worker } from "tesseract.js";
+import path from "path";
+import fs from "fs";
 
 interface OcrRequestBody {
   images: string[]; // base64 encoded images
 }
 
-// Singleton worker di memori server agar tidak load eng.traineddata (5 MB) berulang kali
+// Singleton worker di memori server agar tidak load traineddata berulang kali
 let cachedWorkerPromise: Promise<Worker> | null = null;
 
 async function getOcrWorker(): Promise<Worker> {
   if (!cachedWorkerPromise) {
     cachedWorkerPromise = (async () => {
-      const worker = await createWorker("eng", 1, {
+      const isVercel = !!process.env.VERCEL;
+      const cwd = process.cwd();
+      const localTrainedPath = path.join(cwd, "eng.traineddata");
+      const hasLocalData = fs.existsSync(localTrainedPath);
+
+      const options: Record<string, unknown> = {
         logger: () => {},
-      });
+      };
+
+      // Jika ada file eng.traineddata lokal di root project, gunakan langsung dari disk (10x lebih cepat)
+      if (hasLocalData) {
+        options.langPath = cwd;
+      }
+
+      // Di Vercel serverless (AWS Lambda), filesystem selain /tmp bersifat read-only
+      if (isVercel) {
+        options.cachePath = "/tmp";
+      } else {
+        options.cachePath = cwd;
+      }
+
+      const worker = await createWorker("eng", 1, options);
       await worker.setParameters({
         tessedit_pageseg_mode: "6" as never,
         tessedit_char_whitelist:
@@ -27,48 +51,54 @@ async function getOcrWorker(): Promise<Worker> {
         preserve_interword_spaces: "1" as never,
       });
       return worker;
-    })();
+    })().catch((err) => {
+      cachedWorkerPromise = null;
+      console.error("Gagal inisialisasi Tesseract worker:", err);
+      throw err;
+    });
   }
   return cachedWorkerPromise;
 }
 
-async function runOcr(processedBase64: string): Promise<{ text: string; confidence: number }> {
+async function runOcr(imageBuffer: Buffer): Promise<{ text: string; confidence: number }> {
   try {
     const worker = await getOcrWorker();
-    const { data } = await worker.recognize(processedBase64);
+    const { data } = await worker.recognize(imageBuffer);
     return { text: data.text, confidence: data.confidence ?? 0 };
   } catch (err) {
-    // Jika worker crash, reset cache dan coba sekali lagi
+    console.error("Worker recognize error, me-reset worker:", err);
     cachedWorkerPromise = null;
     const worker = await getOcrWorker();
-    const { data } = await worker.recognize(processedBase64);
+    const { data } = await worker.recognize(imageBuffer);
     return { text: data.text, confidence: data.confidence ?? 0 };
   }
 }
 
 /**
- * Strategi dual-pass:
- * 1. Coba dengan preprocessing standar (threshold agresif)
- * 2. Jika hasilnya terlalu sedikit karakter bermakna, coba preprocessing ringan
- * Return hasil terbaik (yang mengandung lebih banyak angka/kata relevan)
+ * Preprocessing & OCR cepat berbasis Buffer (menghindari overhead decode/encode base64 berulang)
  */
-async function runOcrDualPass(base64Image: string): Promise<{ text: string; confidence: number }> {
-  const processed1 = await preprocessImage(base64Image);
+async function runOcrFast(base64Image: string): Promise<{ text: string; confidence: number }> {
+  const processed1 = await preprocessImageToBuffer(base64Image);
   const res1 = await runOcr(processed1);
 
   const quality = (text: string) => {
     const digits = (text.match(/\d/g) || []).length;
-    const words  = (text.match(/[A-Za-z]{3,}/g) || []).length;
+    const words = (text.match(/[A-Za-z]{3,}/g) || []).length;
     return digits + words * 2;
   };
 
   const q1 = quality(res1.text);
 
-  if (q1 < 50) {
-    const processed2 = await preprocessImageLight(base64Image);
-    const res2 = await runOcr(processed2);
-    const q2 = quality(res2.text);
-    return q2 > q1 ? res2 : res1;
+  // Jalankan pass kedua hanya jika hasil pass 1 sangat sedikit (< 25)
+  if (q1 < 25) {
+    try {
+      const processed2 = await preprocessImageLightToBuffer(base64Image);
+      const res2 = await runOcr(processed2);
+      const q2 = quality(res2.text);
+      return q2 > q1 ? res2 : res1;
+    } catch {
+      return res1;
+    }
   }
 
   return res1;
@@ -79,14 +109,19 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let body: OcrRequestBody;
-  try { body = await req.json(); }
-  catch { return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 }); }
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
 
-  if (!body.images?.length)
+  if (!body.images?.length) {
     return NextResponse.json({ error: "images array wajib diisi" }, { status: 400 });
+  }
 
-  if (body.images.length > 10)
+  if (body.images.length > 10) {
     return NextResponse.json({ error: "Maksimal 10 screenshot" }, { status: 400 });
+  }
 
   try {
     const today = todayWIB();
@@ -95,7 +130,7 @@ export async function POST(req: NextRequest) {
 
     for (let idx = 0; idx < body.images.length; idx++) {
       const image = body.images[idx];
-      const { text: rawText, confidence } = await runOcrDualPass(image);
+      const { text: rawText, confidence } = await runOcrFast(image);
       totalConf += confidence;
 
       // Validasi tanggal wajib = hari ini HANYA untuk halaman Parcel Sweeper

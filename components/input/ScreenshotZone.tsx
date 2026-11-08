@@ -23,12 +23,9 @@ export function compressImageFile(file: File): Promise<string> {
       const img = new Image();
       img.onerror = () => resolve(dataUrl);
       img.onload = () => {
-        const MAX_W = 1920;
-        if (img.width <= MAX_W && dataUrl.length < 1_200_000) {
-          resolve(dataUrl);
-          return;
-        }
-        const scale = Math.min(1, MAX_W / img.width);
+        // Skala optimal untuk OCR: maksimum lebar 1600px
+        const MAX_W = 1600;
+        const scale = img.width > MAX_W ? MAX_W / img.width : 1;
         const canvas = document.createElement("canvas");
         canvas.width = Math.round(img.width * scale);
         canvas.height = Math.round(img.height * scale);
@@ -38,7 +35,8 @@ export function compressImageFile(file: File): Promise<string> {
           return;
         }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL("image/png"));
+        // Menggunakan JPEG quality 0.90: ukuran ~150-250KB (menghemat 90% bandwidth & waktu upload)
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
       };
       img.src = dataUrl;
     };

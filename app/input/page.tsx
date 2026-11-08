@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ScreenshotZone, compressImageFile } from "@/components/input/ScreenshotZone";
 import { OcrPreviewTable } from "@/components/input/OcrPreviewTable";
@@ -24,6 +24,9 @@ import {
   Edit3,
   FileSpreadsheet,
   ArrowRight,
+  Loader2,
+  Clock,
+  XCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -98,6 +101,9 @@ function UnifiedInputContent() {
   const [recentHistory, setRecentHistory] = useState<ClosingData[]>([]);
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
   const [manualFields, setManualFields] = useState<string[]>([]);
+  const [ocrStep, setOcrStep] = useState<string>("Mengoptimalkan gambar...");
+  const [ocrElapsed, setOcrElapsed] = useState<number>(0);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const isProcessing = pageState === "processing";
   const isSaving = pageState === "saving";
@@ -326,15 +332,46 @@ function UnifiedInputContent() {
       return;
     }
     setPageState("processing");
+    setOcrStep("Mengirim screenshot ke server...");
+    setOcrElapsed(0);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Timer elapsed detik
+    const timer = setInterval(() => {
+      setOcrElapsed((prev) => prev + 1);
+    }, 1000);
+
+    // Langkah status berkala agar pengguna tahu proses sedang berjalan lancar
+    const stepTimeout1 = setTimeout(() => {
+      setOcrStep("Mengekstrak teks & angka metrik...");
+    }, 1500);
+    const stepTimeout2 = setTimeout(() => {
+      setOcrStep("Mencocokkan data kolom FMS & Parcel Sweeper...");
+    }, 4000);
+
+    // Timeout maksimal 35 detik mencegah hanging tak berujung
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 35000);
+
     try {
       const res = await fetch("/api/ocr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: screenshots }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
+      clearInterval(timer);
+      clearTimeout(stepTimeout1);
+      clearTimeout(stepTimeout2);
+
       if (res.status === 413) {
         throw new Error(
-          "Ukuran screenshot terlalu besar. Coba kirim 2–3 gambar saja."
+          "Ukuran screenshot terlalu besar. Coba kirim 1–2 gambar saja."
         );
       }
       const json = await res.json();
@@ -345,10 +382,30 @@ function UnifiedInputContent() {
       }
       mergeIntoOcrRow(json.row || {}, json.tanggal_detected);
       toast.success("OCR selesai! Periksa dan simpan data.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Gagal OCR");
+    } catch (err: unknown) {
+      clearTimeout(timeoutId);
+      clearInterval(timer);
+      clearTimeout(stepTimeout1);
+      clearTimeout(stepTimeout2);
+
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.error("Proses OCR dibatalkan atau waktu habis (timeout 35s).");
+      } else {
+        toast.error(err instanceof Error ? err.message : "Gagal OCR");
+      }
       setPageState(ocrRow ? "preview" : "idle");
+    } finally {
+      abortControllerRef.current = null;
     }
+  };
+
+  const handleCancelOcr = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      toast("Proses OCR dibatalkan", { icon: "⏹️" });
+    }
+    setPageState(ocrRow ? "preview" : "idle");
   };
 
   const handleUpdateRow = useCallback(
@@ -769,12 +826,32 @@ function UnifiedInputContent() {
 
             {/* Processing */}
             {pageState === "processing" && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">
-                <ScanText className="h-8 w-8 text-red-400 animate-pulse mx-auto mb-3" />
-                <p className="text-gray-700 font-medium">Memproses OCR...</p>
-                <p className="text-sm text-gray-400 mt-1">
-                  Membaca {screenshots.length} screenshot
-                </p>
+              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 text-center max-w-md mx-auto my-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="relative inline-flex items-center justify-center mb-3">
+                  <div className="w-14 h-14 rounded-full bg-red-50 border border-red-200 flex items-center justify-center animate-spin">
+                    <Loader2 className="h-7 w-7 text-red-600" />
+                  </div>
+                  <ScanText className="h-5 w-5 text-red-500 absolute" />
+                </div>
+                <h3 className="text-gray-900 font-semibold text-base">Memproses OCR Cepat...</h3>
+                <p className="text-xs font-medium text-red-600 mt-1">{ocrStep}</p>
+                <div className="mt-3 flex items-center justify-center gap-3 text-xs text-gray-500 bg-gray-50 rounded-full py-1.5 px-4 w-fit mx-auto border border-gray-100">
+                  <span className="flex items-center gap-1 font-mono text-gray-700">
+                    <Clock className="h-3.5 w-3.5 text-gray-400" /> {ocrElapsed}s
+                  </span>
+                  <span>•</span>
+                  <span>{screenshots.length} screenshot</span>
+                </div>
+                <div className="mt-5">
+                  <button
+                    type="button"
+                    onClick={handleCancelOcr}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 hover:text-red-600 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <XCircle className="h-3.5 w-3.5 text-gray-500" />
+                    Batalkan Proses
+                  </button>
+                </div>
               </div>
             )}
 
