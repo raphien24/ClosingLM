@@ -1,4 +1,4 @@
-﻿import { createWorker, Worker } from "tesseract.js";
+import { createWorker, Worker } from "tesseract.js";
 import path from "path";
 import fs from "fs";
 

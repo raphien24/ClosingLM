@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getOcrWorker } from "@/lib/ocrWorker";
 
 // Warm-up endpoint: menjaga Tesseract worker tetap hidup di instance serverless.
