@@ -100,6 +100,7 @@ function UnifiedInputContent() {
   const [previousData, setPreviousData] = useState<ClosingData | null>(null);
   const [recentHistory, setRecentHistory] = useState<ClosingData[]>([]);
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+  const [ocrEngine, setOcrEngine] = useState<"paddle" | "tesseract" | null>(null);
   const [manualFields, setManualFields] = useState<string[]>([]);
   const [ocrStep, setOcrStep] = useState<string>("Mengoptimalkan gambar...");
   const [ocrElapsed, setOcrElapsed] = useState<number>(0);
@@ -380,6 +381,9 @@ function UnifiedInputContent() {
       if (typeof json.confidence === "number") {
         setOcrConfidence(json.confidence);
       }
+      if (json.engine === "paddle" || json.engine === "tesseract") {
+        setOcrEngine(json.engine);
+      }
       mergeIntoOcrRow(json.row || {}, json.tanggal_detected);
       toast.success("OCR selesai! Periksa dan simpan data.");
     } catch (err: unknown) {
@@ -522,6 +526,7 @@ function UnifiedInputContent() {
     setScreenshots([]);
     setOcrRow(null);
     setOcrConfidence(null);
+    setOcrEngine(null);
     setManualFields([]);
     setDetectedDate(todayWIB());
     setPageState("idle");
@@ -875,6 +880,17 @@ function UnifiedInputContent() {
                         }`}
                       >
                         Keyakinan OCR: {ocrConfidence}%
+                      </span>
+                    )}
+                    {ocrEngine && (
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          ocrEngine === "paddle"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-gray-200 text-gray-700"
+                        }`}
+                      >
+                        Mesin: {ocrEngine === "paddle" ? "PaddleOCR" : "Tesseract"}
                       </span>
                     )}
                   </div>

@@ -86,13 +86,19 @@ async function runPaddleService(imageBuffer: Buffer): Promise<string | null> {
     return null;
   }
 }
-async function runOcrFast(base64Image: string): Promise<{ text: string; confidence: number; sparseText: string }> {
+async function runOcrFast(base64Image: string): Promise<{ text: string; confidence: number; sparseText: string; engine: "paddle" | "tesseract" }> {
   const processed1 = await preprocessImageToBuffer(base64Image);
   const fullScreen1 = await isFullScreen(processed1);
   let res1: { text: string; confidence: number };
+  let engine: "paddle" | "tesseract" = "tesseract";
   if (fullScreen1) {
     const svc = await runPaddleService(base64ToBuffer(base64Image));
-    res1 = svc ? { text: svc, confidence: 90 } : await runOcrWithPsm(processed1, "3");
+    if (svc) {
+      res1 = { text: svc, confidence: 90 };
+      engine = "paddle";
+    } else {
+      res1 = await runOcrWithPsm(processed1, "3");
+    }
   } else {
     res1 = await runOcr(processed1);
   }
@@ -112,13 +118,13 @@ async function runOcrFast(base64Image: string): Promise<{ text: string; confiden
       const processed2 = await preprocessImageLightToBuffer(base64Image);
       const res2 = await runOcr(processed2);
       const q2 = quality(res2.text);
-      return { ...(q2 > q1 ? res2 : res1), sparseText };
+      return { ...(q2 > q1 ? res2 : res1), sparseText, engine };
     } catch {
-      return { ...res1, sparseText };
+      return { ...res1, sparseText, engine };
     }
   }
 
-  return { ...res1, sparseText };
+  return { ...res1, sparseText, engine };
 }
 
 export async function POST(req: NextRequest) {
@@ -144,10 +150,12 @@ export async function POST(req: NextRequest) {
     const today = todayWIB();
     const batches = [];
     let totalConf = 0;
+    let engine: "paddle" | "tesseract" = "tesseract";
 
     for (let idx = 0; idx < body.images.length; idx++) {
       const image = body.images[idx];
-      const { text: rawText, confidence, sparseText } = await runOcrFast(image);
+      const { text: rawText, confidence, sparseText, engine: eng } = await runOcrFast(image);
+      engine = eng;
       totalConf += confidence;
 
       // Validasi tanggal wajib = hari ini HANYA untuk halaman Parcel Sweeper
@@ -195,6 +203,7 @@ export async function POST(req: NextRequest) {
       tanggal_detected: today,
       total_images: body.images.length,
       confidence: avgConfidence,
+      engine,
     });
   } catch (error) {
     console.error("OCR Error:", error);
