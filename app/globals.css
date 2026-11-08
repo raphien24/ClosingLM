@@ -239,6 +239,45 @@ html.dark .border-amber-200 {
   border-color: rgba(245, 158, 11, 0.4) !important;
 }
 
+/* Kartu form grup di halaman input - latar sedikit terang agar kotak & label menonjol */
+html.dark .bg-gray-50\/50.rounded-xl {
+  background-color: rgba(51, 65, 85, 0.4) !important;
+}
+
+/* Kotak angka hasil OCR - latar lebih gelap & teks terang, mudah dibaca */
+html.dark input.border-green-300 {
+  background-color: #0f172a !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(52, 211, 153, 0.45) !important;
+}
+html.dark input.border-amber-400 {
+  background-color: #2a1f0a !important;
+  color: #fde68a !important;
+  border-color: rgba(251, 191, 36, 0.6) !important;
+}
+html.dark input.border-purple-400 {
+  background-color: #1e1b33 !important;
+  color: #ddd6fe !important;
+  border-color: rgba(167, 139, 250, 0.55) !important;
+}
+html.dark input.border-gray-200 {
+  background-color: #0b1220 !important;
+  color: #cbd5e1 !important;
+  border-color: rgba(71, 85, 105, 0.6) !important;
+}
+
+/* Aturan umum input di dark mode */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #0b1220 !important;
+  color: #e2e8f0 !important;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #64748b !important;
+}
+
 /* Dark Mode Hover Overrides (Mencegah background berubah putih saat di-hover) */
 html.dark .hover\:bg-white:hover,
 html.dark .hover\:bg-gray-50:hover,
