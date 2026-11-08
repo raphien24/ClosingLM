@@ -9,11 +9,5 @@
       "memory": 2048,
       "maxDuration": 60
     }
-  },
-  "crons": [
-    {
-      "path": "/api/ocr/warmup",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  }
 }
