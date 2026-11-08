@@ -12,8 +12,6 @@ import { getOcrWorker, resetOcrWorker } from "@/lib/ocrWorker";
 
 // Beri waktu cukup untuk cold start Tesseract di Vercel serverless.
 export const maxDuration = 60;
-// Jalankan fungsi di region terdekat user (Singapore).
-export const preferredRegion = ["sin1"];
 
 interface OcrRequestBody {
   images: string[]; // base64 encoded images
