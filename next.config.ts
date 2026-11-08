@@ -20,8 +20,8 @@ const tesseractTrace = [
 const nextConfig: NextConfig = {
   serverExternalPackages: ["googleapis", "google-auth-library", "tesseract.js", "sharp"],
   outputFileTracingIncludes: {
-    "/api/ocr": ["./eng.traineddata", ...tesseractTrace],
-    "/api/ocr/warmup": ["./eng.traineddata", ...tesseractTrace],
+    "/api/ocr": ["./eng.traineddata", "./eng.traineddata.gz", ...tesseractTrace],
+    "/api/ocr/warmup": ["./eng.traineddata", "./eng.traineddata.gz", ...tesseractTrace],
   },
 };
 
