@@ -360,7 +360,11 @@ function extractBacklog(text: string): {
   const backlogBlockMatch = text.match(
     /Backlog([\s\S]{0,2000}?)(?:To\s+Expedite|Operation\s+Progress|$)/i
   );
-  const blockText = backlogBlockMatch ? backlogBlockMatch[1] : text;
+  if (!backlogBlockMatch) {
+    // Gambar ini bukan kartu Backlog (mis. Fleet Head Counts) -> jangan fabrikasi angka
+    return { backlog_total: null, backlog_to_buyer: null, backlog_to_seller: null, backlog_to_transfer: null };
+  }
+  const blockText = backlogBlockMatch[1];
 
   let to_buyer = 0, to_seller = 0, to_transfer = 0;
   let foundAgingRows = 0;
