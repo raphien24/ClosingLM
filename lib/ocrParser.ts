@@ -97,6 +97,15 @@ function allNumbers(s: string): number[] {
     .filter((n): n is number => n !== null);
 }
 
+/** Angka rasio "X/Y": tanda "-" di FMS berarti kosong -> 0. */
+const ratioNum = (n: string): number | null => (n.trim() === "-" ? 0 : parseNumber(n));
+
+/** Nilai "-" di FMS berarti kosong -> hasil OCR = 0 (bila tidak ada angka). */
+function dashToZero(segment: string, value: number | null): number | null {
+  if (value !== null) return value;
+  return /(^|[\s(])-(?=[\s)/%]|$)/.test(segment) ? 0 : null;
+}
+
 // ── Parse OCR text dari FMS "Operation Progress" ─────────────
 //
 // Layout tabel FMS yang diharapkan di OCR output:
@@ -231,6 +240,8 @@ function extractFleetDelivering(text: string): number | null {
       nums = allNumbers(combined);
     }
     if (nums.length) return nums[0];
+    // Nilai "-" di FMS = 0
+    if (dashToZero(lines[i], null) !== null) return 0;
   }
   return null;
 }
@@ -315,19 +326,19 @@ function extractFleetHeadCounts(text: string): {
   // Cari section "2WH"
   const m2wh = hcSource.match(/(?:2|Z)\s*W\s*H([\s\S]{0,180}?)(?:(?:4|A)\s*W\s*H|Lainnya|$)/i);
   if (m2wh) {
-    const ratios = [...m2wh[1].matchAll(/(\d+)\s*\/\s*\d+/g)];
-    if (ratios[0]) result.dedicated_2wh  = parseNumber(ratios[0][1]);
-    if (ratios[1]) result.kurir_plus_2wh = parseNumber(ratios[1][1]);
-    if (ratios[2]) result.mitra_2wh      = parseNumber(ratios[2][1]);
+    const ratios = [...m2wh[1].matchAll(/((?:\d+|-)\s*\/\s*(?:\d+|-))/g)];
+    if (ratios[0]) result.dedicated_2wh  = ratioNum(ratios[0][1]);
+    if (ratios[1]) result.kurir_plus_2wh = ratioNum(ratios[1][1]);
+    if (ratios[2]) result.mitra_2wh      = ratioNum(ratios[2][1]);
   }
 
   // Cari section "4WH"
   const m4wh = hcSource.match(/(?:4|A)\s*W\s*H([\s\S]{0,180}?)(?:Lainnya|Fleet\s+Productivity|$)/i);
   if (m4wh) {
-    const ratios = [...m4wh[1].matchAll(/(\d+)\s*\/\s*\d+/g)];
-    if (ratios[0]) result.dedicated_4wh = parseNumber(ratios[0][1]);
+    const ratios = [...m4wh[1].matchAll(/((?:\d+|-)\s*\/\s*(?:\d+|-))/g)];
+    if (ratios[0]) result.dedicated_4wh = ratioNum(ratios[0][1]);
     // ratios[1] = Kurir Plus 4WH (tidak diperlukan)
-    if (ratios[2]) result.mitra_4wh     = parseNumber(ratios[2][1]);
+    if (ratios[2]) result.mitra_4wh     = ratioNum(ratios[2][1]);
   }
 
   return result;
