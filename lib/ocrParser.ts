@@ -56,6 +56,17 @@ export function detectParcelSweeperDates(text: string): string[] {
     found.add(`${m[1]}-${m[2]}-${m[3]}`);
   }
 
+  // 3. Format "DD MMM YYYY" (misal "8 Nov 2026") - nama bulan ID/EN
+  const MONTHS: Record<string, string> = { jan: "01", feb: "02", mar: "03", apr: "04", mei: "05", may: "05", jun: "06", jul: "07", agu: "08", aug: "08", sep: "09", okt: "10", oct: "10", nov: "11", des: "12", dec: "12" };
+  for (const m of cleaned.matchAll(/\b(0?[1-9]|[12]\d|3[01])\s+([A-Za-z]{3,9})\.?\s+(20\d{2})\b/g)) {
+    const mm = MONTHS[m[2].slice(0, 3).toLowerCase()];
+    if (mm) found.add(`${m[3]}-${mm}-${m[1].padStart(2, "0")}`);
+  }
+
+  // 4. Format "Tanggal: DD/MM/YYYY" atau "DD-MM-YYYY"
+  for (const m of cleaned.matchAll(/Tanggal\s*:?\s*(0[1-9]|[12]\d|3[01])[\/\-](0[1-9]|1[0-2])[\/\-](20\d{2})\b/gi)) {
+    found.add(`${m[3]}-${m[2]}-${m[1]}`);
+  }
   return Array.from(found);
 }
 
