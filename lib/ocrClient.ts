@@ -97,7 +97,9 @@ async function preprocessForOcr(
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
 
-  const isFull = w >= 900 && h >= 600;
+  // Dashboard FMS umumnya lebar (>= 900px) walaupun tidak terlalu tinggi.
+  // Jadi patokan "layar penuh" cukup dari lebar agar tabel tidak salah mode.
+  const isFull = w >= 900;
   let targetW = w;
   if (isFull && w < 2000) targetW = Math.min(3200, Math.round(w * 2.5));
   else if (w < 2000) targetW = Math.min(3200, w * 2);
