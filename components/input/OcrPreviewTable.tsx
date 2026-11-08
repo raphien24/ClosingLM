@@ -14,6 +14,7 @@ interface Props {
   onUpdate: (i: number, field: keyof ClosingData, value: string) => void;
   previousData?: ClosingData | null;
   manualFields?: string[];
+  fieldConfidence?: Record<string, number>;
 }
 
 const COLS: { key: keyof ClosingData; label: string; type: "text" | "number"; group: string }[] = [
@@ -49,7 +50,7 @@ const GROUPS = [
   "Parcel Sweeper",
 ];
 
-export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [] }: Props) {
+export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [], fieldConfidence = {} }: Props) {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const row = rows[0] || {};
   const manualSet = new Set(manualFields);
@@ -129,6 +130,20 @@ export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [
                           <label className="block text-xs font-medium text-gray-600 truncate" title={col.label}>
                             {col.label}
                           </label>
+                          {fieldConfidence[col.key] != null && (
+                            <span
+                              className={`text-[10px] font-semibold ${
+                                fieldConfidence[col.key] >= 80
+                                  ? "text-green-600"
+                                  : fieldConfidence[col.key] >= 60
+                                  ? "text-amber-600"
+                                  : "text-red-600"
+                              }`}
+                              title="Keyakinan OCR field ini (hasil cocok-silang 2 bacaan)"
+                            >
+                              {Math.round(fieldConfidence[col.key])}%
+                            </span>
+                          )}
                           {isManual && (
                             <span className="px-1.5 py-0.2 bg-purple-100 text-purple-700 text-[10px] font-semibold rounded">
                               Manual
@@ -190,7 +205,7 @@ export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [
                             placeholder=""
                             onChange={(e) => onUpdate(ri, col.key, e.target.value)}
                             step={col.type === "number" ? "any" : undefined}
-                            title={warn || undefined}
+                            title={warn || (fieldConfidence[col.key] != null ? `Keyakinan OCR: ${Math.round(fieldConfidence[col.key])}%` : undefined)}
                             className={`w-full min-w-[78px] px-2 py-1 text-sm rounded border focus:outline-none focus:ring-1 ${
                               warn
                                 ? "border-amber-400 bg-amber-50 text-gray-900 focus:ring-amber-400"

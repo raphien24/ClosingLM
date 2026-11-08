@@ -165,6 +165,7 @@ export interface LocalOcrResult {
   texts: string[];
   sparseTexts: string[];
   confidences: number[];
+  altTexts: string[];
 }
 
 export class OcrCancelledError extends Error {
@@ -186,6 +187,7 @@ export async function runOcrLocally(
   const texts: string[] = [];
   const sparseTexts: string[] = [];
   const confidences: number[] = [];
+  const altTexts: string[] = [];
 
   for (let i = 0; i < images.length; i++) {
     if (hooks?.isCancelled?.()) throw new OcrCancelledError();
@@ -205,6 +207,7 @@ export async function runOcrLocally(
     const norm = (s: string) => s.replace(/ +/g, " ").trim();
     const cocok = norm(r200.data.text) === norm(r225.data.text);
     texts.push(r200.data.text);
+    altTexts.push(r225.data.text);
     confidences.push(
       cocok
         ? Math.round(((r200.data.confidence ?? 0) + (r225.data.confidence ?? 0)) / 2)
@@ -222,5 +225,5 @@ export async function runOcrLocally(
     }
   }
 
-  return { texts, sparseTexts, confidences };
+  return { texts, sparseTexts, confidences, altTexts };
 }

@@ -101,7 +101,8 @@ function UnifiedInputContent() {
   const [showTextBox, setShowTextBox] = useState(false);
   const [previousData, setPreviousData] = useState<ClosingData | null>(null);
   const [recentHistory, setRecentHistory] = useState<ClosingData[]>([]);
-  const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+  const [fieldConfidence, setFieldConfidence] = useState<Record<string, number>>({});
   const [ocrEngine, setOcrEngine] = useState<"paddle" | "tesseract" | null>(null);
   const [manualFields, setManualFields] = useState<string[]>([]);
   const [ocrStep, setOcrStep] = useState<string>("Mengoptimalkan gambar...");
@@ -362,7 +363,7 @@ function UnifiedInputContent() {
     }, 90000);
 
     try {
-      const { texts, sparseTexts, confidences } = await runOcrLocally(
+      const { texts, sparseTexts, confidences, altTexts } = await runOcrLocally(
         screenshots,
         {
           onProgress: (step) => setOcrStep(step),
@@ -378,11 +379,22 @@ function UnifiedInputContent() {
       const today = todayWIB();
       const batches = [];
       let totalConf = 0;
+      const fieldConf: Record<string, number> = {};
 
       for (let idx = 0; idx < texts.length; idx++) {
         const rawText = texts[idx];
         const psDates = detectParcelSweeperDates(rawText);
         const parsed = parseOcrText(rawText);
+        // Keyakinan per field: bandingkan hasil pass 1 (bin200) dan pass 2 (bin225).
+        const altParsed = parseOcrText(altTexts[idx] || "");
+        const baseConf = confidences[idx] ?? 0;
+        for (const k of Object.keys(parsed.row)) {
+          const v1 = (parsed.row as Record<string, unknown>)[k];
+          const v2 = (altParsed.row as Record<string, unknown>)[k];
+          const sama = v1 != null && String(v1) === String(v2);
+          const c = sama ? baseConf : Math.min(baseConf, 60);
+          fieldConf[k] = Math.max(fieldConf[k] ?? 0, c);
+        }
         const expSparse = extractExpediteSparse(sparseTexts[idx] || "");
         if (expSparse !== null) parsed.row.total_expedite = expSparse;
 
@@ -408,6 +420,7 @@ function UnifiedInputContent() {
 
       const merged = mergeOcrBatches(batches);
       setOcrConfidence(Math.round(totalConf / texts.length));
+      setFieldConfidence(fieldConf);
       setOcrEngine("tesseract");
       mergeIntoOcrRow(merged.row || {}, today);
       toast.success("OCR selesai! Periksa dan simpan data.");
@@ -554,6 +567,7 @@ function UnifiedInputContent() {
     setScreenshots([]);
     setOcrRow(null);
     setOcrConfidence(null);
+    setFieldConfidence({});
     setOcrEngine(null);
     setManualFields([]);
     setDetectedDate(todayWIB());
@@ -934,6 +948,7 @@ function UnifiedInputContent() {
                   rows={[ocrRow]}
                   onUpdate={handleUpdateRow}
                   previousData={previousData}
+                  fieldConfidence={fieldConfidence}
                   manualFields={manualFields}
                 />
 
