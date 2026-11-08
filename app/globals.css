@@ -148,6 +148,19 @@ html.dark .bg-red-100 {
   color: #fecaca !important;
   border-color: rgba(248, 113, 113, 0.4) !important;
 }
+
+/* Banner catatan validasi (anomaly) — lembut & mudah dibaca di dark mode */
+html.dark .anomaly-banner {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(248, 113, 113, 0.28) !important;
+  color: #fecaca !important;
+}
+html.dark .anomaly-banner li {
+  color: #fca5a5 !important;
+}
+html.dark .anomaly-banner .text-red-600 {
+  color: #fca5a5 !important;
+}
 html.dark .bg-amber-50,
 html.dark .bg-amber-50\/60,
 html.dark .bg-amber-100 {

@@ -66,7 +66,7 @@ export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [
     <div className="space-y-4">
       {/* Banner catatan validasi (memblokir simpan jika masih ada) */}
       {liveAnomalies.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-800">
+        <div className="anomaly-banner bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-800">
           <div className="flex items-center gap-2 font-semibold mb-1.5">
             <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
             <span>
