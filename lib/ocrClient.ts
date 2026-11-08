@@ -90,7 +90,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * Tiru pipeline sharp di server memakai canvas: upscale (layar penuh), grayscale,
  * lalu normalisasi kontras (auto-level) agar angka kecil lebih jelas terbaca.
  */
-async function preprocessForOcr(dataUrl: string): Promise<string> {
+async function preprocessForOcr(
+  dataUrl: string
+): Promise<{ dataUrl: string; isFull: boolean }> {
   const img = await loadImage(dataUrl);
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
@@ -106,7 +108,7 @@ async function preprocessForOcr(dataUrl: string): Promise<string> {
   canvas.width = Math.max(1, Math.round(w * scale));
   canvas.height = Math.max(1, Math.round(h * scale));
   const ctx = canvas.getContext("2d");
-  if (!ctx) return dataUrl;
+  if (!ctx) return { dataUrl, isFull };
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
   try {
@@ -130,7 +132,7 @@ async function preprocessForOcr(dataUrl: string): Promise<string> {
     // bila browser menolak akses piksel, lanjutkan tanpa normalisasi
   }
 
-  return canvas.toDataURL("image/png");
+  return { dataUrl: canvas.toDataURL("image/png"), isFull };
 }
 
 export interface LocalOcrResult {
@@ -162,9 +164,12 @@ export async function runOcrLocally(
   for (let i = 0; i < images.length; i++) {
     if (hooks?.isCancelled?.()) throw new OcrCancelledError();
     hooks?.onProgress?.(`Memproses screenshot ${i + 1}/${images.length}…`);
-    const processed = await preprocessForOcr(images[i]);
+    const { dataUrl: processed, isFull } = await preprocessForOcr(images[i]);
+    // Screenshot penuh -> mode 3 (otomatis, cocok untuk dashboard/tabel).
+    // Potongan kecil -> mode 6 (blok teks).
+    const mainMode = isFull ? "3" : "6";
 
-    await worker.setParameters({ tessedit_pageseg_mode: "6" as never });
+    await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
     const { data } = await worker.recognize(processed);
     texts.push(data.text);
     confidences.push(data.confidence ?? 0);
@@ -176,7 +181,7 @@ export async function runOcrLocally(
     } catch {
       sparseTexts.push("");
     } finally {
-      await worker.setParameters({ tessedit_pageseg_mode: "6" as never });
+      await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
     }
   }
 
