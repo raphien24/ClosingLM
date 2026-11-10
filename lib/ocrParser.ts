@@ -295,14 +295,15 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
 }
 
 /**
- * Fleet Head Counts — ekstrak angka pertama dari pola "X/Y"
+ * Fleet Head Counts — ekstrak angka pertama dari pola "X/Y" atau "-/-" (= 0).
  *
- * Layout di OCR output biasanya:
- * Baris 2WH: "2WH   17/17   9/9   23/23"
- *             col[0]=Dedicated, col[1]=Kurir Plus, col[2]=Mitra
- * Baris 4WH: "4WH   0/0   0/0   10/10"
- *             col[0]=Dedicated, col[1]=Kurir Plus, col[2]=Mitra
- * Toleran OCR: "2WH" bisa terbaca "ZWH", "2W H", dsb.
+ * Mendukung 3 layout:
+ * 1. Side-by-side OCR (Fleet Head Counts berdampingan dengan Fleet Productivity di kanan)
+ * 2. Column-by-column OCR (Dedicated -> Kurir Plus -> Mitra tersusun vertikal)
+ * 3. Copy-paste FMS / baris tabel ("2WH  17/17  9/9  23/23" atau "-/-  -/-  -/-")
+ *
+ * Jika section Fleet Head Counts terbaca bernilai "-/-" / kosong ("Attendance Rate -%"
+ * tanpa rasio angka), seluruh 5 field diisi 0.
  */
 function extractFleetHeadCounts(text: string): {
   dedicated_2wh:  number | null;
@@ -319,28 +320,117 @@ function extractFleetHeadCounts(text: string): {
     mitra_4wh:      null as number | null,
   };
 
-  // Cari section "Fleet Head Counts" terlebih dahulu agar tidak tertukar dengan "Fleet Productivity" (yang juga punya baris 2WH & 4WH!)
-  const headCountBlockMatch = text.match(
-    /Fleet\s+Head\s+Counts([\s\S]{0,600}?)(?:Fleet\s+Productivity|Keuangan|$)/i
-  );
-  const hcSource = headCountBlockMatch ? headCountBlockMatch[1] : text;
+  // Isolasi section Fleet Head Counts (tangani kasus berdampingan dengan Fleet Productivity)
+  let hcSource = "";
+  const hcHeading = text.match(/Fleet\s+Head\s+Counts/i);
+  if (hcHeading && hcHeading.index !== undefined) {
+    const afterStart = text.slice(hcHeading.index + hcHeading[0].length);
+    const firstNewline = afterStart.indexOf("\n");
+    const firstLine = firstNewline === -1 ? afterStart : afterStart.slice(0, firstNewline);
+    const isSideBySide = /Fleet\s+Productivity/i.test(firstLine);
 
-  // Cari section "2WH"
-  const m2wh = hcSource.match(/(?:2|Z)\s*W\s*H([\s\S]{0,180}?)(?:(?:4|A)\s*W\s*H|Lainnya|$)/i);
-  if (m2wh) {
-    const ratios = [...m2wh[1].matchAll(/((?:\d+|-))\s*\/\s*(?:\d+|-)/g)];
-    if (ratios[0]) result.dedicated_2wh  = ratioNum(ratios[0][1]);
-    if (ratios[1]) result.kurir_plus_2wh = ratioNum(ratios[1][1]);
-    if (ratios[2]) result.mitra_2wh      = ratioNum(ratios[2][1]);
+    if (isSideBySide) {
+      const lines = afterStart.split(/\r?\n/).slice(0, 18);
+      const leftLines: string[] = [];
+      for (const line of lines) {
+        if (/^(?:Keuangan|Ringkasan|Backlog|To\s+Expedite)\b/i.test(line.trim())) break;
+        let left = line;
+        // Jika kolom Fleet Productivity punya header/baris kedua (Delivered/Handed Over, Order), potong sebelum itu
+        const prodCut = left.search(/Delivered\s*\/\s*Handed\s*Over|\b\d+\s*Order\b|\bOrder\b/i);
+        if (prodCut !== -1) left = left.slice(0, prodCut);
+        // Jika header "Actual/Schedule" sejajar dengan baris "2WH/4WH/Lainnya" milik Fleet Productivity di kanan, buang bagian kanan
+        if (/Act[a-z]{1,4}\s*\/?\s*Sched/i.test(left)) {
+          const rightTableCut = left.search(/\s+(?:(?:2|Z)\s*W\s*H|(?:4|A)\s*W\s*H|Lainnya)\b/i);
+          if (rightTableCut !== -1) left = left.slice(0, rightTableCut);
+        }
+        // Jika di baris yang sama ada 2WH/4WH/Lainnya milik Fleet Productivity setelah kolom Head Counts, potong di kemunculan ke-2
+        const secondRowLabel = left.match(/^([\s\S]*?\b(?:(?:2|Z)\s*W\s*H|(?:4|A)\s*W\s*H|Lainnya)\b[\s\S]*?)\s+(?=(?:2|Z)\s*W\s*H|(?:4|A)\s*W\s*H|Lainnya)/i);
+        if (secondRowLabel) left = secondRowLabel[1];
+        leftLines.push(left);
+      }
+      hcSource = leftLines.join("\n");
+    } else {
+      const stopMatch = afterStart.match(/Fleet\s+Productivity|Keuangan|Ringkasan/i);
+      hcSource = stopMatch && stopMatch.index !== undefined
+        ? afterStart.slice(0, Math.min(stopMatch.index, 1400))
+        : afterStart.slice(0, 1400);
+    }
+  } else {
+    // Fallback jika header "Fleet Head Counts" terpotong OCR, tapi label "Actual/Schedule" terbaca
+    const actualMatch = text.match(/Act[a-z]{1,4}\s*\/?\s*Sched/i);
+    if (!actualMatch || actualMatch.index === undefined) return result;
+    const start = Math.max(0, actualMatch.index - 250);
+    const windowText = text.slice(start, actualMatch.index + 700);
+    const stopMatch = windowText.slice(actualMatch.index - start).match(/Fleet\s+Productivity|Delivered\s*\/\s*Handed|Keuangan/i);
+    hcSource = stopMatch && stopMatch.index !== undefined
+      ? windowText.slice(0, (actualMatch.index - start) + stopMatch.index)
+      : windowText;
   }
 
-  // Cari section "4WH"
-  const m4wh = hcSource.match(/(?:4|A)\s*W\s*H([\s\S]{0,180}?)(?:Lainnya|Fleet\s+Productivity|$)/i);
+  const hcNorm = hcSource.replace(/[–—−]/g, "-");
+  const RATIO_RE = /((?:\d+|-))\s*\/\s*(?:\d+|-)/g;
+
+  const parseCols = (segment: string): (number | null)[] => {
+    const clean = segment.replace(/\s+/g, " ").trim();
+    const ratios = [...clean.matchAll(RATIO_RE)];
+    if (ratios.length >= 3) {
+      return ratios.slice(0, 3).map((m) => ratioNum(m[1]));
+    }
+    // Pertahankan posisi kolom jika salah satu sel gagal OCR (dipisahkan >= 2 spasi)
+    const cells = segment.trim().split(/\s{2,}/).filter(Boolean);
+    if (cells.length >= 3) {
+      return cells.slice(0, 3).map((c) => {
+        const m = c.match(/((?:\d+|-))\s*\/\s*(?:\d+|-)/);
+        return m ? ratioNum(m[1]) : null;
+      });
+    }
+    return ratios.map((m) => ratioNum(m[1]));
+  };
+
+  // 1. Cari baris "2WH" dan "4WH"
+  const m2wh = hcNorm.match(/(?:2|Z)\s*W\s*H([\s\S]{0,260}?)(?:(?:4|A)\s*W\s*H|Lainnya|Dedicated\s+Actual|Kurir\s+Plus\s+Actual|Mitra\s+Actual|$)/i);
+  if (m2wh) {
+    const cols = parseCols(m2wh[1]);
+    if (cols[0] !== undefined && cols[0] !== null) result.dedicated_2wh  = cols[0];
+    if (cols[1] !== undefined && cols[1] !== null) result.kurir_plus_2wh = cols[1];
+    if (cols[2] !== undefined && cols[2] !== null) result.mitra_2wh      = cols[2];
+  }
+
+  const m4wh = hcNorm.match(/(?:4|A)\s*W\s*H([\s\S]{0,260}?)(?:Lainnya|Dedicated\s+Actual|Kurir\s+Plus|Mitra|$)/i);
   if (m4wh) {
-    const ratios = [...m4wh[1].matchAll(/((?:\d+|-))\s*\/\s*(?:\d+|-)/g)];
-    if (ratios[0]) result.dedicated_4wh = ratioNum(ratios[0][1]);
-    // ratios[1] = Kurir Plus 4WH (tidak diperlukan)
-    if (ratios[2]) result.mitra_4wh     = ratioNum(ratios[2][1]);
+    const cols = parseCols(m4wh[1]);
+    if (cols[0] !== undefined && cols[0] !== null) result.dedicated_4wh = cols[0];
+    if (cols[2] !== undefined && cols[2] !== null) result.mitra_4wh     = cols[2];
+  }
+
+  // 2. Fallback layout vertikal per kolom (Dedicated -> Kurir Plus -> Mitra)
+  if (result.kurir_plus_2wh === null) {
+    const kpMatch = hcNorm.match(/K[au]r[il]r\s+P(?:lus|hus|in|hs)([\s\S]{0,260}?)(?=M[il]t?ra|$)/i);
+    if (kpMatch) {
+      const ratios = [...kpMatch[1].matchAll(RATIO_RE)];
+      if (ratios[0]) result.kurir_plus_2wh = ratioNum(ratios[0][1]);
+    }
+  }
+  if (result.mitra_2wh === null || result.mitra_4wh === null) {
+    const mMatch = hcNorm.match(/M[il]t?ra\b([\s\S]{0,260})/i);
+    if (mMatch) {
+      const ratios = [...mMatch[1].matchAll(RATIO_RE)];
+      if (result.mitra_2wh === null && ratios[0]) result.mitra_2wh = ratioNum(ratios[0][1]);
+      if (result.mitra_4wh === null && ratios[1]) result.mitra_4wh = ratioNum(ratios[1][1]);
+    }
+  }
+
+  // 3. Jika Fleet Head Counts bernilai "-/-" / belum ada kurir ("Attendance Rate -%" tanpa rasio angka):
+  //    tulis 0 pada semua hasil Fleet Head Counts.
+  const hasNumericRatio = /\d+\s*\/\s*\d+/.test(hcNorm);
+  const hasDashRatio = /-\s*\/\s*-/.test(hcNorm);
+  const hasDashAttendance = /Attendance\s+Rate\s*[-~]\s*%/i.test(hcNorm) && !/Attendance\s+Rate\s*\d/i.test(hcNorm);
+  if (!hasNumericRatio && (hasDashRatio || hasDashAttendance)) {
+    result.dedicated_2wh  ??= 0;
+    result.kurir_plus_2wh ??= 0;
+    result.dedicated_4wh  ??= 0;
+    result.mitra_2wh      ??= 0;
+    result.mitra_4wh      ??= 0;
   }
 
   return result;
