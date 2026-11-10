@@ -224,6 +224,24 @@ function extractInHubVolume(text: string, label: string): number | null {
   return null;
 }
 
+const SECTION_BOUNDARY_RE = /Fleet\s+(?:Head|Prod)|Updated|Dedicated|Kurir|Mitra|Backlog|To\s+Expedite|Order/i;
+
+function afterLabelOnLine(line: string, re: RegExp): string {
+  const m = line.match(re);
+  if (!m || m.index === undefined) return line;
+  return line.slice(m.index + m[0].length);
+}
+
+function collectFollowingLines(lines: string[], startIdx: number, count = 2): string {
+  const out: string[] = [];
+  for (let i = startIdx + 1; i <= startIdx + count && i < lines.length; i++) {
+    const l = lines[i] || "";
+    if (SECTION_BOUNDARY_RE.test(l)) break;
+    out.push(l);
+  }
+  return out.join(" ");
+}
+
 /**
  * Fleet Status Delivering: ambil kolom VOLUME (angka ke-1)
  * Format: "Delivering   0   4.448   4.448(100,0%)---"
@@ -236,14 +254,14 @@ function extractFleetDelivering(text: string): number | null {
     if (!re.test(lines[i])) continue;
     // Hindari "First Delivering Time", "Stuck at Delivering", atau "Delivering attempted"
     if (/first|stuck|attempted/i.test(lines[i])) continue;
-    let nums = allNumbers(lines[i].replace(re, ""));
+    const afterLabel = afterLabelOnLine(lines[i], re);
+    let nums = allNumbers(afterLabel);
     if (!nums.length) {
-      const combined = [lines[i + 1] || "", lines[i + 2] || ""].join(" ");
-      nums = allNumbers(combined);
+      nums = allNumbers(collectFollowingLines(lines, i));
     }
     if (nums.length) return nums[0];
     // Nilai "-" di FMS = 0
-    if (dashToZero(lines[i], null) !== null) return 0;
+    if (dashToZero(afterLabel, null) !== null) return 0;
   }
   return null;
 }
@@ -262,11 +280,13 @@ function extractFleetDelivered(text: string): number | null {
     if (!re.test(lines[i])) continue;
     // Skip kartu "Total Delivered to Buyer" atau "Delivered (%)"
     if (/buyer|total\s+delivered|delivered\s*\(/i.test(lines[i])) continue;
-    let nums = allNumbers(lines[i].replace(re, ""));
+    const afterLabel = afterLabelOnLine(lines[i], re);
+    let nums = allNumbers(afterLabel);
     if (!nums.length) {
-      nums = allNumbers([lines[i + 1] || "", lines[i + 2] || ""].join(" "));
+      nums = allNumbers(collectFollowingLines(lines, i));
     }
     if (nums.length) return nums[0];
+    if (dashToZero(afterLabel, null) !== null) return 0;
   }
   return null;
 }
@@ -283,14 +303,15 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
   const idx = lines.findIndex((l) => re.test(l));
   if (idx === -1) return { oh_volume: null, oh_total: null };
 
-  let nums = allNumbers(lines[idx].replace(re, ""));
+  const afterLabel = afterLabelOnLine(lines[idx], re);
+  let nums = allNumbers(afterLabel);
   if (nums.length < 2) {
-    const combined = [lines[idx].replace(re, ""), lines[idx + 1] || "", lines[idx + 2] || ""].join(" ");
-    nums = allNumbers(combined);
+    const extra = collectFollowingLines(lines, idx);
+    if (extra) nums = allNumbers(`${afterLabel} ${extra}`);
   }
   return {
-    oh_volume: dashToZero(lines[idx], nums[0] ?? null),  // Volume (kiri)
-    oh_total:  dashToZero(lines[idx], nums[1] ?? nums[0] ?? null),  // Total (kanan)
+    oh_volume: dashToZero(afterLabel, nums[0] ?? null),  // Volume (kiri)
+    oh_total:  dashToZero(afterLabel, nums[1] ?? nums[0] ?? null),  // Total (kanan)
   };
 }
 
