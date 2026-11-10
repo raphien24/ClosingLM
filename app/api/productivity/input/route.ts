@@ -46,9 +46,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `${result.saved} data baru disimpan, ${result.overwritten} diperbarui.`,
-      saved: result.saved,
-      overwritten: result.overwritten,
+      message: `${result.saved} data baru disimpan${result.skipped > 0 ? `, ${result.skipped} duplikat dilewati` : ""}.`,
+      saved:   result.saved,
+      skipped: result.skipped,
     });
   } catch (err) {
     console.error("Error saving batch:", err);

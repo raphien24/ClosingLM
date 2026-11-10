@@ -1195,26 +1195,29 @@ export async function checkExistingCourierRecords(
   };
 }
 
-// ── Batch save: simpan banyak records sekaligus ──────────────
-// Hanya 2 API calls: 1 read (ambil semua data existing) + 1 write (batch append/update)
-// Jauh lebih efisien dari saveCourierRecord satu per satu (N*2 API calls)
+// ── Batch save: append-only, duplicate di-skip ──────────────
+// Logic:
+//   1. Baca existing sekali (1 API call) → bangun Set key duplicate
+//   2. Filter record: hanya yang belum ada di sheet
+//   3. appendRows sekali ke bawah (1 API call)
+//   Tidak ada updateRow → tidak ada risiko overwrite row yang salah
 
 export async function saveCourierRecordsBatch(
   records: Omit<CourierRecord, "nama_hub" | "submitted_at" | "submitted_by">[],
   hubName: string,
   userEmail: string
-): Promise<{ saved: number; overwritten: number }> {
-  if (records.length === 0) return { saved: 0, overwritten: 0 };
+): Promise<{ saved: number; skipped: number }> {
+  if (records.length === 0) return { saved: 0, skipped: 0 };
 
   await ensureSheet(RAW_SHEET(hubName), RAW_HEADER);
   const submittedAt = new Date().toISOString();
 
-  // 1. Baca semua data existing sekali saja (1 API call)
+  // 1. Baca existing sekali
   const existing = await getSheetData(RAW_SHEET(hubName));
 
-  // Bangun lookup map: "courier_id_YYYY-MM-DD" → row index (1-indexed)
-  // Sekaligus profil kurir (zone_id & assigned_target) untuk melengkapi data susulan
-  const existingMap = new Map<string, number>();
+  // Bangun Set key: "courier_id_YYYY-MM-DD"
+  const existingKeys = new Set<string>();
+  // Bangun profil kurir untuk melengkapi data susulan
   const courierProfiles = new Map<string, { zone_id: string; assigned_target: number | null }>();
 
   for (let i = 1; i < existing.length; i++) {
@@ -1222,54 +1225,53 @@ export async function saveCourierRecordsBatch(
     if (!row || !row[COL.COURIER_ID]) continue;
     const cid = String(row[COL.COURIER_ID]).trim();
 
-    const z = String(row[COL.ZONE] ?? "").trim();
+    // Profil kurir
+    const z   = String(row[COL.ZONE]            ?? "").trim();
     const tgt = n(row[COL.ASSIGNED_TARGET]);
     const prev = courierProfiles.get(cid);
     if (!prev) {
       courierProfiles.set(cid, { zone_id: z, assigned_target: tgt });
     } else {
-      if (z) prev.zone_id = z;
+      if (z)        prev.zone_id        = z;
       if (tgt && tgt > 0) prev.assigned_target = tgt;
     }
 
-    if (!row[COL.DATE]) continue;
-    const key = `${cid}_${normalizeDateKey(String(row[COL.DATE]))}`;
-    existingMap.set(key, i + 1); // 1-indexed
-  }
-
-  // 2. Pisahkan records: mana yang baru (append) vs update
-  const toAppend: (string | number | null)[][] = [];
-  const toUpdate: { rowIndex: number; values: (string | number | null)[] }[] = [];
-
-  for (const rawRecord of records) {
-    const cid = rawRecord.courier_id.trim();
-    const profile = courierProfiles.get(cid);
-    const normContract = normalizeContractType(rawRecord.contract_type);
-    const normVehicle = normalizeVehicleType(rawRecord.vehicle_type);
-
-    const enrichedRecord = {
-      ...rawRecord,
-      contract_type: normContract,
-      vehicle_type: normVehicle,
-      zone_id: rawRecord.zone_id || profile?.zone_id || "",
-      assigned_target: rawRecord.assigned_target,
-    };
-
-    const key = `${cid}_${normalizeDateKey(enrichedRecord.date)}`;
-    const row = buildRow(enrichedRecord, hubName, submittedAt, userEmail);
-
-    if (existingMap.has(key)) {
-      toUpdate.push({ rowIndex: existingMap.get(key)!, values: row });
-    } else {
-      toAppend.push(row);
+    // Key duplikat
+    if (row[COL.DATE]) {
+      existingKeys.add(`${cid}_${normalizeDateKey(String(row[COL.DATE]))}`);
     }
   }
 
-  // 3. Batch write (maks 2 API calls)
-  if (toAppend.length > 0) await appendRows(RAW_SHEET(hubName), toAppend);
-  if (toUpdate.length > 0) await updateRows(RAW_SHEET(hubName), toUpdate);
+  // 2. Filter: hanya record yang belum ada (duplicate di-skip)
+  const toAppend: (string | number | null)[][] = [];
 
-  return { saved: toAppend.length, overwritten: toUpdate.length };
+  for (const rawRecord of records) {
+    const cid         = rawRecord.courier_id.trim();
+    const normContract = normalizeContractType(rawRecord.contract_type);
+    const normVehicle  = normalizeVehicleType(rawRecord.vehicle_type);
+    const profile      = courierProfiles.get(cid);
+
+    const enriched = {
+      ...rawRecord,
+      contract_type:   normContract,
+      vehicle_type:    normVehicle,
+      zone_id:         rawRecord.zone_id || profile?.zone_id || "",
+      assigned_target: rawRecord.assigned_target,
+    };
+
+    const key = `${cid}_${normalizeDateKey(enriched.date)}`;
+    if (existingKeys.has(key)) continue; // duplicate → skip
+
+    toAppend.push(buildRow(enriched, hubName, submittedAt, userEmail));
+  }
+
+  // 3. Append semua sekaligus ke bawah (1 API call)
+  if (toAppend.length > 0) await appendRows(RAW_SHEET(hubName), toAppend);
+
+  return {
+    saved:   toAppend.length,
+    skipped: records.length - toAppend.length,
+  };
 }
 
 function buildRow(

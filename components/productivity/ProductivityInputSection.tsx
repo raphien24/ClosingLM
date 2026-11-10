@@ -90,10 +90,9 @@ export function ProductivityInputSection({
   const [parsingStep, setParsingStep] = useState<string>(
     "Membaca & memproses file Excel/CSV..."
   );
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [saveSummary, setSaveSummary] = useState<{
     saved: number;
-    overwritten: number;
+    skipped: number;
   } | null>(null);
 
   const isSaving = pageState === "saving";
@@ -260,7 +259,6 @@ export function ProductivityInputSection({
   // ── Eksekusi simpan ke API ───────────────────────────────
   const executeSave = async () => {
     if (!rows.length) return;
-    setShowConfirmModal(false);
     setPageState("saving");
 
     try {
@@ -297,8 +295,8 @@ export function ProductivityInputSection({
       if (!res.ok) throw new Error(json.error);
 
       setSaveSummary({
-        saved: json.saved ?? 0,
-        overwritten: json.overwritten ?? 0,
+        saved:   json.saved   ?? 0,
+        skipped: json.skipped ?? 0,
       });
       toast.success(json.message || "Data berhasil disimpan!");
       setPageState("done");
@@ -314,13 +312,7 @@ export function ProductivityInputSection({
       toast.error("Pilih tanggal data terlebih dahulu sebelum menyimpan!");
       return;
     }
-    if (
-      dupCheck &&
-      (dupCheck.willOverwriteCount > 0 || dupCheck.existingOnDateCount > 0)
-    ) {
-      setShowConfirmModal(true);
-      return;
-    }
+    // Langsung simpan — duplikat di-skip otomatis di server
     executeSave();
   };
 
@@ -332,7 +324,6 @@ export function ProductivityInputSection({
     setSkippedOffCount(0);
     setFileName("");
     setDupCheck(null);
-    setShowConfirmModal(false);
     setSaveSummary(null);
     setPageState("idle");
   };
@@ -390,13 +381,17 @@ export function ProductivityInputSection({
                   {saveSummary.saved} kurir
                 </strong>
               </span>
-              <span>·</span>
-              <span>
-                Diperbarui / ditimpa:{" "}
-                <strong className="text-amber-700">
-                  {saveSummary.overwritten} kurir
-                </strong>
-              </span>
+              {saveSummary.skipped > 0 && (
+                <>
+                  <span>·</span>
+                  <span>
+                    Duplikat dilewati:{" "}
+                    <strong className="text-gray-500">
+                      {saveSummary.skipped} kurir
+                    </strong>
+                  </span>
+                </>
+              )}
             </div>
           )}
           <div className="flex flex-wrap justify-center gap-3">
@@ -538,19 +533,6 @@ export function ProductivityInputSection({
                         data existing...
                       </span>
                     )}
-                    {dateDetected && (
-                      <span className="bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-xs font-medium">
-                        📅 {displayDate}
-                      </span>
-                    )}
-                    <span className="font-medium text-gray-700">
-                      {rows.length} kurir aktif
-                    </span>
-                    {skippedOffCount > 0 && (
-                      <span className="bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded-full text-xs">
-                        {skippedOffCount} off/resign (Attend Days = 0) dilewati
-                      </span>
-                    )}
                     {parseErrors.length > 0 && (
                       <span className="text-amber-600 flex items-center gap-1">
                         <AlertTriangle className="h-3.5 w-3.5" />{" "}
@@ -560,54 +542,52 @@ export function ProductivityInputSection({
                   </div>
                 </div>
 
-                {/* Pemilih Tanggal (Wajib jika Format Susulan) */}
-                {formatDetected === "historical_performance" && (
-                  <div
-                    className={`mb-4 rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
-                      dateDetected
+                {/* Pemilih Tanggal — SELALU tampil agar user bisa koreksi */}
+                <div
+                  className={`mb-4 rounded-xl border p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                    dateDetected
+                      ? formatDetected === "historical_performance"
                         ? "bg-purple-50/70 border-purple-200"
-                        : "bg-red-50 border-red-300"
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <Calendar
-                        className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
-                          dateDetected ? "text-purple-600" : "text-red-600"
-                        }`}
-                      />
-                      <div className="text-xs">
-                        <p
-                          className={`font-bold text-sm ${
-                            dateDetected ? "text-purple-900" : "text-red-800"
-                          }`}
-                        >
-                          {dateDetected
-                            ? `Tanggal Data Susulan: ${displayDate}`
-                            : "⚠️ Pilih Tanggal Data Susulan (Wajib Diisi)"}
-                        </p>
-                        <p className="text-gray-600 mt-0.5">
-                          File export Driver Performance tidak memiliki kolom
-                          tanggal di dalam tabel. Pilih tanggal hari yang ingin
-                          Anda input, dan sistem otomatis melengkapi{" "}
-                          <strong>Zone ID</strong> serta <strong>Target</strong>{" "}
-                          dari histori kurir.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <input
-                        type="date"
-                        value={dateDetected || ""}
-                        onChange={(e) => handleManualDateChange(e.target.value)}
-                        className={`px-3 py-2 text-sm font-medium rounded-lg border bg-white focus:outline-none focus:ring-2 ${
-                          dateDetected
-                            ? "border-purple-300 text-gray-800 focus:ring-purple-400"
-                            : "border-red-400 text-red-900 focus:ring-red-400"
-                        }`}
-                      />
+                        : "bg-blue-50/70 border-blue-200"
+                      : "bg-red-50 border-red-300"
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <Calendar
+                      className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
+                        !dateDetected ? "text-red-600"
+                        : formatDetected === "historical_performance" ? "text-purple-600"
+                        : "text-blue-600"
+                      }`}
+                    />
+                    <div className="text-xs">
+                      <p className={`font-bold text-sm ${!dateDetected ? "text-red-800" : "text-gray-800"}`}>
+                        {dateDetected
+                          ? `Tanggal Data: ${displayDate}`
+                          : "⚠️ Tanggal tidak terdeteksi — pilih manual"}
+                      </p>
+                      <p className="text-gray-500 mt-0.5">
+                        {formatDetected === "historical_performance"
+                          ? "Format susulan: tanggal wajib diisi manual."
+                          : "Terdeteksi dari kolom \"First Delivering Time\". Koreksi jika salah."}
+                      </p>
                     </div>
                   </div>
-                )}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <input
+                      type="date"
+                      value={dateDetected || ""}
+                      onChange={(e) => handleManualDateChange(e.target.value)}
+                      className={`px-3 py-2 text-sm font-medium rounded-lg border bg-white focus:outline-none focus:ring-2 ${
+                        dateDetected
+                          ? formatDetected === "historical_performance"
+                            ? "border-purple-300 text-gray-800 focus:ring-purple-400"
+                            : "border-blue-300 text-gray-800 focus:ring-blue-400"
+                          : "border-red-400 text-red-900 focus:ring-red-400"
+                      }`}
+                    />
+                  </div>
+                </div>
 
                 {/* Banner Peringatan jika Tanggal / Kurir sudah ada datanya */}
                 {dupCheck &&
@@ -837,68 +817,6 @@ export function ProductivityInputSection({
             </div>
             <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
               <div className="h-full bg-blue-600 rounded-full animate-pulse w-4/5 mx-auto" />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Konfirmasi Timpa Data */}
-      {showConfirmModal && dupCheck && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 max-w-md w-full p-6 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-gray-900">
-                  Konfirmasi Timpa Data Produktivitas
-                </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Tanggal: <strong>{displayDate || rows[0]?.date}</strong>
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-1.5">
-              <p>
-                Di tanggal ini sudah terdapat{" "}
-                <strong>{dupCheck.existingOnDateCount} data kurir</strong> pada
-                database Hub <strong>{hubName}</strong>.
-              </p>
-              <ul className="list-disc list-inside space-y-0.5 font-medium">
-                <li>
-                  <strong className="text-amber-800">
-                    {dupCheck.willOverwriteCount} data kurir
-                  </strong>{" "}
-                  yang sama akan <strong>ditimpa / diperbarui</strong>.
-                </li>
-                <li>
-                  <strong className="text-green-800">
-                    {dupCheck.newCount} data kurir
-                  </strong>{" "}
-                  baru akan <strong>ditambahkan</strong>.
-                </li>
-              </ul>
-            </div>
-
-            <p className="text-xs text-gray-600">
-              Apakah Anda yakin ingin melanjutkan dan menimpa data kurir pada
-              tanggal tersebut?
-            </p>
-
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setShowConfirmModal(false)}
-                disabled={isSaving}
-              >
-                Batal
-              </Button>
-              <Button onClick={executeSave} loading={isSaving}>
-                <CheckCircle2 className="h-4 w-4" />
-                Ya, Timpa & Simpan
-              </Button>
             </div>
           </div>
         </div>

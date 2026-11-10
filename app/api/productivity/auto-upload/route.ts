@@ -139,12 +139,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Berhasil memproses ${records.length} kurir untuk ${hubName}. ${saveResult.saved} data baru ditambahkan, ${saveResult.overwritten} data diperbarui.`,
+      message: `Berhasil memproses ${records.length} kurir untuk ${hubName}. ${saveResult.saved} data baru ditambahkan, ${saveResult.skipped} duplikat dilewati.`,
       hub: hubName.toUpperCase().trim(),
       dateDetected: parseResult.dateDetected,
       totalCouriersProcessed: records.length,
       savedNew: saveResult.saved,
-      updatedExisting: saveResult.overwritten,
+      skipped: saveResult.skipped,
       parseErrors: parseResult.errors,
       skippedOffCount: parseResult.skippedOffCount || 0,
     });
