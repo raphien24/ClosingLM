@@ -9,9 +9,6 @@ import type { Worker } from "tesseract.js";
 const TESSERACT_CDN =
   "https://cdn.jsdelivr.net/npm/tesseract.js@6.0.0/dist/tesseract.min.js";
 
-// Samakan dengan konfigurasi worker di server (lib/ocrWorker.ts)
-const CHAR_WHITELIST =
-  "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,%()-/: ";
 
 type ProgressHook = (step: string) => void;
 type TesseractModule = typeof import("tesseract.js");
@@ -62,8 +59,9 @@ async function getWorker(onProgress?: ProgressHook): Promise<Worker> {
     });
     await worker.setParameters({
       tessedit_pageseg_mode: "6" as never,
-      tessedit_char_whitelist: CHAR_WHITELIST,
+      // Tanpa whitelist (memaksa LSTM salah baca pemisah ribuan) + DPI 300 seperti script referensi.
       preserve_interword_spaces: "1" as never,
+      user_defined_dpi: "300" as never,
     });
     return worker;
   })().catch((err) => {
@@ -103,9 +101,8 @@ async function preprocessForOcr(
   let targetW = w;
   // Naikkan resolusi hingga lebar 3200 agar pemisah ribuan/desimal
   // (contoh: 8.756 dan 100,0%) tidak hilang saat dibaca Tesseract.
-  if (w >= 3200) targetW = 3200;
-  else if (isFull) targetW = Math.min(3200, Math.round(w * 1.6));
-  else targetW = Math.min(3200, w * 2);
+  // Seperti script referensi: perbesar hingga 3x agar lebar mendekati 4200px.
+  targetW = Math.round(w * Math.min(3, Math.max(1, 4200 / w)));
 
   const scale = targetW / w;
   const canvas = document.createElement("canvas");
@@ -126,11 +123,9 @@ async function preprocessForOcr(
       if (g < min) min = g;
       if (g > max) max = g;
     }
-    const range = Math.max(1, max - min);
-    for (let i = 0; i < d.length; i += 4) {
-      const v = Math.round(((d[i] - min) / range) * 255);
-      d[i] = d[i + 1] = d[i + 2] = v;
-    }
+    // Tanpa normalisasi min-max: tidak mengubah kontras asli (hasil benchmark lebih akurat).
+    void min;
+    void max;
     ctx.putImageData(imageData, 0, 0);
   } catch {
     // bila browser menolak akses piksel, lanjutkan tanpa normalisasi
@@ -200,10 +195,11 @@ export async function runOcrLocally(
     await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
     // Baca 2 kali dengan binarisasi berbeda, lalu cocokkan silang
     // (meniru pendekatan script referensi agar salah baca tidak lolos diam-diam).
+    // Bacaan 1 = grayscale asli; bacaan 2 = biner ambang 200 (seperti script referensi).
+    // Ambang 225 dibuang: benchmark menunjukkan sering menghilangkan angka tipis.
     const bin200 = await binarizeForOcr(processed, 200);
-    const bin225 = await binarizeForOcr(processed, 225);
-    const r200 = await worker.recognize(bin200);
-    const r225 = await worker.recognize(bin225);
+    const r200 = await worker.recognize(processed);
+    const r225 = await worker.recognize(bin200);
     const norm = (s: string) => s.replace(/ +/g, " ").trim();
     const cocok = norm(r200.data.text) === norm(r225.data.text);
     texts.push(r200.data.text);

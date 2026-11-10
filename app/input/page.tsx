@@ -385,14 +385,23 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
         const rawText = texts[idx];
         const psDates = detectParcelSweeperDates(rawText);
         const parsed = parseOcrText(rawText);
-        // Keyakinan per field: bandingkan hasil pass 1 (bin200) dan pass 2 (bin225).
+        // Keyakinan per field: bandingkan hasil pass 1 (grayscale) dan pass 2 (biner 200).
         const altParsed = parseOcrText(altTexts[idx] || "");
         const baseConf = confidences[idx] ?? 0;
-        for (const k of Object.keys(parsed.row)) {
-          const v1 = (parsed.row as Record<string, unknown>)[k];
-          const v2 = (altParsed.row as Record<string, unknown>)[k];
+        const rowRec = parsed.row as Record<string, unknown>;
+        const altRec = altParsed.row as Record<string, unknown>;
+        for (const k of Object.keys(rowRec)) {
+          let v1 = rowRec[k];
+          const v2 = altRec[k];
+          // Bacaan 1 gagal tapi bacaan 2 (biner) berhasil -> isi dari bacaan 2 (keyakinan rendah).
+          let filled = false;
+          if (v1 == null && v2 != null) {
+            rowRec[k] = v2;
+            v1 = v2;
+            filled = true;
+          }
           const sama = v1 != null && String(v1) === String(v2);
-          const c = sama ? baseConf : Math.min(baseConf, 60);
+          const c = filled ? Math.min(baseConf, 55) : sama ? baseConf : Math.min(baseConf, 60);
           fieldConf[k] = Math.max(fieldConf[k] ?? 0, c);
         }
         const expSparse = extractExpediteSparse(sparseTexts[idx] || "");
