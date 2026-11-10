@@ -411,8 +411,28 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           fieldConf[k] = Math.max(fieldConf[k] ?? 0, c);
         }
         if (!isParcelSweeperPage(rawText)) {
+          const sparseText = sparseTexts[idx] || "";
+          if (sparseText) {
+            const sparseParsed = parseOcrText(sparseText);
+            const fhcKeys = [
+              "dedicated_actual_2wh",
+              "kurir_plus_actual_2wh",
+              "dedicated_actual_4wh",
+              "mitra_actual_2wh",
+              "mitra_actual_4wh",
+            ] as const;
+            for (const fk of fhcKeys) {
+              if (parsed.row[fk] == null && sparseParsed.row[fk] != null) {
+                parsed.row[fk] = sparseParsed.row[fk];
+                fieldConf[fk] = Math.max(
+                  fieldConf[fk] ?? 0,
+                  Math.min(baseConf || 75, 75)
+                );
+              }
+            }
+          }
           if (parsed.row.backlog_total == null) {
-            const backlogSparse = extractBacklogSparse(sparseTexts[idx] || "");
+            const backlogSparse = extractBacklogSparse(sparseText);
             if (backlogSparse !== null) {
               parsed.row.backlog_total = backlogSparse;
               fieldConf.backlog_total = Math.max(
@@ -421,7 +441,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
               );
             }
           }
-          const expSparse = extractExpediteSparse(sparseTexts[idx] || "");
+          const expSparse = extractExpediteSparse(sparseText);
           if (expSparse !== null) {
             parsed.row.total_expedite = expSparse;
             fieldConf.total_expedite = Math.max(

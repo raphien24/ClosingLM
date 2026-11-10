@@ -160,6 +160,21 @@ export async function POST(req: NextRequest) {
       const psDates = detectParcelSweeperDates(rawText);
       const parsed = parseOcrText(rawText);
       if (!isParcelSweeperPage(rawText)) {
+        if (sparseText) {
+          const sparseParsed = parseOcrText(sparseText);
+          const fhcKeys = [
+            "dedicated_actual_2wh",
+            "kurir_plus_actual_2wh",
+            "dedicated_actual_4wh",
+            "mitra_actual_2wh",
+            "mitra_actual_4wh",
+          ] as const;
+          for (const fk of fhcKeys) {
+            if (parsed.row[fk] == null && sparseParsed.row[fk] != null) {
+              parsed.row[fk] = sparseParsed.row[fk];
+            }
+          }
+        }
         if (parsed.row.backlog_total == null) {
           const backlogSparse = extractBacklogSparse(sparseText);
           if (backlogSparse !== null) parsed.row.backlog_total = backlogSparse;

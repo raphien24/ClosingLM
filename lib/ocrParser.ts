@@ -327,19 +327,24 @@ function extractFleetHeadCounts(text: string): {
     const afterStart = text.slice(hcHeading.index + hcHeading[0].length);
     const firstNewline = afterStart.indexOf("\n");
     const firstLine = firstNewline === -1 ? afterStart : afterStart.slice(0, firstNewline);
-    const isSideBySide = /Fleet\s+Productivity/i.test(firstLine);
+    const stopMatch = afterStart.match(/Fleet\s+Productivity|Keuangan|Ringkasan/i);
+    const hasImmediateStop =
+      stopMatch &&
+      stopMatch.index !== undefined &&
+      afterStart.slice(0, stopMatch.index).trim().length < 8;
+    const isSideBySide = /Fleet\s+Productivity/i.test(firstLine) || !!hasImmediateStop;
 
     if (isSideBySide) {
-      const lines = afterStart.split(/\r?\n/).slice(0, 18);
+      const lines = afterStart.split(/\r?\n/).filter((l) => l.trim().length > 0).slice(0, 35);
       const leftLines: string[] = [];
       for (const line of lines) {
         if (/^(?:Keuangan|Ringkasan|Backlog|To\s+Expedite)\b/i.test(line.trim())) break;
         let left = line;
         // Jika kolom Fleet Productivity punya header/baris kedua (Delivered/Handed Over, Order), potong sebelum itu
-        const prodCut = left.search(/Delivered\s*\/\s*Handed\s*Over|\b\d+\s*Order\b|\bOrder\b/i);
+        const prodCut = left.search(/Delivered\s*\/\s*Handed\s*Over|\b\d+\s*Order\b|\bOrder\b|\bOr[gd]er\b/i);
         if (prodCut !== -1) left = left.slice(0, prodCut);
         // Jika header "Actual/Schedule" sejajar dengan baris "2WH/4WH/Lainnya" milik Fleet Productivity di kanan, buang bagian kanan
-        if (/Act[a-z]{1,4}\s*\/?\s*Sched/i.test(left)) {
+        if (/Act[a-z]{1,4}\s*\/?\s*Sche[da]/i.test(left)) {
           const rightTableCut = left.search(/\s+(?:(?:2|Z)\s*W\s*H|(?:4|A)\s*W\s*H|Lainnya)\b/i);
           if (rightTableCut !== -1) left = left.slice(0, rightTableCut);
         }
@@ -350,25 +355,35 @@ function extractFleetHeadCounts(text: string): {
       }
       hcSource = leftLines.join("\n");
     } else {
-      const stopMatch = afterStart.match(/Fleet\s+Productivity|Keuangan|Ringkasan/i);
       hcSource = stopMatch && stopMatch.index !== undefined
         ? afterStart.slice(0, Math.min(stopMatch.index, 1400))
         : afterStart.slice(0, 1400);
     }
   } else {
     // Fallback jika header "Fleet Head Counts" terpotong OCR, tapi label "Actual/Schedule" terbaca
-    const actualMatch = text.match(/Act[a-z]{1,4}\s*\/?\s*Sched/i);
+    const actualMatch = text.match(/Act[a-z]{1,4}\s*\/?\s*Sche[da][a-z]{0,5}/i);
     if (!actualMatch || actualMatch.index === undefined) return result;
-    const start = Math.max(0, actualMatch.index - 250);
-    const windowText = text.slice(start, actualMatch.index + 700);
-    const stopMatch = windowText.slice(actualMatch.index - start).match(/Fleet\s+Productivity|Delivered\s*\/\s*Handed|Keuangan/i);
-    hcSource = stopMatch && stopMatch.index !== undefined
-      ? windowText.slice(0, (actualMatch.index - start) + stopMatch.index)
-      : windowText;
+    const rawStart = Math.max(0, actualMatch.index - 250);
+    let prefix = text.slice(rawStart, actualMatch.index);
+    // Jangan ikutkan teks tabel In Hub Status / Fleet Status di atas Fleet Head Counts
+    const prevTableMatches = [...prefix.matchAll(/(?:In\s+Hub|Fleet\s+stat|Transported|Received|Assigning|Assigned|Delivering|Delivered|On[\s\-]*hold|\d+%\))/gi)];
+    if (prevTableMatches.length > 0) {
+      const last = prevTableMatches[prevTableMatches.length - 1];
+      if (last.index !== undefined) {
+        prefix = prefix.slice(last.index + last[0].length);
+      }
+    }
+    const suffixRaw = text.slice(actualMatch.index, actualMatch.index + 700);
+    const stopMatch = suffixRaw.match(/Fleet\s+Productivity|Delivered\s*\/\s*Handed|Keuangan/i);
+    const suffix = stopMatch && stopMatch.index !== undefined
+      ? suffixRaw.slice(0, stopMatch.index)
+      : suffixRaw;
+    hcSource = prefix + suffix;
   }
 
   const hcNorm = hcSource.replace(/[–—−]/g, "-");
-  const RATIO_RE = /((?:\d+|-))\s*\/\s*(?:\d+|-)/g;
+  // Rasio kurir maksimal 3 digit (0-999) atau "-", bukan persentase ("15/50000%)") atau tanggal ("11/11/2026")
+  const RATIO_RE = /(?<![\d.])((?:\d{1,3}|-))\s*\/\s*(?:\d{1,3}|-)(?![\d.%\/])/g;
 
   const parseCols = (segment: string): (number | null)[] => {
     const clean = segment.replace(/\s+/g, " ").trim();
@@ -380,7 +395,7 @@ function extractFleetHeadCounts(text: string): {
     const cells = segment.trim().split(/\s{2,}/).filter(Boolean);
     if (cells.length >= 3) {
       return cells.slice(0, 3).map((c) => {
-        const m = c.match(/((?:\d+|-))\s*\/\s*(?:\d+|-)/);
+        const m = c.match(/(?<![\d.])((?:\d{1,3}|-))\s*\/\s*(?:\d{1,3}|-)(?![\d.%\/])/);
         return m ? ratioNum(m[1]) : null;
       });
     }
@@ -405,14 +420,14 @@ function extractFleetHeadCounts(text: string): {
 
   // 2. Fallback layout vertikal per kolom (Dedicated -> Kurir Plus -> Mitra)
   if (result.kurir_plus_2wh === null) {
-    const kpMatch = hcNorm.match(/K[au]r[il]r\s+P(?:lus|hus|in|hs)([\s\S]{0,260}?)(?=M[il]t?ra|$)/i);
+    const kpMatch = hcNorm.match(/K[au]r[a-z]{1,4}\s+P[a-z]{2,4}\b([\s\S]{0,260}?)(?=(?:M[il]t?ra|M[aei]ra|Miss\s+Actual)|$)/i);
     if (kpMatch) {
       const ratios = [...kpMatch[1].matchAll(RATIO_RE)];
       if (ratios[0]) result.kurir_plus_2wh = ratioNum(ratios[0][1]);
     }
   }
   if (result.mitra_2wh === null || result.mitra_4wh === null) {
-    const mMatch = hcNorm.match(/M[il]t?ra\b([\s\S]{0,260})/i);
+    const mMatch = hcNorm.match(/(?:M[il]t?ra|M[aei]ra|Miss(?=\s+Actual))\b([\s\S]{0,260})/i);
     if (mMatch) {
       const ratios = [...mMatch[1].matchAll(RATIO_RE)];
       if (result.mitra_2wh === null && ratios[0]) result.mitra_2wh = ratioNum(ratios[0][1]);
@@ -420,12 +435,21 @@ function extractFleetHeadCounts(text: string): {
     }
   }
 
-  // 3. Jika Fleet Head Counts bernilai "-/-" / belum ada kurir ("Attendance Rate -%" tanpa rasio angka):
+  // 3. Jika Fleet Head Counts bernilai "-/-" / belum ada kurir ("Attendance Rate -%" tanpa rasio aktif > 0):
   //    tulis 0 pada semua hasil Fleet Head Counts.
-  const hasNumericRatio = /\d+\s*\/\s*\d+/.test(hcNorm);
+  //    Abaikan angka persen atau tanggal (mis. "15/50000%)" atau "11/11/2026") agar tidak membatalkan deteksi "-/-".
+  const hasPositiveRatio = /\b(?:[1-9]\d*\s*\/\s*\d{1,3}|\d{1,3}\s*\/\s*[1-9]\d*)\b(?!\s*[%\/])/.test(hcNorm);
   const hasDashRatio = /-\s*\/\s*-/.test(hcNorm);
-  const hasDashAttendance = /Attendance\s+Rate\s*[-~]\s*%/i.test(hcNorm) && !/Attendance\s+Rate\s*\d/i.test(hcNorm);
-  if (!hasNumericRatio && (hasDashRatio || hasDashAttendance)) {
+  const hasDashAttendance =
+    /(?:Attendance|A[a-z]{4,9}nce)\s+Ra[a-z]{1,3}\s*[-~]\s*%/i.test(hcNorm) &&
+    !/Attendance\s+Rate\s*\d/i.test(hcNorm);
+  const hasEmptyHeaderDash =
+    /Updated\s*:\s*-/i.test(hcNorm) && !/\b\d{1,3}\s*%/.test(hcNorm);
+  if (
+    !hasPositiveRatio &&
+    !/\bAttendance\s+Rate\s*\d/i.test(hcNorm) &&
+    (hasDashRatio || hasDashAttendance || hasEmptyHeaderDash)
+  ) {
     result.dedicated_2wh  ??= 0;
     result.kurir_plus_2wh ??= 0;
     result.dedicated_4wh  ??= 0;
