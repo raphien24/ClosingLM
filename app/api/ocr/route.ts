@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { parseOcrText, detectParcelSweeperDates, extractExpediteSparse, isParcelSweeperPage } from "@/lib/ocrParser";
+import { parseOcrText, detectParcelSweeperDates, extractBacklogSparse, extractExpediteSparse, isParcelSweeperPage } from "@/lib/ocrParser";
 import { mergeOcrBatches } from "@/lib/ocrMerger";
 import {
   preprocessImageToBuffer,
@@ -159,11 +159,17 @@ export async function POST(req: NextRequest) {
       // Validasi tanggal wajib = hari ini HANYA untuk halaman Parcel Sweeper
       const psDates = detectParcelSweeperDates(rawText);
       const parsed = parseOcrText(rawText);
+      if (!isParcelSweeperPage(rawText)) {
+        if (parsed.row.backlog_total == null) {
+          const backlogSparse = extractBacklogSparse(sparseText);
+          if (backlogSparse !== null) parsed.row.backlog_total = backlogSparse;
+        }
+        const expSparse = extractExpediteSparse(sparseText);
+        if (expSparse !== null) parsed.row.total_expedite = expSparse;
+      }
       if (parsed.row.backlog_total == null) {
         console.error("[OCR-NOBACKLOG] img=" + idx + " snippet=" + JSON.stringify(rawText.slice(0, 160)));
       }
-      const expSparse = extractExpediteSparse(sparseText);
-      if (expSparse !== null) parsed.row.total_expedite = expSparse;
 
       if (isParcelSweeperPage(rawText) && psDates.length === 0) {
         return NextResponse.json(

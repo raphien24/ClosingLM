@@ -693,16 +693,63 @@ function extractParcelSweeper(text: string): {
 }
 
 /**
+ * Helper bersama untuk ekstrak angka tengah donut dari teks OCR sparse (PSM 11).
+ * Membersihkan tanggal, jam, persentase, dan label hari agar hanya angka donut
+ * berdiri sendiri yang tersisa.
+ */
+function extractDonutSparseValue(
+  text: string,
+  headingRegex: RegExp,
+  stopRegex: RegExp,
+  maxVal: number
+): number | null {
+  if (isParcelSweeperPage(text)) return null;
+  const m = text.match(headingRegex);
+  if (!m || m.index === undefined) return null;
+
+  const afterHeading = text.slice(m.index + m[0].length, m.index + m[0].length + 1200);
+  const stopIdx = afterHeading.search(stopRegex);
+  const block = stopIdx !== -1 ? afterHeading.slice(0, stopIdx) : afterHeading;
+
+  const clean = block
+    .replace(/Updated\s*:?\s*\d{1,2}\s+[A-Za-z]{3,}\s+\d{1,2}[:.]\d{2}/gi, "")
+    .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/g, "")
+    .replace(/\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Agu|Sep|Oct|Okt|Nov|Dec|Des)[A-Za-z]*\b/gi, "")
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, "")
+    .replace(/\d+(?:[,.]\d+)?\s*%/g, "")
+    .replace(/>?[ \t]*\d+[ \t]*[-–~]?[ \t]*\d*[ \t]*(?:hari|days?)\b/gi, "")
+    .replace(/\b[A-Za-z]+\d+[A-Za-z]*\b/g, "")
+    .replace(/\b\d+[A-Za-z]+\b/g, "");
+
+  const standalone = [...clean.matchAll(/^\s*(\d{1,3}(?:[.,]\d{3})+|\d{1,5})\s*$/gm)]
+    .map((mm) => parseNumber(mm[1]))
+    .filter((n): n is number => n !== null && Number.isInteger(n) && n >= 1 && n <= maxVal);
+  return standalone.length ? Math.max(...standalone) : null;
+}
+
+/**
+ * Ekstrak angka Backlog dari teks OCR sparse (PSM 11).
+ * Berguna saat PSM 3 melewatkan angka di dalam donut chart (mis. pada kartu Backlog).
+ */
+export function extractBacklogSparse(text: string): number | null {
+  return extractDonutSparseValue(
+    text,
+    /Backlog/i,
+    /(?:[1Il|]\s+)?To\s+Expedite|Operation\s+Progress|Linehaul\s+Trip|Fleet\s+Head|In\s+Hub\s+Status/i,
+    99999
+  );
+}
+
+/**
  * Ekstrak angka To Expedite dari teks OCR sparse (PSM 11).
  * Angka di tengah donut (mis. "63") muncul sebagai baris tersendiri.
  * Nilai donut kecil (<= 999); ID trip & angka tabel lebih besar/diabaikan.
  */
 export function extractExpediteSparse(text: string): number | null {
-  const m = text.match(/To\s+Expedite([\s\S]{0,800})/i);
-  if (!m) return null;
-  const block = m[1];
-  const standalone = [...block.matchAll(/^\s*(\d{1,4}(?:[.,]\d{3})*)\s*$/gm)]
-    .map((mm) => parseNumber(mm[1]))
-    .filter((n): n is number => n !== null && n >= 1 && n <= 999);
-  return standalone.length ? Math.max(...standalone) : null;
+  return extractDonutSparseValue(
+    text,
+    /To\s+Expedite/i,
+    /Linehaul\s+Trip|Operation\s+Progress|Fleet\s+Head|In\s+Hub\s+Status/i,
+    999
+  );
 }

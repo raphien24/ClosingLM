@@ -10,7 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import { useAuth } from "@/hooks/useAuth";
 import { formatDate, detectAnomalies } from "@/lib/utils";
 import { todayWIB } from "@/lib/dateUtils";
-import { parseOcrText, detectParcelSweeperDates, extractExpediteSparse, isParcelSweeperPage } from "@/lib/ocrParser";
+import { parseOcrText, detectParcelSweeperDates, extractBacklogSparse, extractExpediteSparse, isParcelSweeperPage } from "@/lib/ocrParser";
 import { mergeOcrBatches } from "@/lib/ocrMerger";
 import { runOcrLocally, OcrCancelledError } from "@/lib/ocrClient";
 import { ClosingData, AnomalyField } from "@/types/closing";
@@ -61,6 +61,17 @@ const NUM_FIELDS: (keyof ClosingData)[] = [
 ];
 
 const DRAFT_STORAGE_KEY = "closing_spx_draft_v1";
+
+/** Validasi tanggal Parcel Sweeper terhadap tanggal closing yang dipilih user. */
+function getParcelSweeperDateError(
+  psDates: string[],
+  targetDate: string,
+  sourceLabel: string
+): string | null {
+  const mismatchedDate = psDates.find((d) => d !== targetDate);
+  if (!mismatchedDate) return null;
+  return `${sourceLabel} (${formatDate(mismatchedDate)}) tidak sesuai dengan tanggal closing yang dipilih (${formatDate(targetDate)}). Ubah tanggal closing di date picker jika ingin menginput tanggal lain.`;
+}
 
 function UnifiedInputContent() {
   const { hubName } = useAuth();
@@ -256,18 +267,16 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
         )
       ) {
         e.preventDefault();
-        const today = todayWIB();
         const psDates = detectParcelSweeperDates(text);
         const parsed = parseOcrText(text);
 
-        const mismatchedDate = psDates.find((d) => d !== today);
-        if (mismatchedDate) {
-          toast.error(
-            `Ditolak: Tanggal pada halaman Parcel Sweeper (${formatDate(
-              mismatchedDate
-            )}) tidak sama dengan tanggal hari ini (${formatDate(today)})!`,
-            { duration: 6000 }
-          );
+        const psErr = getParcelSweeperDateError(
+          psDates,
+          detectedDate,
+          "Ditolak: Tanggal pada halaman Parcel Sweeper"
+        );
+        if (psErr) {
+          toast.error(psErr, { duration: 6000 });
           return;
         }
 
@@ -275,7 +284,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           (v) => v != null
         ).length;
         if (countFields > 0) {
-          mergeIntoOcrRow(parsed.row, today);
+          mergeIntoOcrRow(parsed.row);
           if (
             /To\s+Expedite/i.test(plainText) &&
             parsed.row.total_expedite == null
@@ -296,25 +305,23 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     };
     window.addEventListener("paste", handler);
     return () => window.removeEventListener("paste", handler);
-  }, [activeTab, mergeIntoOcrRow]);
+  }, [activeTab, detectedDate, mergeIntoOcrRow]);
 
   const handleParseManualText = () => {
     if (!pastedText.trim()) {
       toast.error("Tempel teks dari halaman FMS terlebih dahulu.");
       return;
     }
-    const today = todayWIB();
     const psDates = detectParcelSweeperDates(pastedText);
     const parsed = parseOcrText(pastedText);
 
-    const mismatchedDate = psDates.find((d) => d !== today);
-    if (mismatchedDate) {
-      toast.error(
-        `Ditolak: Tanggal pada halaman Parcel Sweeper (${formatDate(
-          mismatchedDate
-        )}) tidak sama dengan tanggal hari ini (${formatDate(today)})!`,
-        { duration: 6000 }
-      );
+    const psErr = getParcelSweeperDateError(
+      psDates,
+      detectedDate,
+      "Ditolak: Tanggal pada halaman Parcel Sweeper"
+    );
+    if (psErr) {
+      toast.error(psErr, { duration: 6000 });
       return;
     }
 
@@ -325,7 +332,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       toast.error("Tidak ditemukan angka FMS pada teks yang ditempel.");
       return;
     }
-    mergeIntoOcrRow(parsed.row, today);
+    mergeIntoOcrRow(parsed.row);
     setPastedText("");
     setShowTextBox(false);
     toast.success(`${countFields} angka berhasil diekstrak dari teks FMS!`);
@@ -376,7 +383,6 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       clearTimeout(stepTimeout1);
       clearTimeout(stepTimeout2);
 
-      const today = todayWIB();
       const batches = [];
       let totalConf = 0;
       const fieldConf: Record<string, number> = {};
@@ -404,23 +410,39 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           const c = filled ? Math.min(baseConf, 55) : sama ? baseConf : Math.min(baseConf, 60);
           fieldConf[k] = Math.max(fieldConf[k] ?? 0, c);
         }
-        const expSparse = extractExpediteSparse(sparseTexts[idx] || "");
-        if (expSparse !== null) parsed.row.total_expedite = expSparse;
+        if (!isParcelSweeperPage(rawText)) {
+          if (parsed.row.backlog_total == null) {
+            const backlogSparse = extractBacklogSparse(sparseTexts[idx] || "");
+            if (backlogSparse !== null) {
+              parsed.row.backlog_total = backlogSparse;
+              fieldConf.backlog_total = Math.max(
+                fieldConf.backlog_total ?? 0,
+                Math.min(baseConf || 75, 75)
+              );
+            }
+          }
+          const expSparse = extractExpediteSparse(sparseTexts[idx] || "");
+          if (expSparse !== null) {
+            parsed.row.total_expedite = expSparse;
+            fieldConf.total_expedite = Math.max(
+              fieldConf.total_expedite ?? 0,
+              Math.min(baseConf || 75, 75)
+            );
+          }
+        }
 
         if (isParcelSweeperPage(rawText) && psDates.length === 0) {
           throw new Error(
             `Tanggal Parcel Sweeper pada screenshot #${idx + 1} tidak terdeteksi. Pastikan tanggal terlihat jelas di screenshot.`
           );
         }
-        const mismatchedDate = psDates.find((d) => d !== today);
-        if (mismatchedDate) {
-          throw new Error(
-            `Tanggal Parcel Sweeper pada screenshot #${idx + 1} (${formatDate(
-              mismatchedDate
-            )}) tidak sesuai dengan tanggal hari ini (${formatDate(
-              today
-            )}). Wajib gunakan data Parcel Sweeper hari ini!`
-          );
+        const psErr = getParcelSweeperDateError(
+          psDates,
+          detectedDate,
+          `Tanggal Parcel Sweeper pada screenshot #${idx + 1}`
+        );
+        if (psErr) {
+          throw new Error(psErr);
         }
 
         batches.push(parsed);
@@ -431,7 +453,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       setOcrConfidence(Math.round(totalConf / texts.length));
       setFieldConfidence(fieldConf);
       setOcrEngine("tesseract");
-      mergeIntoOcrRow(merged.row || {}, today);
+      mergeIntoOcrRow(merged.row || {});
       toast.success("OCR selesai! Periksa dan simpan data.");
     } catch (err: unknown) {
       clearTimeout(timeoutId);
@@ -487,9 +509,24 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     []
   );
 
+  const handleClosingDateChange = (val: string) => {
+    if (!val) return;
+    const today = todayWIB();
+    if (val > today) {
+      toast.error(
+        `Tanggal closing tidak boleh melebihi hari ini (${formatDate(today)}).`
+      );
+      setDetectedDate(today);
+      return;
+    }
+    setDetectedDate(val);
+    setPendingData(null);
+  };
+
   const handleSubmit = async (overwrite = false) => {
     if (!ocrRow) return;
-    const baseData = pendingData || (ocrRow as ClosingData);
+    const baseData =
+      overwrite && pendingData ? pendingData : (ocrRow as ClosingData);
     const data: ClosingData = {
       ...baseData,
       nama_hub: hubName || baseData.nama_hub || "",
@@ -568,6 +605,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     setDetectedDate(item.tanggal);
     setOcrRow({ ...item, anomalies: [] });
     setManualFields(item.manual_fields || []);
+    setPendingData(null);
     setPageState("preview");
     toast.success(`Data tanggal ${formatDate(item.tanggal)} dimuat untuk diedit.`);
   };
@@ -848,6 +886,52 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           </div>
         ) : (
           <>
+            {/* Pemilih Tanggal Closing */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <Calendar className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label
+                      htmlFor="closing-date-picker"
+                      className="font-bold text-sm text-gray-900"
+                    >
+                      Tanggal Closing: {formatDate(detectedDate)}
+                    </label>
+                    {detectedDate !== todayWIB() && (
+                      <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                        Tanggal Lain / Susulan
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-gray-500 mt-0.5">
+                    Default hari ini. Ubah tanggal jika ingin menginput atau
+                    memperbaiki closing tanggal sebelumnya.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {detectedDate !== todayWIB() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleClosingDateChange(todayWIB())}
+                  >
+                    Hari Ini
+                  </Button>
+                )}
+                <input
+                  id="closing-date-picker"
+                  type="date"
+                  value={detectedDate}
+                  max={todayWIB()}
+                  onChange={(e) => handleClosingDateChange(e.target.value)}
+                  className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+            </div>
+
             {/* Step 1 — Screenshot zone */}
             <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -945,12 +1029,16 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                       </span>
                     )}
                   </div>
-                  <span className="text-sm text-gray-500">
-                    Tanggal:{" "}
-                    <strong className="text-gray-800">
-                      {formatDate(detectedDate)}
-                    </strong>
-                  </span>
+                  <label className="flex items-center gap-2 text-sm text-gray-500">
+                    <span>Tanggal:</span>
+                    <input
+                      type="date"
+                      value={detectedDate}
+                      max={todayWIB()}
+                      onChange={(e) => handleClosingDateChange(e.target.value)}
+                      className="px-2.5 py-1 text-sm font-semibold rounded-lg border border-gray-300 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-400"
+                    />
+                  </label>
                 </div>
 
                 <OcrPreviewTable
@@ -1007,7 +1095,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                     </h3>
                   </div>
                   <span className="text-xs text-gray-400">
-                    Klik baris hari ini untuk memuat &amp; mengedit ulang
+                    Klik salah satu tanggal untuk memuat &amp; mengedit ulang
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1017,19 +1105,12 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                       <button
                         key={idx}
                         type="button"
-                        disabled={!isTodayItem}
-                        onClick={() =>
-                          isTodayItem && handleLoadHistoryItem(item)
-                        }
-                        title={
-                          !isTodayItem
-                            ? "Hanya data hari ini yang bisa diedit ulang"
-                            : "Klik untuk mengedit data hari ini"
-                        }
-                        className={`px-3 py-2 rounded-xl border text-left text-xs transition-colors ${
+                        onClick={() => handleLoadHistoryItem(item)}
+                        title="Klik untuk memuat & mengedit data tanggal ini"
+                        className={`px-3 py-2 rounded-xl border text-left text-xs transition-colors cursor-pointer ${
                           isTodayItem
-                            ? "border-red-300 bg-red-50 text-red-800 cursor-pointer hover:bg-red-100"
-                            : "border-gray-200 bg-gray-50 text-gray-500 cursor-default"
+                            ? "border-red-300 bg-red-50 text-red-800 hover:bg-red-100"
+                            : "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:border-gray-300"
                         }`}
                       >
                         <p className="font-semibold">

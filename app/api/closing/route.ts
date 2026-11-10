@@ -69,10 +69,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "tanggal dan nama_hub wajib diisi" }, { status: 400 });
 
   const normalizedDate = normalizeToYMD(data.tanggal);
-  const today = todayWIB();
-  if (normalizedDate !== today) {
+  const parsedDate = /^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)
+    ? new Date(`${normalizedDate}T00:00:00Z`)
+    : null;
+  if (!parsedDate || isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== normalizedDate) {
     return NextResponse.json(
-      { error: `Tanggal closing (${normalizedDate}) wajib sama dengan tanggal hari ini (${today}).` },
+      { error: `Format tanggal closing tidak valid (${data.tanggal}).` },
+      { status: 400 }
+    );
+  }
+  const today = todayWIB();
+  if (normalizedDate > today) {
+    return NextResponse.json(
+      { error: `Tanggal closing (${normalizedDate}) tidak boleh melebihi hari ini (${today}).` },
       { status: 400 }
     );
   }
