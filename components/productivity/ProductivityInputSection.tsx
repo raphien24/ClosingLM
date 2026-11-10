@@ -93,6 +93,8 @@ export function ProductivityInputSection({
   const [saveSummary, setSaveSummary] = useState<{
     saved: number;
     skipped: number;
+    deletedExisting: number;
+    wasReplace: boolean;
   } | null>(null);
 
   const isSaving = pageState === "saving";
@@ -295,10 +297,16 @@ export function ProductivityInputSection({
       if (!res.ok) throw new Error(json.error);
 
       setSaveSummary({
-        saved:   json.saved   ?? 0,
-        skipped: json.skipped ?? 0,
+        saved:           json.saved           ?? 0,
+        skipped:         json.skipped         ?? 0,
+        deletedExisting: json.deletedExisting  ?? 0,
+        wasReplace:      json.wasReplace       ?? false,
       });
-      toast.success(json.message || "Data berhasil disimpan!");
+      if (json.wasReplace) {
+        toast(json.message, { icon: "⚠️", duration: 6000 });
+      } else {
+        toast.success(json.message || "Data berhasil disimpan!");
+      }
       setPageState("done");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menyimpan.");
@@ -374,23 +382,35 @@ export function ProductivityInputSection({
             <strong>{displayDate}</strong> telah diproses.
           </p>
           {saveSummary && (
-            <div className="inline-flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2 text-xs text-gray-600 mb-6">
-              <span>
-                Baru disimpan:{" "}
-                <strong className="text-green-700">
-                  {saveSummary.saved} kurir
-                </strong>
-              </span>
-              {saveSummary.skipped > 0 && (
-                <>
-                  <span>·</span>
-                  <span>
-                    Duplikat dilewati:{" "}
-                    <strong className="text-gray-500">
-                      {saveSummary.skipped} kurir
-                    </strong>
-                  </span>
-                </>
+            <div className={`inline-flex flex-col items-center gap-2 border rounded-xl px-5 py-3 text-xs mb-6 ${
+              saveSummary.wasReplace
+                ? "bg-amber-50 border-amber-300 text-amber-800"
+                : "bg-green-50 border-green-200 text-green-800"
+            }`}>
+              {saveSummary.wasReplace && (
+                <p className="font-bold text-sm text-amber-700 flex items-center gap-1.5">
+                  ⚠️ Data Lama Diganti
+                </p>
+              )}
+              <div className="flex items-center gap-4">
+                <span>
+                  Disimpan:{" "}
+                  <strong className="text-green-700">{saveSummary.saved} kurir</strong>
+                </span>
+                {saveSummary.deletedExisting > 0 && (
+                  <>
+                    <span className="text-gray-400">·</span>
+                    <span>
+                      Dihapus:{" "}
+                      <strong className="text-amber-700">{saveSummary.deletedExisting} data lama</strong>
+                    </span>
+                  </>
+                )}
+              </div>
+              {saveSummary.wasReplace && (
+                <p className="text-amber-600 text-[11px]">
+                  Baris kuning ditambahkan di Google Sheets sebagai penanda batch ini.
+                </p>
               )}
             </div>
           )}

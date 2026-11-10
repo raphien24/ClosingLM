@@ -330,3 +330,147 @@ export async function updateRows(
   });
   invalidateSheetCache(sheetName);
 }
+
+/**
+ * Hapus semua rows yang memenuhi kondisi (berdasarkan nilai kolom).
+ * Karena Google Sheets tidak support delete by value, kita:
+ * 1. Ambil semua data
+ * 2. Filter out rows yang match
+ * 3. Clear sheet
+ * 4. Tulis ulang data yang tersisa (header + non-matching rows)
+ *
+ * Returns: jumlah rows yang dihapus
+ */
+export async function deleteRowsByColumnValue(
+  sheetName: string,
+  columnIndex: number,
+  value: string
+): Promise<number> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = SPREADSHEET_ID;
+
+  // Baca semua data
+  const all = await getSheetData(sheetName);
+  if (all.length <= 1) return 0; // hanya header atau kosong
+
+  const header = all[0];
+  const dataRows = all.slice(1);
+
+  // Pisahkan: yang match (akan dihapus) vs yang tidak
+  const toKeep = dataRows.filter(
+    (row) =>
+      !row[columnIndex] ||
+      row[columnIndex].toLowerCase().trim() !== value.toLowerCase().trim()
+  );
+  const deletedCount = dataRows.length - toKeep.length;
+
+  if (deletedCount === 0) return 0;
+
+  // Clear sheet lalu tulis ulang
+  await sheets.spreadsheets.values.clear({ spreadsheetId, range: sheetName });
+
+  const newData = [header, ...toKeep];
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `${sheetName}!A1`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: newData },
+  });
+
+  return deletedCount;
+}
+
+/**
+ * Warnai satu baris (row) dengan background color kuning.
+ * rowIndex: 1-indexed (row 1 = header)
+ * Dipakai untuk memberi tanda visual pada batch upload terbaru.
+ */
+export async function colorRowYellow(
+  sheetName: string,
+  rowIndex: number    // 1-indexed
+): Promise<void> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = SPREADSHEET_ID;
+
+  // Ambil sheetId
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = meta.data.sheets?.find(
+    (s) => s.properties?.title === sheetName
+  );
+  if (!sheet?.properties?.sheetId) return;
+  const sheetId = sheet.properties.sheetId;
+
+  // Kuning: RGB(255, 255, 153)
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: rowIndex - 1, // 0-indexed
+              endRowIndex:   rowIndex,
+              startColumnIndex: 0,
+              endColumnIndex: 30,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: {
+                  red:   1.0,
+                  green: 1.0,
+                  blue:  0.6,  // kuning
+                },
+              },
+            },
+            fields: "userEnteredFormat.backgroundColor",
+          },
+        },
+      ],
+    },
+  });
+}
+
+/**
+ * Hapus warna background dari semua rows di sebuah sheet
+ * (reset ke putih). Dipakai sebelum set warna baru agar tidak
+ * ada row kuning lama yang tertinggal.
+ */
+export async function clearRowColors(sheetName: string): Promise<void> {
+  const sheets = getSheetsClient();
+  const spreadsheetId = SPREADSHEET_ID;
+
+  const meta = await sheets.spreadsheets.get({ spreadsheetId });
+  const sheet = meta.data.sheets?.find(
+    (s) => s.properties?.title === sheetName
+  );
+  if (!sheet?.properties?.sheetId) return;
+  const sheetId = sheet.properties.sheetId;
+
+  const rowCount = sheet.properties.gridProperties?.rowCount ?? 1000;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 1, // skip header
+              endRowIndex:   rowCount,
+              startColumnIndex: 0,
+              endColumnIndex: 30,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: { red: 1, green: 1, blue: 1 }, // putih
+              },
+            },
+            fields: "userEnteredFormat.backgroundColor",
+          },
+        },
+      ],
+    },
+  });
+}

@@ -139,13 +139,16 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: `Berhasil memproses ${records.length} kurir untuk ${hubName}. ${saveResult.saved} data baru ditambahkan, ${saveResult.skipped} duplikat dilewati.`,
+      message: saveResult.deletedExisting > 0
+        ? `⚠️ ${saveResult.deletedExisting} data lama dihapus, ${saveResult.saved} data baru disimpan untuk ${hubName}.`
+        : `Berhasil memproses ${records.length} kurir untuk ${hubName}. ${saveResult.saved} data baru ditambahkan.`,
       hub: hubName.toUpperCase().trim(),
       dateDetected: parseResult.dateDetected,
       totalCouriersProcessed: records.length,
-      savedNew: saveResult.saved,
-      skipped: saveResult.skipped,
-      parseErrors: parseResult.errors,
+      savedNew:        saveResult.saved,
+      deletedExisting: saveResult.deletedExisting,
+      wasReplace:      saveResult.deletedExisting > 0,
+      parseErrors:     parseResult.errors,
       skippedOffCount: parseResult.skippedOffCount || 0,
     });
   } catch (err) {

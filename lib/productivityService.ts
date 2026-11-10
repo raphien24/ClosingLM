@@ -1,4 +1,4 @@
-import { getSheetData, batchGetSheetData, appendRow, findRows, updateRow, ensureSheet, appendRows, updateRows } from "./sheets";
+import { getSheetData, batchGetSheetData, appendRow, findRows, updateRow, ensureSheet, appendRows, updateRows, deleteRowsByColumnValue, colorRowYellow, clearRowColors } from "./sheets";
 import {
   CourierRecord,
   CourierScheduleRow,
@@ -1195,58 +1195,78 @@ export async function checkExistingCourierRecords(
   };
 }
 
-// ── Batch save: append-only, duplicate di-skip ──────────────
+// ── Batch save: clean replace per tanggal + marker kuning ───
 // Logic:
-//   1. Baca existing sekali (1 API call) → bangun Set key duplicate
-//   2. Filter record: hanya yang belum ada di sheet
-//   3. appendRows sekali ke bawah (1 API call)
-//   Tidak ada updateRow → tidak ada risiko overwrite row yang salah
+//   1. Cek apakah ada data existing untuk tanggal yang di-upload
+//   2. Jika ada → hapus semua row tanggal tersebut (clear rows by date)
+//      → reset warna kuning lama
+//   3. Append semua record baru ke bawah (1 API call)
+//   4. Warnai 1 baris penanda kuning tepat di atas batch baru
+//
+// Returns: saved, deletedExisting (untuk peringatan di UI)
 
 export async function saveCourierRecordsBatch(
   records: Omit<CourierRecord, "nama_hub" | "submitted_at" | "submitted_by">[],
   hubName: string,
   userEmail: string
-): Promise<{ saved: number; skipped: number }> {
-  if (records.length === 0) return { saved: 0, skipped: 0 };
+): Promise<{ saved: number; deletedExisting: number }> {
+  if (records.length === 0) return { saved: 0, deletedExisting: 0 };
 
-  await ensureSheet(RAW_SHEET(hubName), RAW_HEADER);
+  const sheet = RAW_SHEET(hubName);
+  await ensureSheet(sheet, RAW_HEADER);
   const submittedAt = new Date().toISOString();
 
-  // 1. Baca existing sekali
-  const existing = await getSheetData(RAW_SHEET(hubName));
+  // Ambil tanggal unik dari records yang akan di-upload
+  // (biasanya semua sama, tapi handle edge case)
+  const uploadDates = [...new Set(
+    records.map((r) => normalizeDateKey(r.date))
+  )];
 
-  // Bangun Set key: "courier_id_YYYY-MM-DD"
-  const existingKeys = new Set<string>();
-  // Bangun profil kurir untuk melengkapi data susulan
+  // 1. Baca existing untuk profil kurir dan cek duplikat tanggal
+  const existing = await getSheetData(sheet);
   const courierProfiles = new Map<string, { zone_id: string; assigned_target: number | null }>();
 
+  // Hitung berapa banyak row existing yang akan dihapus
+  let deletedExisting = 0;
   for (let i = 1; i < existing.length; i++) {
     const row = existing[i];
     if (!row || !row[COL.COURIER_ID]) continue;
-    const cid = String(row[COL.COURIER_ID]).trim();
 
-    // Profil kurir
+    const cid = String(row[COL.COURIER_ID]).trim();
     const z   = String(row[COL.ZONE]            ?? "").trim();
     const tgt = n(row[COL.ASSIGNED_TARGET]);
     const prev = courierProfiles.get(cid);
     if (!prev) {
       courierProfiles.set(cid, { zone_id: z, assigned_target: tgt });
     } else {
-      if (z)        prev.zone_id        = z;
+      if (z)           prev.zone_id        = z;
       if (tgt && tgt > 0) prev.assigned_target = tgt;
     }
 
-    // Key duplikat
+    // Hitung row yang akan terhapus
     if (row[COL.DATE]) {
-      existingKeys.add(`${cid}_${normalizeDateKey(String(row[COL.DATE]))}`);
+      const rowDateKey = normalizeDateKey(String(row[COL.DATE]));
+      if (uploadDates.includes(rowDateKey)) deletedExisting++;
     }
   }
 
-  // 2. Filter: hanya record yang belum ada (duplicate di-skip)
-  const toAppend: (string | number | null)[][] = [];
+  // 2. Jika ada data lama untuk tanggal ini, hapus dulu + reset warna
+  if (deletedExisting > 0) {
+    // Hapus per tanggal (dalam format MM/DD/YYYY yang ada di sheet)
+    for (const dateKey of uploadDates) {
+      // Convert YYYY-MM-DD → cari format MM/DD/YYYY yang ada di sheet
+      const [y, m, d] = dateKey.split("-");
+      const mmddyyyy = `${m}/${d}/${y}`;
+      await deleteRowsByColumnValue(sheet, COL.DATE, mmddyyyy);
+    }
+    // Reset warna kuning lama
+    await clearRowColors(sheet);
+  }
 
+  // 3. Bangun rows baru (dengan enrichment profil kurir)
+  const toAppend: (string | number | null)[][] = [];
   for (const rawRecord of records) {
-    const cid         = rawRecord.courier_id.trim();
+    const cid          = rawRecord.courier_id.trim();
     const normContract = normalizeContractType(rawRecord.contract_type);
     const normVehicle  = normalizeVehicleType(rawRecord.vehicle_type);
     const profile      = courierProfiles.get(cid);
@@ -1258,20 +1278,26 @@ export async function saveCourierRecordsBatch(
       zone_id:         rawRecord.zone_id || profile?.zone_id || "",
       assigned_target: rawRecord.assigned_target,
     };
-
-    const key = `${cid}_${normalizeDateKey(enriched.date)}`;
-    if (existingKeys.has(key)) continue; // duplicate → skip
-
     toAppend.push(buildRow(enriched, hubName, submittedAt, userEmail));
   }
 
-  // 3. Append semua sekaligus ke bawah (1 API call)
-  if (toAppend.length > 0) await appendRows(RAW_SHEET(hubName), toAppend);
+  if (toAppend.length === 0) return { saved: 0, deletedExisting };
 
-  return {
-    saved:   toAppend.length,
-    skipped: records.length - toAppend.length,
-  };
+  // 4. Baca ulang sheet setelah delete untuk tahu posisi baris terakhir
+  const afterDelete = await getSheetData(sheet);
+  const lastRow = afterDelete.length; // baris terakhir yang ada (1-indexed)
+
+  // 5. Append semua record baru ke bawah
+  await appendRows(sheet, toAppend);
+
+  // 6. Warnai 1 baris penanda kuning — tepat di atas batch baru
+  //    Jika sheet kosong (hanya header), penanda ada di row 2
+  const markerRowIndex = lastRow + 1; // row pertama dari batch baru (1-indexed)
+  if (markerRowIndex >= 2) {
+    await colorRowYellow(sheet, markerRowIndex);
+  }
+
+  return { saved: toAppend.length, deletedExisting };
 }
 
 function buildRow(
