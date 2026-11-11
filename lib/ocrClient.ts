@@ -129,17 +129,24 @@ async function preprocessForOcr(
   return { dataUrl: canvas.toDataURL("image/png"), isFull };
 }
 
-/** Crop zona tabel Fleet status (kanan tengah Operation Progress) untuk fallback On-hold. */
-async function cropFleetStatusForOcr(dataUrl: string): Promise<string | null> {
+/** Crop sebagian area Operation Progress (proporsi 0..1) & upscale untuk fallback tabel kiri/kanan. */
+async function cropRegionForOcr(
+  dataUrl: string,
+  sxFrac: number,
+  syFrac: number,
+  swFrac: number,
+  shFrac: number
+): Promise<string | null> {
   const img = await loadImage(dataUrl);
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
   if (w < 400 || h < 200) return null;
 
-  const sx = Math.round(w * 0.46);
-  const sy = Math.round(h * 0.22);
-  const sw = w - sx;
-  const sh = Math.round(h * 0.40);
+  const sx = Math.round(w * sxFrac);
+  const sy = Math.round(h * syFrac);
+  const sw = Math.min(w - sx, Math.round(w * swFrac));
+  const sh = Math.min(h - sy, Math.round(h * shFrac));
+  if (sw < 50 || sh < 30) return null;
   const tw = Math.min(2800, sw * 3);
   const th = Math.max(1, Math.round((sh * tw) / sw));
 
@@ -181,7 +188,7 @@ export interface LocalOcrResult {
   sparseTexts: string[];
   confidences: number[];
   altTexts: string[];
-  fleetStatusTexts: string[];
+  extraTexts: string[][];
 }
 
 export class OcrCancelledError extends Error {
@@ -204,7 +211,7 @@ export async function runOcrLocally(
   const sparseTexts: string[] = [];
   const confidences: number[] = [];
   const altTexts: string[] = [];
-  const fleetStatusTexts: string[] = [];
+  const extraTexts: string[][] = [];
 
   for (let i = 0; i < images.length; i++) {
     if (hooks?.isCancelled?.()) throw new OcrCancelledError();
@@ -242,7 +249,7 @@ export async function runOcrLocally(
       await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
     }
 
-    // Fallback crop tabel Fleet status jika Operation Progress penuh belum membaca On-hold
+    // Fallback crop per zona tabel jika Operation Progress penuh belum membaca semua baris In Hub / Fleet Status / Head Counts
     const combinedMain = `${r200.data.text}\n${r225.data.text}`;
     const isOpProgress =
       isFull &&
@@ -250,30 +257,46 @@ export async function runOcrLocally(
         combinedMain
       ) &&
       !/Parcel\s+Sweeper|\bPS20\d{6,}/i.test(combinedMain);
-    const hasOnHoldNums =
-      /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1t]?d|an[\s\-]+h[o0]l?d)\b[^\n]*\d/i.test(
-        combinedMain
-      );
 
-    if (isOpProgress && !hasOnHoldNums) {
-      try {
-        const cropUrl = await cropFleetStatusForOcr(images[i]);
-        if (cropUrl) {
+    const crops: string[] = [];
+    if (isOpProgress) {
+      const hasOnHoldNums =
+        /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1t]?d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b[^\n]*\d/i.test(
+          combinedMain
+        );
+      const hasInHubAll =
+        /\b(?:[TI]ransp[o0]rt(?:ed)?|Iranspored)\b[^\n]*\d/i.test(combinedMain) &&
+        /\bR[eo][ce][aeiu]{1,3}[tv]?[ea]?d\b[^\n]*\d/i.test(combinedMain) &&
+        /\bA[sS][a-z]{2,5}[gn]g\b[^\n]*\d/i.test(combinedMain) &&
+        /\bA[sm]{1,2}[a-z]{1,4}n[aeo]?d\b[^\n]*\d/i.test(combinedMain);
+      const hasFhcRatios =
+        /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){2}/i.test(combinedMain) &&
+        /(?:4|A)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){2}/i.test(combinedMain);
+      const isDashFhc = /-\s*\/\s*-|Attendance\s+Rate\s*[-~]\s*%/i.test(combinedMain);
+
+      const regions: [number, number, number, number][] = [];
+      if (!hasOnHoldNums) regions.push([0.46, 0.22, 0.54, 0.40]);
+      if (!hasInHubAll) regions.push([0.0, 0.22, 0.50, 0.34]);
+      if (!hasFhcRatios && !isDashFhc) regions.push([0.0, 0.50, 0.50, 0.50]);
+
+      if (regions.length > 0) {
+        try {
           await worker.setParameters({ tessedit_pageseg_mode: "6" as never });
-          const fsRes = await worker.recognize(cropUrl);
-          fleetStatusTexts.push(fsRes.data.text);
-        } else {
-          fleetStatusTexts.push("");
+          for (const [sx, sy, sw, sh] of regions) {
+            const cropUrl = await cropRegionForOcr(images[i], sx, sy, sw, sh);
+            if (!cropUrl) continue;
+            const res = await worker.recognize(cropUrl);
+            if (res.data.text) crops.push(res.data.text);
+          }
+        } catch {
+          // abaikan error crop fallback
+        } finally {
+          await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
         }
-      } catch {
-        fleetStatusTexts.push("");
-      } finally {
-        await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
       }
-    } else {
-      fleetStatusTexts.push("");
     }
+    extraTexts.push(crops);
   }
 
-  return { texts, sparseTexts, confidences, altTexts, fleetStatusTexts };
+  return { texts, sparseTexts, confidences, altTexts, extraTexts };
 }

@@ -153,11 +153,11 @@ export function parseOcrText(rawText: string): {
   }
 
   // ── In Hub Status ────────────────────────────────────────
-  // Ambil kolom Volume (angka pertama di baris tersebut)
-  const in_hub_transported = extractInHubVolume(text, "Transported");
-  const in_hub_received    = extractInHubVolume(text, "Received");
-  const in_hub_assigning   = extractInHubVolume(text, "Assigning");
-  const in_hub_assigned    = extractInHubVolume(text, "Assigned");
+  // Ambil kolom Volume (angka pertama di baris tersebut), toleran terhadap typo OCR umum
+  const in_hub_transported = extractInHubVolume(text, /\b(?:[TI]ransp[o0]rt(?:ed)?|Iranspored)\b/i);
+  const in_hub_received    = extractInHubVolume(text, /\bR[eo][ce][aeiu]{1,3}[tv]?[ea]?d\b/i);
+  const in_hub_assigning   = extractInHubVolume(text, /\bA[sS][a-z]{2,5}[gn]g\b/i);
+  const in_hub_assigned    = extractInHubVolume(text, /\bA[sm]{1,2}[a-z]{1,4}n[aeo]?d\b/i);
 
   // ── Fleet Status ─────────────────────────────────────────
   const fleet_delivering = extractFleetDelivering(text);
@@ -205,21 +205,29 @@ export function parseOcrText(rawText: string): {
  * Format baris: "Transported   2   9.229   9.227(100%) ---"
  * Atau di teks copy-paste FMS, label bisa berdiri sendiri di satu baris dan angka di baris berikutnya.
  */
-function extractInHubVolume(text: string, label: string): number | null {
+function extractInHubVolume(text: string, label: string | RegExp): number | null {
   const lines = text.split(/\r?\n/);
-  const esc = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`\\b${esc}\\b`, "i");
+  const re =
+    typeof label === "string"
+      ? new RegExp(`\\b${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i")
+      : label;
 
   for (let i = 0; i < lines.length; i++) {
     if (!re.test(lines[i])) continue;
-    const sameLine = allNumbers(lines[i].replace(re, ""));
+    let after = afterLabelOnLine(lines[i], re);
+    // Jangan ikutkan kolom kanan "Fleet status" bila OCR membaca In Hub & Fleet Status sejajar
+    const rightCut = after.search(/\b(?:Fleet\s+stat|Delivering|Delivered|[oq0]n[\s\-r]*[hn][o0a][il1t]?d|[oq0]nh[o0][il1]e)\b/i);
+    if (rightCut !== -1) after = after.slice(0, rightCut);
+    // Jika kolom Volume (kolom ke-1) terbaca OCR sebagai "[]" / "()" sebelum angka Total (mis. "ASEgreng [] 323"), nilainya 0
+    if (/^\s*(?:\[\s*\]|\(\s*\))(?:\s|$)/.test(after)) return 0;
+    const sameLine = allNumbers(after);
     if (sameLine.length > 0) return sameLine[0];
-    // Jika di baris yang sama tidak ada angka (misal copy-paste tabel vertikal), cek 1-2 baris setelahnya
-    const nextBlock = [lines[i + 1] || "", lines[i + 2] || ""].join(" ");
-    const nextNums = allNumbers(nextBlock);
+    // Jika di baris yang sama tidak ada angka (misal copy-paste tabel vertikal), cek 1-2 baris berikutnya
+    // tapi berhenti sebelum batas section (mis. "1 Fleet Head Counts") agar tidak menarik angka "1".
+    const nextNums = allNumbers(collectFollowingLines(lines, i));
     if (nextNums.length > 0) return nextNums[0];
     // Nilai "-" di FMS = 0
-    if (dashToZero(lines[i], null) !== null) return 0;
+    if (dashToZero(after, null) !== null) return 0;
   }
   return null;
 }
@@ -249,12 +257,14 @@ function collectFollowingLines(lines: string[], startIdx: number, count = 2): st
  */
 function extractFleetDelivering(text: string): number | null {
   const lines = text.split(/\r?\n/);
-  const re = /\bDelivering\b/i;
+  const re = /\bD[aeo]l{1,2}[il]?v[aeo]r?[a-z]{0,3}ng\b/i;
   for (let i = 0; i < lines.length; i++) {
     if (!re.test(lines[i])) continue;
-    // Hindari "First Delivering Time", "Stuck at Delivering", atau "Delivering attempted"
-    if (/first|stuck|attempted/i.test(lines[i])) continue;
+    // Hindari "First Delivering Time", "Stuck at Delivering", "Delivering attempted" (termasuk typo OCR), atau jika diikuti kata (bukan kolom angka)
+    if (/first|stuck|attempt|attemp|stte[mn]|penyelesai/i.test(lines[i])) continue;
     const afterLabel = afterLabelOnLine(lines[i], re);
+    if (/^\s*[a-z]{4,}/i.test(afterLabel)) continue;
+    if (/^\s*(?:\[\s*\]|\(\s*\))(?:\s|$)/.test(afterLabel)) return 0;
     let nums = allNumbers(afterLabel);
     if (!nums.length) {
       nums = allNumbers(collectFollowingLines(lines, i));
@@ -275,12 +285,14 @@ function extractFleetDelivering(text: string): number | null {
  */
 function extractFleetDelivered(text: string): number | null {
   const lines = text.split(/\r?\n/);
-  const re = /\bDelivered\b/i;
+  const re = /\b(?:D[aeo]l[il]?v[aeo]r[ea]?d|Delvend|Dedvered)\b/i;
   for (let i = 0; i < lines.length; i++) {
     if (!re.test(lines[i])) continue;
-    // Skip kartu "Total Delivered to Buyer" atau "Delivered (%)"
-    if (/buyer|total\s+delivered|delivered\s*\(/i.test(lines[i])) continue;
+    // Skip kartu "Total Delivered to Buyer", "Delivered (%)", atau header "Delivered / Handed Over" di Fleet Productivity
+    if (/buyer|total\s+delivered|delivered\s*\(|handed|h[ae]nd[ea]d/i.test(lines[i])) continue;
     const afterLabel = afterLabelOnLine(lines[i], re);
+    if (/^\s*(?:\/\s*[a-z]+|[a-z]{4,})/i.test(afterLabel)) continue;
+    if (/^\s*(?:\[\s*\]|\(\s*\))(?:\s|$)/.test(afterLabel)) return 0;
     let nums = allNumbers(afterLabel);
     if (!nums.length) {
       nums = allNumbers(collectFollowingLines(lines, i));
@@ -299,8 +311,8 @@ function extractFleetDelivered(text: string): number | null {
  */
 function extractOnHold(text: string): { oh_volume: number | null; oh_total: number | null } {
   const lines = text.split(/\r?\n/);
-  // Toleran terhadap salah baca OCR: On-hold, On hold, Onhold, On-hoid, On hod, an hod, Onnoid, Onrhod, Qn-hold
-  const re = /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1t]?d|an[\s\-]+h[o0]l?d)\b/i;
+  // Toleran terhadap salah baca OCR: On-hold, On hold, Onhold, On-hoid, On hod, an hod, Onnoid, Onrhod, Qn-hold, Onhole
+  const re = /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1t]?d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b/i;
   const idx = lines.findIndex((l) => re.test(l));
   if (idx === -1) return { oh_volume: null, oh_total: null };
 
@@ -407,35 +419,93 @@ function extractFleetHeadCounts(text: string): {
   // Rasio kurir maksimal 3 digit (0-999) atau "-", bukan persentase ("15/50000%)") atau tanggal ("11/11/2026")
   const RATIO_RE = /(?<![\d.])((?:\d{1,3}|-))\s*\/\s*(?:\d{1,3}|-)(?![\d.%\/])/g;
 
-  const parseCols = (segment: string): (number | null)[] => {
+  // Ekstrak angka total header Dedicated / Kurir Plus / Mitra (angka besar di bawah label masing-masing)
+  let dedicatedTotal: number | null = null;
+  let kurirPlusTotal: number | null = null;
+  let mitraTotal: number | null = null;
+  const hdrLineMatch = hcNorm.match(/De[a-z]{3,8}\b(?![^\n]*Actual)[^\n]*\n\s*(\d{1,3}(?:\s+\d{1,3}){0,2})(?!\s*\/)\b/i);
+  if (hdrLineMatch) {
+    const hdrNums = hdrLineMatch[1].trim().split(/\s+/).map((x) => parseInt(x, 10));
+    if (hdrNums[0] != null && !isNaN(hdrNums[0])) dedicatedTotal = hdrNums[0];
+    if (hdrNums[1] != null && !isNaN(hdrNums[1])) kurirPlusTotal = hdrNums[1];
+    if (hdrNums[2] != null && !isNaN(hdrNums[2])) mitraTotal = hdrNums[2];
+  }
+  if (kurirPlusTotal === null) {
+    const kpHdr = hcNorm.match(/K[au]r[a-z]{1,4}\s+P[a-z]{2,4}\b(?![^\n]*Actual)[^\n]*\n\s*(\d{1,3})(?!\s*\/)\b/i);
+    if (kpHdr) kurirPlusTotal = parseInt(kpHdr[1], 10);
+  }
+  if (mitraTotal === null) {
+    const mHdr = hcNorm.match(/(?:M[il]t?ra|M[aei]ra|W[il]s)\b(?![^\n]*Actual)[^\n]*\n\s*(\d{1,3})(?!\s*\/)\b/i);
+    if (mHdr) mitraTotal = parseInt(mHdr[1], 10);
+  }
+
+  // Parse satu sel rasio: dukung "X/Y", "-/-", dan kasus OCR kehilangan "/" (mis. "1818" -> 18, "22" -> 2, "272" -> 2)
+  const parseHeadCountCell = (cell: string, colMaxHint?: number | null): number | null => {
+    const ratioMatch = cell.match(/(?<![\d.])((?:\d{1,3}|-))\s*\/\s*(?:\d{1,3}|-)(?![\d.%\/])/);
+    if (ratioMatch) return ratioNum(ratioMatch[1]);
+    const token = cell.trim().match(/^(\d{1,6})$/)?.[1];
+    if (!token) return null;
+    if (token.length >= 4 && token.length % 2 === 0) {
+      const half = token.length / 2;
+      const left = parseInt(token.slice(0, half), 10);
+      const right = parseInt(token.slice(half), 10);
+      if (left === right || (left <= right && right <= 250 && parseInt(token, 10) > 250)) {
+        return left;
+      }
+    }
+    if (token.length === 3 && token[0] === token[2] && parseInt(token, 10) > (colMaxHint ?? 200)) {
+      return parseInt(token[0], 10);
+    }
+    if (token.length === 2 && token[0] === token[1] && colMaxHint != null && parseInt(token, 10) > colMaxHint) {
+      return parseInt(token[0], 10);
+    }
+    const n = parseInt(token, 10);
+    return n <= (colMaxHint ?? 200) ? n : null;
+  };
+
+  const parseCols = (segment: string, colHints?: (number | null)[]): (number | null)[] => {
     const clean = segment.replace(/\s+/g, " ").trim();
     const ratios = [...clean.matchAll(RATIO_RE)];
     if (ratios.length >= 3) {
       return ratios.slice(0, 3).map((m) => ratioNum(m[1]));
     }
-    // Pertahankan posisi kolom jika salah satu sel gagal OCR (dipisahkan >= 2 spasi)
+    // Pertahankan posisi kolom jika salah satu sel gagal OCR atau kehilangan "/" (dipisahkan >= 2 spasi)
     const cells = segment.trim().split(/\s{2,}/).filter(Boolean);
     if (cells.length >= 3) {
-      return cells.slice(0, 3).map((c) => {
-        const m = c.match(/(?<![\d.])((?:\d{1,3}|-))\s*\/\s*(?:\d{1,3}|-)(?![\d.%\/])/);
-        return m ? ratioNum(m[1]) : null;
-      });
+      return cells.slice(0, 3).map((c, idx) => parseHeadCountCell(c, colHints?.[idx]));
     }
-    return ratios.map((m) => ratioNum(m[1]));
+    if (ratios.length > 0) return ratios.map((m) => ratioNum(m[1]));
+    if (cells.length === 1) {
+      const val = parseHeadCountCell(cells[0], colHints?.[0]);
+      return val !== null ? [val] : [];
+    }
+    return [];
   };
 
-  // 1. Cari baris "2WH" dan "4WH"
-  const m2wh = hcNorm.match(/(?:2|Z)\s*W\s*H([\s\S]{0,260}?)(?:(?:4|A)\s*W\s*H|Lainnya|Dedicated\s+Actual|Kurir\s+Plus\s+Actual|Mitra\s+Actual|$)/i);
+  // 1. Cari baris "2WH" dan "4WH" (toleran terhadap "28H", "20H", "WH", "4AWH", "aH")
+  const m2wh = hcNorm.match(/(?:\b(?:2|Z)[80]?\s*W?\s*H|\bW\s*H)\b([\s\S]{0,260}?)(?:\b(?:4|A)[A-Z]?\s*W\s*H|\b[aA]\s*H\b|Lainnya|Dedicated\s+Actual|Kurir\s+Plus\s+Actual|Mitra\s+Actual|$)/i);
   if (m2wh) {
-    const cols = parseCols(m2wh[1]);
+    const cols = parseCols(m2wh[1], [dedicatedTotal, kurirPlusTotal, mitraTotal]);
     if (cols[0] !== undefined && cols[0] !== null) result.dedicated_2wh  = cols[0];
     if (cols[1] !== undefined && cols[1] !== null) result.kurir_plus_2wh = cols[1];
     if (cols[2] !== undefined && cols[2] !== null) result.mitra_2wh      = cols[2];
   }
 
-  const m4wh = hcNorm.match(/(?:4|A)\s*W\s*H([\s\S]{0,260}?)(?:Lainnya|Dedicated\s+Actual|Kurir\s+Plus|Mitra|$)/i);
+  const m4wh = hcNorm.match(/(?:\b(?:4|A)[A-Z]?\s*W\s*H|\b[aA]\s*H)\b([\s\S]{0,260}?)(?:Lainnya|Lar[a-z]{2,5}|Dedicated\s+Actual|Kurir\s+Plus|Mitra|$)/i);
   if (m4wh) {
-    const cols = parseCols(m4wh[1]);
+    const ded4Hint =
+      dedicatedTotal !== null && result.dedicated_2wh !== null
+        ? Math.max(0, dedicatedTotal - result.dedicated_2wh)
+        : dedicatedTotal;
+    const kp4Hint =
+      kurirPlusTotal !== null && result.kurir_plus_2wh !== null
+        ? Math.max(0, kurirPlusTotal - result.kurir_plus_2wh)
+        : kurirPlusTotal;
+    const m4Hint =
+      mitraTotal !== null && result.mitra_2wh !== null
+        ? Math.max(0, mitraTotal - result.mitra_2wh)
+        : mitraTotal;
+    const cols = parseCols(m4wh[1], [ded4Hint, kp4Hint, m4Hint]);
     if (cols[0] !== undefined && cols[0] !== null) result.dedicated_4wh = cols[0];
     if (cols[2] !== undefined && cols[2] !== null) result.mitra_4wh     = cols[2];
   }

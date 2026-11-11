@@ -370,7 +370,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     }, 90000);
 
     try {
-      const { texts, sparseTexts, confidences, altTexts, fleetStatusTexts } = await runOcrLocally(
+      const { texts, sparseTexts, confidences, altTexts, extraTexts } = await runOcrLocally(
         screenshots,
         {
           onProgress: (step) => setOcrStep(step),
@@ -441,16 +441,27 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             fieldConf.total_expedite = Math.max(fieldConf.total_expedite ?? 0, fallbackConf);
           }
 
-          const fsText = fleetStatusTexts[idx] || "";
-          if (fsText) {
-            const fsParsed = parseOcrText(fsText);
-            const fsKeys = [
-              "fleet_delivering",
-              "fleet_delivered",
-              "fleet_oh_volume",
-              "fleet_oh_total",
-            ] as const;
-            for (const fk of fsKeys) applyFallback(fk, fsParsed.row[fk] as number | null | undefined);
+          const extraKeys = [
+            "in_hub_transported",
+            "in_hub_received",
+            "in_hub_assigning",
+            "in_hub_assigned",
+            "fleet_delivering",
+            "fleet_delivered",
+            "fleet_oh_volume",
+            "fleet_oh_total",
+            "dedicated_actual_2wh",
+            "kurir_plus_actual_2wh",
+            "dedicated_actual_4wh",
+            "mitra_actual_2wh",
+            "mitra_actual_4wh",
+          ] as const;
+          for (const cropText of extraTexts[idx] || []) {
+            if (!cropText) continue;
+            const cropParsed = parseOcrText(cropText);
+            for (const ek of extraKeys) {
+              applyFallback(ek, cropParsed.row[ek] as number | null | undefined);
+            }
           }
         }
 
