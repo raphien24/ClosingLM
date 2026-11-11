@@ -169,9 +169,10 @@ export async function POST(req: NextRequest) {
             "mitra_actual_2wh",
             "mitra_actual_4wh",
           ] as const;
-          for (const fk of fhcKeys) {
-            if (parsed.row[fk] == null && sparseParsed.row[fk] != null) {
-              parsed.row[fk] = sparseParsed.row[fk];
+          const sparseAllZero = fhcKeys.every((fk) => sparseParsed.row[fk] === 0);
+          if (sparseAllZero) {
+            for (const fk of fhcKeys) {
+              if (parsed.row[fk] == null) parsed.row[fk] = 0;
             }
           }
         }

@@ -84,6 +84,21 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/** Konversi piksel canvas menjadi grayscale di tempat. */
+function applyGrayscale(ctx: CanvasRenderingContext2D, width: number, height: number): void {
+  try {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      d[i] = d[i + 1] = d[i + 2] = g;
+    }
+    ctx.putImageData(imageData, 0, 0);
+  } catch {
+    // bila browser menolak akses piksel, lanjutkan tanpa grayscale
+  }
+}
+
 /**
  * Tiru pipeline sharp di server memakai canvas: upscale (layar penuh), grayscale,
  * lalu normalisasi kontras (auto-level) agar angka kecil lebih jelas terbaca.
@@ -98,11 +113,8 @@ async function preprocessForOcr(
   // Dashboard FMS umumnya lebar (>= 900px) walaupun tidak terlalu tinggi.
   // Jadi patokan "layar penuh" cukup dari lebar agar tabel tidak salah mode.
   const isFull = w >= 900;
-  let targetW = w;
-  // Naikkan resolusi hingga lebar 3200 agar pemisah ribuan/desimal
-  // (contoh: 8.756 dan 100,0%) tidak hilang saat dibaca Tesseract.
   // Seperti script referensi: perbesar hingga 3x agar lebar mendekati 4200px.
-  targetW = Math.round(w * Math.min(3, Math.max(1, 4200 / w)));
+  const targetW = Math.round(w * Math.min(3, Math.max(1, 4200 / w)));
 
   const scale = targetW / w;
   const canvas = document.createElement("canvas");
@@ -110,28 +122,36 @@ async function preprocessForOcr(
   canvas.height = Math.max(1, Math.round(h * scale));
   const ctx = canvas.getContext("2d");
   if (!ctx) return { dataUrl, isFull };
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-  try {
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imageData.data;
-    let min = 255;
-    let max = 0;
-    for (let i = 0; i < d.length; i += 4) {
-      const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-      d[i] = d[i + 1] = d[i + 2] = g;
-      if (g < min) min = g;
-      if (g > max) max = g;
-    }
-    // Tanpa normalisasi min-max: tidak mengubah kontras asli (hasil benchmark lebih akurat).
-    void min;
-    void max;
-    ctx.putImageData(imageData, 0, 0);
-  } catch {
-    // bila browser menolak akses piksel, lanjutkan tanpa normalisasi
-  }
+  applyGrayscale(ctx, canvas.width, canvas.height);
 
   return { dataUrl: canvas.toDataURL("image/png"), isFull };
+}
+
+/** Crop zona tabel Fleet status (kanan tengah Operation Progress) untuk fallback On-hold. */
+async function cropFleetStatusForOcr(dataUrl: string): Promise<string | null> {
+  const img = await loadImage(dataUrl);
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  if (w < 400 || h < 200) return null;
+
+  const sx = Math.round(w * 0.46);
+  const sy = Math.round(h * 0.22);
+  const sw = w - sx;
+  const sh = Math.round(h * 0.40);
+  const tw = Math.min(2800, sw * 3);
+  const th = Math.max(1, Math.round((sh * tw) / sw));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = tw;
+  canvas.height = th;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
+  applyGrayscale(ctx, tw, th);
+  return canvas.toDataURL("image/png");
 }
 
 /** Binarisasi (hitam-putih) dengan ambang tertentu untuk cross-check dua bacaan. */
@@ -161,6 +181,7 @@ export interface LocalOcrResult {
   sparseTexts: string[];
   confidences: number[];
   altTexts: string[];
+  fleetStatusTexts: string[];
 }
 
 export class OcrCancelledError extends Error {
@@ -183,6 +204,7 @@ export async function runOcrLocally(
   const sparseTexts: string[] = [];
   const confidences: number[] = [];
   const altTexts: string[] = [];
+  const fleetStatusTexts: string[] = [];
 
   for (let i = 0; i < images.length; i++) {
     if (hooks?.isCancelled?.()) throw new OcrCancelledError();
@@ -219,7 +241,39 @@ export async function runOcrLocally(
     } finally {
       await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
     }
+
+    // Fallback crop tabel Fleet status jika Operation Progress penuh belum membaca On-hold
+    const combinedMain = `${r200.data.text}\n${r225.data.text}`;
+    const isOpProgress =
+      isFull &&
+      /Operation\s+Progress|In\s+Hub\s+Status|Fleet\s+Head\s+Counts|Fleet\s+Productivity|Clear\s+Floor\s+Rate|To\s+Handover|To\s+Deliver/i.test(
+        combinedMain
+      ) &&
+      !/Parcel\s+Sweeper|\bPS20\d{6,}/i.test(combinedMain);
+    const hasOnHoldNums =
+      /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1t]?d|an[\s\-]+h[o0]l?d)\b[^\n]*\d/i.test(
+        combinedMain
+      );
+
+    if (isOpProgress && !hasOnHoldNums) {
+      try {
+        const cropUrl = await cropFleetStatusForOcr(images[i]);
+        if (cropUrl) {
+          await worker.setParameters({ tessedit_pageseg_mode: "6" as never });
+          const fsRes = await worker.recognize(cropUrl);
+          fleetStatusTexts.push(fsRes.data.text);
+        } else {
+          fleetStatusTexts.push("");
+        }
+      } catch {
+        fleetStatusTexts.push("");
+      } finally {
+        await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
+      }
+    } else {
+      fleetStatusTexts.push("");
+    }
   }
 
-  return { texts, sparseTexts, confidences, altTexts };
+  return { texts, sparseTexts, confidences, altTexts, fleetStatusTexts };
 }

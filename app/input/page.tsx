@@ -370,7 +370,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     }, 90000);
 
     try {
-      const { texts, sparseTexts, confidences, altTexts } = await runOcrLocally(
+      const { texts, sparseTexts, confidences, altTexts, fleetStatusTexts } = await runOcrLocally(
         screenshots,
         {
           onProgress: (step) => setOcrStep(step),
@@ -411,6 +411,13 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           fieldConf[k] = Math.max(fieldConf[k] ?? 0, c);
         }
         if (!isParcelSweeperPage(rawText)) {
+          const fallbackConf = Math.min(baseConf || 75, 75);
+          const applyFallback = (fk: keyof ClosingData, val: number | null | undefined) => {
+            if (val == null || parsed.row[fk] != null) return;
+            (parsed.row as Record<string, unknown>)[fk] = val;
+            fieldConf[fk] = Math.max(fieldConf[fk] ?? 0, fallbackConf);
+          };
+
           const sparseText = sparseTexts[idx] || "";
           if (sparseText) {
             const sparseParsed = parseOcrText(sparseText);
@@ -421,33 +428,29 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
               "mitra_actual_2wh",
               "mitra_actual_4wh",
             ] as const;
-            for (const fk of fhcKeys) {
-              if (parsed.row[fk] == null && sparseParsed.row[fk] != null) {
-                parsed.row[fk] = sparseParsed.row[fk];
-                fieldConf[fk] = Math.max(
-                  fieldConf[fk] ?? 0,
-                  Math.min(baseConf || 75, 75)
-                );
-              }
+            // Di PSM 11 (sparse), tabel Fleet Head Counts & Fleet Productivity tercampur barisnya;
+            // hanya pakai fallback sparse jika seluruhnya terbaca 0 (-/-), agar angka Fleet Productivity (mis. 141/99) tidak bocor.
+            if (fhcKeys.every((fk) => sparseParsed.row[fk] === 0)) {
+              for (const fk of fhcKeys) applyFallback(fk, 0);
             }
           }
-          if (parsed.row.backlog_total == null) {
-            const backlogSparse = extractBacklogSparse(sparseText);
-            if (backlogSparse !== null) {
-              parsed.row.backlog_total = backlogSparse;
-              fieldConf.backlog_total = Math.max(
-                fieldConf.backlog_total ?? 0,
-                Math.min(baseConf || 75, 75)
-              );
-            }
-          }
+          applyFallback("backlog_total", extractBacklogSparse(sparseText));
           const expSparse = extractExpediteSparse(sparseText);
           if (expSparse !== null) {
             parsed.row.total_expedite = expSparse;
-            fieldConf.total_expedite = Math.max(
-              fieldConf.total_expedite ?? 0,
-              Math.min(baseConf || 75, 75)
-            );
+            fieldConf.total_expedite = Math.max(fieldConf.total_expedite ?? 0, fallbackConf);
+          }
+
+          const fsText = fleetStatusTexts[idx] || "";
+          if (fsText) {
+            const fsParsed = parseOcrText(fsText);
+            const fsKeys = [
+              "fleet_delivering",
+              "fleet_delivered",
+              "fleet_oh_volume",
+              "fleet_oh_total",
+            ] as const;
+            for (const fk of fsKeys) applyFallback(fk, fsParsed.row[fk] as number | null | undefined);
           }
         }
 

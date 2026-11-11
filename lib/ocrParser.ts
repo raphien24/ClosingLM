@@ -299,7 +299,8 @@ function extractFleetDelivered(text: string): number | null {
  */
 function extractOnHold(text: string): { oh_volume: number | null; oh_total: number | null } {
   const lines = text.split(/\r?\n/);
-  const re = /\b[o0]n[\s\-]*h[o0]ld\b/i;
+  // Toleran terhadap salah baca OCR: On-hold, On hold, Onhold, On-hoid, On hod, an hod, Onnoid, Onrhod, Qn-hold
+  const re = /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1t]?d|an[\s\-]+h[o0]l?d)\b/i;
   const idx = lines.findIndex((l) => re.test(l));
   if (idx === -1) return { oh_volume: null, oh_total: null };
 
@@ -365,7 +366,7 @@ function extractFleetHeadCounts(text: string): {
         const prodCut = left.search(/Delivered\s*\/\s*Handed\s*Over|\b\d+\s*Order\b|\bOrder\b|\bOr[gd]er\b/i);
         if (prodCut !== -1) left = left.slice(0, prodCut);
         // Jika header "Actual/Schedule" sejajar dengan baris "2WH/4WH/Lainnya" milik Fleet Productivity di kanan, buang bagian kanan
-        if (/Act[a-z]{1,4}\s*\/?\s*Sche[da]/i.test(left)) {
+        if (/Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}/i.test(left)) {
           const rightTableCut = left.search(/\s+(?:(?:2|Z)\s*W\s*H|(?:4|A)\s*W\s*H|Lainnya)\b/i);
           if (rightTableCut !== -1) left = left.slice(0, rightTableCut);
         }
@@ -382,7 +383,7 @@ function extractFleetHeadCounts(text: string): {
     }
   } else {
     // Fallback jika header "Fleet Head Counts" terpotong OCR, tapi label "Actual/Schedule" terbaca
-    const actualMatch = text.match(/Act[a-z]{1,4}\s*\/?\s*Sche[da][a-z]{0,5}/i);
+    const actualMatch = text.match(/Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}/i);
     if (!actualMatch || actualMatch.index === undefined) return result;
     const rawStart = Math.max(0, actualMatch.index - 250);
     let prefix = text.slice(rawStart, actualMatch.index);
@@ -465,7 +466,8 @@ function extractFleetHeadCounts(text: string): {
     /(?:Attendance|A[a-z]{4,9}nce)\s+Ra[a-z]{1,3}\s*[-~]\s*%/i.test(hcNorm) &&
     !/Attendance\s+Rate\s*\d/i.test(hcNorm);
   const hasEmptyHeaderDash =
-    /Updated\s*:\s*-/i.test(hcNorm) && !/\b\d{1,3}\s*%/.test(hcNorm);
+    (/Updated\s*:\s*-/i.test(hcNorm) || /(?:^|\n)\s*-\s*(?:\n|$)/.test(hcNorm)) &&
+    !/\b\d{1,3}\s*%/.test(hcNorm);
   if (
     !hasPositiveRatio &&
     !/\bAttendance\s+Rate\s*\d/i.test(hcNorm) &&
