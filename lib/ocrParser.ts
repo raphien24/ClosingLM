@@ -200,6 +200,10 @@ export function parseOcrText(rawText: string): {
 
 // ── Helpers ───────────────────────────────────────────────────
 
+// Toleran terhadap variasi OCR: On-hold, On hold, Onhold, On-hoid, On-hokd, On-holkd, On hod, an hod, Onnoid, Onrhod, Qn-hold, Onhole
+const ON_HOLD_LABEL_RE =
+  /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1tk]{0,2}d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b/i;
+
 /**
  * In Hub Status: cari baris label, ambil angka pertama (= kolom Volume)
  * Format baris: "Transported   2   9.229   9.227(100%) ---"
@@ -216,7 +220,7 @@ function extractInHubVolume(text: string, label: string | RegExp): number | null
     if (!re.test(lines[i])) continue;
     let after = afterLabelOnLine(lines[i], re);
     // Jangan ikutkan kolom kanan "Fleet status" bila OCR membaca In Hub & Fleet Status sejajar
-    const rightCut = after.search(/\b(?:Fleet\s+stat|Delivering|Delivered|[oq0]n[\s\-r]*[hn][o0a][il1t]?d|[oq0]nh[o0][il1]e)\b/i);
+    const rightCut = after.search(new RegExp(`\\b(?:Fleet\\s+stat|Delivering|Delivered)|${ON_HOLD_LABEL_RE.source}`, "i"));
     if (rightCut !== -1) after = after.slice(0, rightCut);
     // Jika kolom Volume (kolom ke-1) terbaca OCR sebagai "[]" / "()" sebelum angka Total (mis. "ASEgreng [] 323"), nilainya 0
     if (/^\s*(?:\[\s*\]|\(\s*\))(?:\s|$)/.test(after)) return 0;
@@ -311,12 +315,28 @@ function extractFleetDelivered(text: string): number | null {
  */
 function extractOnHold(text: string): { oh_volume: number | null; oh_total: number | null } {
   const lines = text.split(/\r?\n/);
-  // Toleran terhadap salah baca OCR: On-hold, On hold, Onhold, On-hoid, On hod, an hod, Onnoid, Onrhod, Qn-hold, Onhole
-  const re = /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1t]?d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b/i;
-  const idx = lines.findIndex((l) => re.test(l));
+  const idx = lines.findIndex((l) => ON_HOLD_LABEL_RE.test(l));
   if (idx === -1) return { oh_volume: null, oh_total: null };
 
-  const afterLabel = afterLabelOnLine(lines[idx], re);
+  const afterLabel = afterLabelOnLine(lines[idx], ON_HOLD_LABEL_RE);
+  const parseOnHoldCell = (cell: string): number | null => {
+    const cellNums = allNumbers(cell);
+    if (cellNums.length > 0) return cellNums[0];
+    if (/^\s*(?:\[\s*\]|\(\s*\))(?:\s|$)/.test(cell)) return 0;
+    return dashToZero(cell, null);
+  };
+  // Jika kolom dipisahkan >= 2 spasi (mis. "a   52   17.3%)" atau "43   52   9(17,3%)"), pertahankan posisi kolom Volume & Total
+  const cells = afterLabel.trim().split(/\s{2,}/).filter(Boolean);
+  if (cells.length >= 2) {
+    const ohVol = parseOnHoldCell(cells[0]);
+    const ohTot = parseOnHoldCell(cells[1]);
+    return {
+      // On-hold Volume <= On-hold Total; bila Total terbaca 0 sedangkan Volume garbled ("a   0"), Volume pasti 0
+      oh_volume: ohTot === 0 && ohVol === null ? 0 : ohVol,
+      oh_total:  ohTot,
+    };
+  }
+
   let nums = allNumbers(afterLabel);
   if (nums.length < 2) {
     const extra = collectFollowingLines(lines, idx);
@@ -324,7 +344,7 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
   }
   return {
     oh_volume: dashToZero(afterLabel, nums[0] ?? null),  // Volume (kiri)
-    oh_total:  dashToZero(afterLabel, nums[1] ?? nums[0] ?? null),  // Total (kanan)
+    oh_total:  dashToZero(afterLabel, nums[1] ?? null),  // Total (kanan, jangan salin Volume bila Total belum terbaca)
   };
 }
 

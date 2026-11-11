@@ -259,7 +259,7 @@ export async function runOcrLocally(
     const crops: string[] = [];
     if (isOpProgress) {
       const hasOnHoldNums =
-        /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1t]?d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b[^\n]*\d/i.test(
+        /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1tk]{0,2}d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b[ \t:-]*\d[\d.,]*[ \t]+(?:\d|-)/i.test(
           combinedMain
         );
       const hasInHubAll =
