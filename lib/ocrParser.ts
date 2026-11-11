@@ -33,25 +33,29 @@ export function detectDate(text: string): string | null {
   return dates[0] ?? null;
 }
 
+const PARCEL_SWEEPER_RE =
+  /Parcel\s+Sweeper|Expected\s+Orders?\s+Scanned|\bTotal\b[\s\S]{0,60}\bUnscanned\b|\bPS20\d{6,}/i;
+
+/** Apakah teks berasal dari halaman Parcel Sweeper (perlu validasi tanggal wajib hari ini). */
+export function isParcelSweeperPage(text: string): boolean {
+  return PARCEL_SWEEPER_RE.test(text);
+}
+
 /**
  * Ekstrak tanggal khusus dari halaman Parcel Sweeper (untuk validasi wajib = hari ini).
  * Mengembalikan array kosong jika teks bukan berasal dari halaman Parcel Sweeper.
  */
-/** Apakah teks berasal dari halaman Parcel Sweeper (perlu validasi tanggal wajib hari ini). */
-export function isParcelSweeperPage(text: string): boolean {
-  return /Parcel\s+Sweeper|Expected\s+Order\s+Scanned|\bPS20\d{6,}/i.test(text);
-}
 export function detectParcelSweeperDates(text: string): string[] {
-  if (!/Parcel\s+Sweeper|Expected\s+Order\s+Scanned|\bPS20\d{6,}/i.test(text)) {
+  if (!isParcelSweeperPage(text)) {
     return [];
   }
 
-  // Abaikan watermark timestamp sistem (misal "com/2026-11-07 18:51:33")
-  const cleaned = text.replace(/(?:spxexpress\.com|\.com)\/\d{4}-\d{2}-\d{2}/gi, "");
+  // Abaikan watermark timestamp sistem (misal "spxexpress.com/2026-11-07 18:51:33" atau "ess.com/2026-11-11")
+  const cleaned = text.replace(/\S*\/\d{4}-\d{2}-\d{2}(?:[ \t]+\d{2}:\d{2}:\d{2})?/gi, "");
   const found = new Set<string>();
 
-  // 1. Format eksplisit "Tanggal: YYYY-MM-DD"
-  for (const m of cleaned.matchAll(/Tanggal\s*:?\s*(20\d{2})[\/\-](0[1-9]|1[0-2])[\/\-](0[1-9]|[12]\d|3[01])\b/gi)) {
+  // 1. Format eksplisit "Tanggal: YYYY-MM-DD" atau "Date: YYYY-MM-DD"
+  for (const m of cleaned.matchAll(/\b(?:Tanggal|Tgl|[DO]ate)\b\s*[:.;-]?\s*(20\d{2})[\/\-](0[1-9]|1[0-2])[\/\-](0[1-9]|[12]\d|3[01])\b/gi)) {
     found.add(`${m[1]}-${m[2]}-${m[3]}`);
   }
 
@@ -67,8 +71,8 @@ export function detectParcelSweeperDates(text: string): string[] {
     if (mm) found.add(`${m[3]}-${mm}-${m[1].padStart(2, "0")}`);
   }
 
-  // 4. Format "Tanggal: DD/MM/YYYY" atau "DD-MM-YYYY"
-  for (const m of cleaned.matchAll(/Tanggal\s*:?\s*(0[1-9]|[12]\d|3[01])[\/\-](0[1-9]|1[0-2])[\/\-](20\d{2})\b/gi)) {
+  // 4. Format "Tanggal/Date: DD/MM/YYYY" atau "DD-MM-YYYY"
+  for (const m of cleaned.matchAll(/\b(?:Tanggal|Tgl|[DO]ate)\b\s*[:.;-]?\s*(0[1-9]|[12]\d|3[01])[\/\-](0[1-9]|1[0-2])[\/\-](20\d{2})\b/gi)) {
     found.add(`${m[3]}-${m[2]}-${m[1]}`);
   }
   return Array.from(found);
@@ -135,14 +139,14 @@ export function parseOcrText(rawText: string): {
   // Deteksi apakah halaman ini adalah halaman khusus "Parcel Sweeper"
   // (di halaman Parcel Sweeper, tabel resi memiliki kata "Received", "BackLog", "OnHold", "Expedite Tag"
   //  yang TIDAK BOLEH salah masuk ke In Hub Status / Backlog / Expedite!)
-  const isParcelSweeperPage =
-    /Parcel\s+Sweeper|Expected\s+Order\s+Scanned|\bPS20\d{6,}/i.test(text) &&
+  const isParcelSweeper =
+    isParcelSweeperPage(text) &&
     !/Operation\s+Progress|In\s+Hub\s+Status|Ringkasan\s+Hub/i.test(text);
 
   // ── Parcel Sweeper ───────────────────────────────────────
   const { parcel_sweeper_total, parcel_sweeper_scanned_pct } = extractParcelSweeper(text);
 
-  if (isParcelSweeperPage) {
+  if (isParcelSweeper) {
     return {
       row: {
         parcel_sweeper_total,
@@ -724,6 +728,42 @@ function extractFleetHeadCounts(text: string): {
  *   Jumlah seluruh sel di tabel Aging (12+0+3 + 24+0+1 + 339+3+6 = 388) SAMA PERSIS
  *   dengan angka di tengah donut chart Backlog (388)!
  */
+/** Bersihkan tanggal, baris "Updated:...", jam, persentase, dan label hari agar angka tengah donut terisolasi bersih. */
+function cleanDonutNoiseText(raw: string): string {
+  return raw
+    .replace(/^[^\n]*\b(?:Up[cd]at[a-z]{1,4}|Upt[a-z]{2,6}|[a-z]?date[a-z]{1,4})\b[^\n]*/gim, "")
+    .replace(
+      /\b\d{1,2}[ \t]+(?:Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Agu|Sep|Oct|Okt|N[o0][vw]|M[o0]v|Dec|Des)[A-Za-z]*(?:[ \t]+\d{1,4}(?:[:.]\d{2})?)?/gi,
+      ""
+    )
+    .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/g, "")
+    .replace(/\b\d{1,2}[:.]\d{2}(?:[:.]\d{2})?(?!\d)/g, "")
+    .replace(/\b20\d{2}\b/g, "")
+    .replace(/>?[ \t]*\d+[ \t]*[-–~]?[ \t]*\d*[ \t]*(?:hari|days?|fawn|crea|joma|han)/gi, "")
+    .replace(/\b[A-Za-z]+\d+[A-Za-z]*\b/g, "")
+    .replace(/\b\d+[A-Za-z]+\b/g, "")
+    .replace(/\bLINER[ \t]+\d+\b/gi, "")
+    .replace(/\d+(?:[,.]\d+)?[ \t]*%/g, "");
+}
+
+/** Tolak angka kecil (< 10, mis. "2" terpotong dari "20") yang mustahil menghasilkan persentase slice donut yang terlihat (mis. 85,0% / 850%). */
+function isValidDonutForPcts(n: number, rawSectionText: string): boolean {
+  if (n >= 10) return true;
+  const pcts = [...rawSectionText.matchAll(/\b(\d{1,3}(?:[.,]\d+)?)\s*%/g)]
+    .map((m) => {
+      const raw = Number(m[1].replace(",", "."));
+      if (!Number.isFinite(raw)) return null;
+      // Tesseract sering menghilangkan koma pada "85,0%" / "15,0%" sehingga terbaca "850%" / "150%"
+      return raw > 100 && raw <= 999 && !/[.,]/.test(m[1]) ? raw / 10 : raw;
+    })
+    .filter((p): p is number => p !== null && p >= 2 && p <= 98);
+  if (pcts.length === 0) return true;
+  return pcts.some((p) => {
+    const cnt = Math.round((p / 100) * n);
+    return cnt > 0 && cnt < n && Math.abs((cnt / n) * 100 - p) <= 1.5;
+  });
+}
+
 function extractBacklog(text: string): {
   backlog_total:       number | null;
   backlog_to_buyer:    number | null;
@@ -733,7 +773,7 @@ function extractBacklog(text: string): {
   // 1. Ekstrak dari tabel Aging (paling akurat 100% saat Ctrl+A / Ctrl+V)
   // Batasi pencarian di antara "Backlog" dan "To Expedite" / "Operation Progress"
   const backlogBlockMatch = text.match(
-    /Backlog([\s\S]{0,2000}?)(?:To\s+Expedite|Operation\s+Progress|$)/i
+    /Backlog([\s\S]{0,2000}?)(?:(?:\b[1Il|][ \t]+)?(?:To\s+Expedite|Operation\s+Progress)|$)/i
   );
   if (!backlogBlockMatch) {
     // Gambar ini bukan kartu Backlog (mis. Fleet Head Counts) -> jangan fabrikasi angka
@@ -768,7 +808,9 @@ function extractBacklog(text: string): {
   // 2. Ekstrak angka di tengah donut chart (jika ada di OCR gambar)
   // Pada OCR gambar, angka di tengah donut (misal 388) selalu berada di bagian kiri baris (sebelum spasi panjang ke tabel kanan)
   let donut_total: number | null = null;
-  const donutLines = blockText.split(/\r?\n/).slice(1); // lewati baris judul "Backlog"
+  const rawDonutLines = blockText.split(/\r?\n/);
+  // Lewati baris pertama hanya bila berupa sisa baris judul "Backlog" (bukan angka donut langsung)
+  const donutLines = /^\s*\d[\d.,]*\s*$/.test(rawDonutLines[0] ?? "") ? rawDonutLines : rawDonutLines.slice(1);
   const leftPieces: string[] = [];
   for (const line of donutLines) {
     // Ambil hanya bagian kiri baris (sebelum 10+ spasi berturut-turut atau kata Aging/Hari)
@@ -778,17 +820,7 @@ function extractBacklog(text: string): {
   }
   const leftOnly = leftPieces.join("\n");
   if (leftOnly) {
-    // Hapus baris yang mengandung noise header palsu OCR ("LINER", "Mita Arg", dsb)
-    const clean = leftOnly
-      .replace(/Updated\s*:?\s*\d{1,2}[ \t]+[A-Za-z]{3,}[ \t]+\d{1,2}:\d{2}/gi, "")
-      .replace(/\b\d{1,2}[ \t]+(?:Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Agu|Sep|Oct|Okt|Nov|Dec|Des)\w*/gi, "")
-      .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, "")
-      .replace(/>?[ \t]*\d+[ \t]*[-–~]?[ \t]*\d*[ \t]*(?:hari|days?|fawn|crea|joma|han)/gi, "")
-      // Hapus kata yang menempel langsung dengan angka tanpa spasi (misal "EE1N")
-      .replace(/\b[A-Za-z]+\d+[A-Za-z]*\b/g, "")
-      .replace(/\b\d+[A-Za-z]+\b/g, "")
-      .replace(/\bLINER[ \t]+\d+\b/gi, "")
-      .replace(/\d+(?:[,.]\d+)?[ \t]*%/g, "");
+    const clean = cleanDonutNoiseText(leftOnly);
 
     // Utamakan angka >= 10 yang berada di paling awal baris (kiri)
     const startOfLineMatches = [...clean.matchAll(/^\s*(\d{2,6}(?:[.,]\d{3})*)\b/gm)]
@@ -845,8 +877,8 @@ function extractExpedite(text: string): {
 } {
   let total_expedite: number | null = null;
 
-  // Ambil blok mulai dari "To Expedite" sampai sebelum "Operation Progress"
-  const expMatch = text.match(/To\s+Expedite([\s\S]{0,1200}?)(?:Operation\s+Progress|$)/i);
+  // Ambil blok mulai dari "To Expedite" sampai sebelum "Operation Progress" (abaikan awalan ikon "1 ")
+  const expMatch = text.match(/To\s+Expedite([\s\S]{0,1200}?)(?:(?:\b[1Il|][ \t]+)?Operation\s+Progress|$)/i);
   if (expMatch) {
     let rawBlock = expMatch[1];
 
@@ -869,31 +901,26 @@ function extractExpedite(text: string): {
           // 2. Ambil hanya kolom paling kiri (sebelum 8+ spasi berturut-turut yang memisahkan dengan Linehaul Trip di kanan)
           const leftCol = line.split(/\s{8,}/)[0] || "";
           const cut = leftCol.search(/Linehaul|Memuat|Transporting|Trip\s*ID|\bLT[0O]Q|\b\d{1,2}:\d{2}\s+\d{1,2}:\d{2}/i);
-          return cut !== -1 ? leftCol.slice(0, cut) : leftCol;
+          const trimmed = cut !== -1 ? leftCol.slice(0, cut) : leftCol;
+          // Hapus angka Transporting Linehaul yang diawali "-" (mis. "- 1.941" atau "\ | - 10")
+          return trimmed.replace(/(?:^|[ \t|\\])[-\u2013\u2014][ \t]+\d[\d.,]*\b/g, "");
         })
         .join("\n");
     }
 
-    // Bersihkan semua noise: "Updated: 7 Nov 18:48", tanggal, jam, tahun, persentase, dan token alfanumerik (misal "1s")
-    const clean = rawBlock
-      .replace(/Updated\s*:?\s*\d{1,2}\s+[A-Za-z]{3,}\s+\d{1,2}:\d{2}/gi, "")
-      .replace(/\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Agu|Sep|Oct|Okt|Nov|Dec|Des)\w*/gi, "")
-      .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, "")
-      .replace(/\b20\d{2}\b/g, "")
-      .replace(/\d+(?:[,.]\d+)?\s*%/g, "")
-      .replace(/\b[A-Za-z]+\d+[A-Za-z]*\b/g, "")
-      .replace(/\b\d+[A-Za-z]+\b/g, "");
+    // Bersihkan semua noise: "Updated: 7 Nov 18:48", tanggal, jam, tahun, persentase, dan token alfanumerik
+    const clean = cleanDonutNoiseText(rawBlock);
 
     // Utamakan angka >= 1 yang berdiri sendiri di sebuah baris (ciri khas angka tengah donut "23")
     const standaloneMatches = [...clean.matchAll(/^\s*(\d{1,5}(?:[.,]\d{3})*)\s*$/gm)]
       .map((m) => parseNumber(m[1]))
-      .filter((n): n is number => n !== null && n >= 1 && n <= 9999);
+      .filter((n): n is number => n !== null && n >= 1 && n <= 9999 && isValidDonutForPcts(n, rawBlock));
     if (standaloneMatches.length > 0) {
       total_expedite = standaloneMatches[0];
     } else {
       const candidates = (clean.match(/\b(\d{1,5}(?:[.,]\d{3})*)\b/g) || [])
         .map((v) => parseNumber(v))
-        .filter((n): n is number => n !== null && n >= 1 && n <= 9999);
+        .filter((n): n is number => n !== null && n >= 1 && n <= 9999 && isValidDonutForPcts(n, rawBlock));
       total_expedite = candidates[0] ?? null;
     }
   }
@@ -935,7 +962,7 @@ function extractParcelSweeper(text: string): {
   parcel_sweeper_scanned_pct: number | null;
 } {
   // Pastikan teks memang mengandung halaman Parcel Sweeper
-  if (!/Parcel\s+Sweeper|Expected\s+Order\s+Scanned|\bPS20\d{6,}/i.test(text)) {
+  if (!isParcelSweeperPage(text)) {
     return { parcel_sweeper_total: null, parcel_sweeper_scanned_pct: null };
   }
 
@@ -967,9 +994,11 @@ function extractParcelSweeper(text: string): {
     if (p !== null && p >= 0 && p <= 100) scanned_pct = p;
   }
 
-  // Jika Total tertulis setelah kata "Total" sebelum "Unscanned"
+  // Jika Total tertulis setelah kata "Total" sebelum "Unscanned" (toleran simbol ikon tooltip seperti "©", "®", "&")
   if (total === null) {
-    const totalBeforeUnscanned = text.match(/\bTotal\s+(\d[\d.,]*)\s+Unscanned/i);
+    const totalBeforeUnscanned = text.match(
+      /\bTotal\b[ \t:]*(\d[\d.,]*)(?:[^\d\n]{0,12})\s+(?:Unscanned|Unscammed)\b/i
+    );
     if (totalBeforeUnscanned) {
       total = parseNumber(totalBeforeUnscanned[1]);
     }
@@ -1008,42 +1037,56 @@ function extractParcelSweeper(text: string): {
     // Cari urutan 3 angka vertikal di kolom kiri: [Total, Unscanned, Scanned]
     // Di mana Total == Unscanned + Scanned (misal [260, 0, 260])
     if (total === null) {
-      // Hapus bagian persentase terlebih dahulu agar angka 100% tidak ikut masuk daftar kandidat
-      const leftWithoutPct = leftText.replace(/\d+(?:[ \t]+\d+)*(?:[.,]\d+)?[ \t]*%/g, "");
-      const nums = (leftWithoutPct.match(/\b(\d{1,6}(?:[.,]\d{3})*)\b/g) || [])
-        .map((v) => parseNumber(v))
-        .filter((n): n is number => n !== null && n >= 0 && n <= 99999);
+      // Hapus tanggal ("Date: 2026-11-11"), watermark, ikon "(2)" / "(0)", dan persentase agar "11 === 11 + 0" tidak pernah salah terbaca Total
+      const leftClean = leftText
+        .replace(/\b(?:Tanggal|Tgl|[DO]ate)\b[^\n]*/gi, "")
+        .replace(/\S*\/\d{4}-\d{2}-\d{2}(?:[ \t]+\d{2}:\d{2}:\d{2})?/gi, "")
+        .replace(/\b20\d{2}[-/]\d{2}[-/]\d{2}(?:[ \t]+\d{2}:\d{2}:\d{2})?\b/g, "")
+        .replace(/Expected\s+Orders?[\s\S]{0,20}?Scanned\s*(?:\([^)\n]*\))?/gi, "")
+        .replace(/\(\s*[\d?]+\s*\)/g, "")
+        .replace(/\d+(?:[ \t]+\d+)*(?:[.,]\d+)?[ \t]*%/g, "");
 
-      // Cari pasangan (a, b, c) berurutan di mana a > 0 dan a === b + c (Total = Unscanned + Scanned)
-      for (let i = 0; i + 2 < nums.length; i++) {
-        const a = nums[i], b = nums[i + 1], c = nums[i + 2];
-        if (a > 0 && a === b + c) {
-          total = a;
-          if (scanned_pct === null) {
-            scanned_pct = Math.round((c / a) * 1000) / 10;
-          }
-          break;
-        }
+      const labeledTotal = leftClean.match(/\bTotal\b[ \t:]*(\d[\d.,]*)\b/i);
+      if (labeledTotal) {
+        total = parseNumber(labeledTotal[1]);
       }
 
-      // Jika hanya 2 angka identik terbaca (Total=260 dan Scanned=260, sedangkan 0 terlewat)
       if (total === null) {
-        for (let i = 0; i < nums.length; i++) {
-          for (let j = i + 1; j < nums.length; j++) {
-            if (nums[i] >= 5 && nums[i] === nums[j]) {
-              total = nums[i];
-              if (scanned_pct === null) scanned_pct = 100;
-              break;
+        const nums = (leftClean.match(/\b(\d{1,6}(?:[.,]\d{3})*)\b/g) || [])
+          .map((v) => parseNumber(v))
+          .filter((n): n is number => n !== null && n >= 0 && n <= 99999);
+
+        // Cari pasangan (a, b, c) berurutan di mana a > 0 dan a === b + c (Total = Unscanned + Scanned)
+        for (let i = 0; i + 2 < nums.length; i++) {
+          const a = nums[i], b = nums[i + 1], c = nums[i + 2];
+          if (a > 0 && a === b + c) {
+            total = a;
+            if (scanned_pct === null) {
+              scanned_pct = Math.round((c / a) * 1000) / 10;
             }
+            break;
           }
-          if (total !== null) break;
         }
-      }
 
-      // Fallback terakhir: ambil angka pertama yang >= 5
-      if (total === null) {
-        const big = nums.filter((n) => n >= 5);
-        if (big.length > 0) total = big[0];
+        // Jika hanya 2 angka identik terbaca (Total=260 dan Scanned=260, sedangkan 0 terlewat)
+        if (total === null) {
+          for (let i = 0; i < nums.length; i++) {
+            for (let j = i + 1; j < nums.length; j++) {
+              if (nums[i] >= 5 && nums[i] === nums[j]) {
+                total = nums[i];
+                if (scanned_pct === null) scanned_pct = 100;
+                break;
+              }
+            }
+            if (total !== null) break;
+          }
+        }
+
+        // Fallback terakhir: ambil angka pertama yang >= 5
+        if (total === null) {
+          const big = nums.filter((n) => n >= 5);
+          if (big.length > 0) total = big[0];
+        }
       }
     }
   }
@@ -1073,19 +1116,11 @@ function extractDonutSparseValue(
   const stopIdx = afterHeading.search(stopRegex);
   const block = stopIdx !== -1 ? afterHeading.slice(0, stopIdx) : afterHeading;
 
-  const clean = block
-    .replace(/Updated\s*:?\s*\d{1,2}\s+[A-Za-z]{3,}\s+\d{1,2}[:.]\d{2}/gi, "")
-    .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/g, "")
-    .replace(/\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Agu|Sep|Oct|Okt|Nov|Dec|Des)[A-Za-z]*\b/gi, "")
-    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, "")
-    .replace(/\d+(?:[,.]\d+)?\s*%/g, "")
-    .replace(/>?[ \t]*\d+[ \t]*[-–~]?[ \t]*\d*[ \t]*(?:hari|days?)\b/gi, "")
-    .replace(/\b[A-Za-z]+\d+[A-Za-z]*\b/g, "")
-    .replace(/\b\d+[A-Za-z]+\b/g, "");
+  const clean = cleanDonutNoiseText(block);
 
   const standalone = [...clean.matchAll(/^\s*(\d{1,3}(?:[.,]\d{3})+|\d{1,5})\s*$/gm)]
     .map((mm) => parseNumber(mm[1]))
-    .filter((n): n is number => n !== null && Number.isInteger(n) && n >= 1 && n <= maxVal);
+    .filter((n): n is number => n !== null && Number.isInteger(n) && n >= 1 && n <= maxVal && isValidDonutForPcts(n, block));
   return standalone.length ? Math.max(...standalone) : null;
 }
 

@@ -283,9 +283,8 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
 
       if (
         plainText.length > 20 &&
-        /transported|received|delivering|delivered|backlog|expedite|2wh|4wh|parcel\s+sweeper|expected\s+order\s+scanned|\bPS20\d{6,}/i.test(
-          text
-        )
+        (isParcelSweeperPage(text) ||
+          /transported|received|delivering|delivered|backlog|expedite|2wh|4wh/i.test(text))
       ) {
         e.preventDefault();
         const psDates = detectParcelSweeperDates(text);
@@ -413,13 +412,22 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
 
       for (let idx = 0; idx < texts.length; idx++) {
         const rawText = texts[idx];
-        const psDates = detectParcelSweeperDates(rawText);
+        const altRawText = altTexts[idx] || "";
+        const isPs = isParcelSweeperPage(rawText) || isParcelSweeperPage(altRawText);
+        const psDates = (() => {
+          const d1 = detectParcelSweeperDates(rawText);
+          if (d1.length > 0) return d1;
+          const d2 = detectParcelSweeperDates(altRawText);
+          if (d2.length > 0) return d2;
+          return detectParcelSweeperDates(`${rawText}\n${altRawText}\n${sparseTexts[idx] || ""}`);
+        })();
         const parsed = parseOcrText(rawText);
         // Keyakinan per field: bandingkan hasil pass 1 (grayscale) dan pass 2 (biner 200).
-        const altParsed = parseOcrText(altTexts[idx] || "");
+        const altParsed = parseOcrText(altRawText);
         const baseConf = confidences[idx] ?? 0;
         const rowRec = parsed.row as Record<string, unknown>;
         const altRec = altParsed.row as Record<string, unknown>;
+        const agreedMainKeys = new Set<string>();
         for (const k of Object.keys(rowRec)) {
           let v1 = rowRec[k];
           const v2 = altRec[k];
@@ -434,42 +442,21 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             c = Math.min(baseConf || 75, 75);
           } else if (String(v1) === String(v2)) {
             c = Math.max(baseConf, 80);
+            agreedMainKeys.add(k);
           } else {
             // Pass 1 dan Pass 2 menghasilkan angka berbeda -> tandai rendah agar dicek ulang.
             c = Math.min(baseConf || 55, 55);
           }
           fieldConf[k] = Math.max(fieldConf[k] ?? 0, c);
         }
-        if (!isParcelSweeperPage(rawText)) {
+        if (!isPs) {
           const fallbackConf = Math.min(baseConf || 75, 75);
+          const hasSideBySideLinehaul = /Linehaul|Transporting|\bLT[0O]Q/i.test(`${rawText}\n${altRawText}`);
           const applyFallback = (fk: keyof ClosingData, val: number | null | undefined) => {
             if (val == null || parsed.row[fk] != null) return;
             (parsed.row as Record<string, unknown>)[fk] = val;
             fieldConf[fk] = Math.max(fieldConf[fk] ?? 0, fallbackConf);
           };
-
-          const sparseText = sparseTexts[idx] || "";
-          if (sparseText) {
-            const sparseParsed = parseOcrText(sparseText);
-            const fhcKeys = [
-              "dedicated_actual_2wh",
-              "kurir_plus_actual_2wh",
-              "dedicated_actual_4wh",
-              "mitra_actual_2wh",
-              "mitra_actual_4wh",
-            ] as const;
-            // Di PSM 11 (sparse), tabel Fleet Head Counts & Fleet Productivity tercampur barisnya;
-            // hanya pakai fallback sparse jika seluruhnya terbaca 0 (-/-), agar angka Fleet Productivity (mis. 141/99) tidak bocor.
-            if (fhcKeys.every((fk) => sparseParsed.row[fk] === 0)) {
-              for (const fk of fhcKeys) applyFallback(fk, 0);
-            }
-          }
-          applyFallback("backlog_total", extractBacklogSparse(sparseText));
-          const expSparse = extractExpediteSparse(sparseText);
-          if (expSparse !== null) {
-            parsed.row.total_expedite = expSparse;
-            fieldConf.total_expedite = Math.max(fieldConf.total_expedite ?? 0, fallbackConf);
-          }
 
           const extraKeys = [
             "in_hub_transported",
@@ -485,12 +472,34 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             "dedicated_actual_4wh",
             "mitra_actual_2wh",
             "mitra_actual_4wh",
+            "backlog_total",
+            "backlog_to_buyer",
+            "backlog_to_seller",
+            "backlog_to_transfer",
+            "total_expedite",
           ] as const;
           for (const cropText of extraTexts[idx] || []) {
             if (!cropText) continue;
             const cropParsed = parseOcrText(cropText);
             for (const ek of extraKeys) {
               applyFallback(ek, cropParsed.row[ek] as number | null | undefined);
+            }
+            // Crop donut ter-zoom 2.5x mengisolasi sisi kiri sehingga bebas noise Linehaul Trip dan angka kecil terpotong (mis. "2" dari "20")
+            for (const dk of ["backlog_total", "total_expedite"] as const) {
+              const curVal = parsed.row[dk];
+              const cropVal = cropParsed.row[dk];
+              if (cropVal == null) continue;
+              const replaceTruncated =
+                curVal != null &&
+                curVal < 10 &&
+                cropVal >= 10 &&
+                (!agreedMainKeys.has(dk) || String(cropVal).startsWith(String(curVal)));
+              const replaceLinehaulPolluted =
+                dk === "total_expedite" && hasSideBySideLinehaul && cropText.startsWith("To Expedite\n");
+              if (replaceTruncated || replaceLinehaulPolluted) {
+                parsed.row[dk] = cropVal;
+                fieldConf[dk] = fallbackConf;
+              }
             }
             // Bila fleet_oh_total sebelumnya terbaca < fleet_oh_volume (mustahil, mis. 13 < 103), ganti dari crop yang valid (>= Volume)
             if (
@@ -515,9 +524,28 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             parsed.row.fleet_oh_total = altParsed.row.fleet_oh_total;
             fieldConf.fleet_oh_total = fallbackConf;
           }
+
+          const sparseText = sparseTexts[idx] || "";
+          if (sparseText) {
+            const sparseParsed = parseOcrText(sparseText);
+            const fhcKeys = [
+              "dedicated_actual_2wh",
+              "kurir_plus_actual_2wh",
+              "dedicated_actual_4wh",
+              "mitra_actual_2wh",
+              "mitra_actual_4wh",
+            ] as const;
+            // Di PSM 11 (sparse), tabel Fleet Head Counts & Fleet Productivity tercampur barisnya;
+            // hanya pakai fallback sparse jika seluruhnya terbaca 0 (-/-), agar angka Fleet Productivity (mis. 141/99) tidak bocor.
+            if (fhcKeys.every((fk) => sparseParsed.row[fk] === 0)) {
+              for (const fk of fhcKeys) applyFallback(fk, 0);
+            }
+          }
+          applyFallback("backlog_total", extractBacklogSparse(sparseText));
+          applyFallback("total_expedite", extractExpediteSparse(sparseText));
         }
 
-        if (isParcelSweeperPage(rawText) && psDates.length === 0) {
+        if (isPs && psDates.length === 0) {
           throw new Error(
             `Tanggal Parcel Sweeper pada screenshot #${idx + 1} tidak terdeteksi. Pastikan tanggal terlihat jelas di screenshot.`
           );

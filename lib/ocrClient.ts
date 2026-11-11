@@ -5,6 +5,7 @@
  * - Screenshot TIDAK dikirim ke server; hanya hasil teks yang dipakai lalu disimpan.
  */
 import type { Worker } from "tesseract.js";
+import { isParcelSweeperPage } from "./ocrParser";
 
 const TESSERACT_CDN =
   "https://cdn.jsdelivr.net/npm/tesseract.js@6.0.0/dist/tesseract.min.js";
@@ -249,12 +250,23 @@ export async function runOcrLocally(
 
     // Fallback crop per zona tabel jika Operation Progress penuh belum membaca semua baris In Hub / Fleet Status / Head Counts
     const combinedMain = `${r200.data.text}\n${r225.data.text}`;
+    const isParcelSweeper = isParcelSweeperPage(combinedMain);
+    const hasOpBody =
+      /In\s+Hub\s+Status|Fleet\s+Head\s+Counts|Fleet\s+Productivity|Clear\s+Floor\s+Rate|To\s+Handover|To\s+Deliver|Fleet\s+stat/i.test(
+        combinedMain
+      );
     const isOpProgress =
       isFull &&
-      /Operation\s+Progress|In\s+Hub\s+Status|Fleet\s+Head\s+Counts|Fleet\s+Productivity|Clear\s+Floor\s+Rate|To\s+Handover|To\s+Deliver/i.test(
-        combinedMain
-      ) &&
-      !/Parcel\s+Sweeper|\bPS20\d{6,}/i.test(combinedMain);
+      !isParcelSweeper &&
+      (hasOpBody ||
+        (/Operation\s+Progress/i.test(combinedMain) && !/Backlog[\s\S]*To\s+Expedite/i.test(combinedMain)));
+    const hasBacklogWord = /Backlog/i.test(combinedMain);
+    const hasExpediteWord = /To\s*Expedit/i.test(combinedMain);
+    const isBacklogExp =
+      isFull &&
+      !isParcelSweeper &&
+      ((hasBacklogWord && /To\s*Expedit|Linehaul|Aging/i.test(combinedMain)) ||
+        (hasExpediteWord && !hasOpBody));
 
     const crops: string[] = [];
     if (isOpProgress) {
@@ -322,6 +334,35 @@ export async function runOcrLocally(
         } finally {
           await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
         }
+      }
+    }
+    if (isBacklogExp) {
+      try {
+        await worker.setParameters({ tessedit_pageseg_mode: "11" as never });
+        // Threshold berbeda sesuai warna donut: Backlog biru/oranye bersih di 180, To Expedite kuning/merah bersih di 200
+        const donutRegions: [string, number, number, number, number, number][] = [];
+        if (hasBacklogWord) {
+          donutRegions.push(["Backlog", 0.02, 0.12, 0.28, 0.38, 180]);
+          donutRegions.push(["To Expedite", 0.02, 0.56, 0.28, 0.38, 200]);
+        } else {
+          donutRegions.push(["To Expedite", 0.02, 0.10, 0.32, 0.80, 200]);
+        }
+        for (const [prefix, sx, sy, sw, sh, thr] of donutRegions) {
+          const cropUrl = await cropRegionForOcr(images[i], sx, sy, sw, sh);
+          if (!cropUrl) continue;
+          const binUrl = await binarizeForOcr(cropUrl, thr);
+          const resBin = await worker.recognize(binUrl);
+          if (
+            resBin.data.text &&
+            !/Operation\s+Progress|Fleet\s+Head|Fleet\s+Productivity|Dedicated/i.test(resBin.data.text)
+          ) {
+            crops.push(`${prefix}\n${resBin.data.text}`);
+          }
+        }
+      } catch {
+        // abaikan error crop donut Backlog/Expedite
+      } finally {
+        await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
       }
     }
     extraTexts.push(crops);
