@@ -3,17 +3,22 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  Calendar,
   ChevronDown,
   ChevronUp,
   AlertTriangle,
   Info,
   BarChart3,
   Loader2,
+  Anchor,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { GracePeriodToggle } from "@/components/productivity/GracePeriodToggle";
+import {
+  MaritimeWaveBackdrop,
+  SailorHelmVesselIcon,
+  SailorCompassIcon,
+} from "@/components/productivity/MaritimeAnimations";
 import { format } from "date-fns";
 
 interface CoreSegmentMetrics {
@@ -223,7 +228,7 @@ function SegmentCells({
 }
 
 export default function DashboardMonthlyPage() {
-  const { hubName, user } = useAuth();
+  const { hubName } = useAuth();
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState(format(now, "yyyy-MM"));
   const [data, setData] = useState<MonthlyData | null>(null);
@@ -280,53 +285,50 @@ export default function DashboardMonthlyPage() {
     : "";
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-12">
-      {/* Top Blue Header Banner */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-slate-900 dark:via-[#0f2447] dark:to-[#132c57] dark:border-b dark:border-slate-700/80 text-white shadow-md">
-        <div className="w-full px-4 sm:px-6 py-5 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold tracking-tight">
-                Monthly Productivity Dashboard
-              </h1>
-              <GracePeriodToggle
-                hasL15D={Boolean(data?.hasL15D)}
-                dataDaysCount={data?.dataDaysCount ?? 0}
-                enabled={excludeNew}
-                onToggle={handleToggleExcludeNew}
-                excludedCount={data?.excludedNewCount}
-              />
-            </div>
-            <div className="mt-1.5 flex flex-wrap items-center gap-2.5 text-xs text-blue-100 dark:text-slate-300">
-              <span>Monthly Aggregated Performance Metrics</span>
-              <span>•</span>
-              <span className="inline-flex items-center gap-1.5 font-medium text-emerald-300">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                Live Synced
-              </span>
-              <span>•</span>
-              <span className="px-2.5 py-1 rounded-md bg-blue-500/40 border border-blue-400/30 dark:bg-slate-800/80 dark:border-slate-600/60 dark:text-slate-100 text-white font-medium">
-                Last Update: {data?.lastUpdate || "-"}
-              </span>
-              {hubName && (
-                <>
-                  <span>•</span>
-                  <span className="px-2.5 py-1 rounded-md bg-blue-500/40 border border-blue-400/30 dark:bg-slate-800/80 dark:border-slate-600/60 dark:text-blue-300 text-white font-medium">
-                    Hub: {hubName}
-                  </span>
-                </>
-              )}
+    <div className="min-h-screen bg-[#e8eef5] dark:bg-transparent pb-12">
+      {/* Top Maritime Navy Header Banner */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1f3a] via-[#102d56] to-[#15457a] dark:from-slate-900 dark:via-[#0f2447] dark:to-[#132c57] border-b border-sky-900/30 dark:border-slate-700/80 text-white shadow-lg">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-400/70 via-sky-300/60 to-amber-400/70" />
+        <MaritimeWaveBackdrop />
+
+        <div className="relative z-10 w-full px-4 sm:px-6 py-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <SailorHelmVesselIcon />
+            <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
+                  Monthly Productivity Dashboard
+                </h1>
+                <GracePeriodToggle
+                  hasL15D={Boolean(data?.hasL15D)}
+                  dataDaysCount={data?.dataDaysCount ?? 0}
+                  enabled={excludeNew}
+                  onToggle={handleToggleExcludeNew}
+                  excludedCount={data?.excludedNewCount}
+                />
+              </div>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2.5 text-xs text-sky-100/90 dark:text-slate-300">
+                <span>Monthly Aggregated Performance Metrics</span>
+                <span className="text-sky-300/50">•</span>
+                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Synced
+                </span>
+                <span className="text-sky-300/50">•</span>
+                <span className="px-2.5 py-0.5 rounded-md bg-white/10 border border-white/15 dark:bg-slate-800/80 dark:border-slate-600/60 text-white font-medium">
+                  Last Update: {data?.lastUpdate || "-"}
+                </span>
+                {hubName && (
+                  <>
+                    <span className="text-sky-300/50">•</span>
+                    <span className="px-2.5 py-0.5 rounded-md bg-white/10 border border-white/15 dark:bg-slate-800/80 dark:border-slate-600/60 text-amber-300 font-bold">
+                      Hub: {hubName}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
-
-          {user?.name && (
-            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-blue-500/30 border border-blue-400/30 dark:bg-slate-800/80 dark:border-slate-600/60 text-sm font-medium">
-              <div className="w-6 h-6 rounded-full bg-white/20 dark:bg-blue-500/25 dark:text-blue-200 flex items-center justify-center text-xs font-bold">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-              <span>{user.name.split(" ")[0]}</span>
-            </div>
-          )}
         </div>
       </div>
 
@@ -356,14 +358,14 @@ export default function DashboardMonthlyPage() {
         )}
 
         {/* Filter Bar Bulan (tetap di paling atas halaman) */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+        <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-[#134074] dark:border-t-blue-500 shadow-sm p-5">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="w-full sm:w-72">
               <label
                 htmlFor="monthly-month-filter"
                 className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 mb-1.5"
               >
-                <Calendar className="h-3.5 w-3.5 text-gray-500" />
+                <SailorCompassIcon className="h-3.5 w-3.5 text-[#134074] dark:text-sky-400" />
                 Month
               </label>
               <input
@@ -402,8 +404,9 @@ export default function DashboardMonthlyPage() {
             {/* Two Big Core KPI Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Left Card: PRODUCTIVITY 2WH */}
-              <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-[#0f2447] dark:via-[#122b54] dark:to-[#173668] dark:border dark:border-blue-500/35 rounded-2xl p-6 text-white shadow-md flex flex-col justify-between">
-                <div>
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#0e2d5a] via-[#133b75] to-[#194c94] dark:from-[#0f2447] dark:via-[#122b54] dark:to-[#173668] border border-sky-800/35 dark:border-blue-500/35 rounded-2xl p-6 text-white shadow-md flex flex-col justify-between">
+                <MaritimeWaveBackdrop compact className="opacity-60" />
+                <div className="relative z-10">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2">
@@ -500,7 +503,7 @@ export default function DashboardMonthlyPage() {
                 </div>
 
                 {/* View Calculation Formula Accordion */}
-                <div className="mt-3.5">
+                <div className="relative z-10 mt-3.5">
                   <button
                     type="button"
                     onClick={() => setShowFormula(!showFormula)}
@@ -535,7 +538,7 @@ export default function DashboardMonthlyPage() {
               </div>
 
               {/* Right Card: PRODUCTIVITY 4WH */}
-              <div className="bg-gradient-to-br from-slate-800 to-slate-900 dark:from-[#162033] dark:to-[#0f172a] dark:border dark:border-slate-700/80 rounded-2xl p-6 text-white shadow-md flex flex-col justify-between">
+              <div className="bg-gradient-to-br from-[#132238] via-[#1a2e4a] to-[#0f172a] dark:from-[#162033] dark:to-[#0f172a] border border-slate-700/60 dark:border-slate-700/80 rounded-2xl p-6 text-white shadow-md flex flex-col justify-between">
                 <div>
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -614,8 +617,8 @@ export default function DashboardMonthlyPage() {
 
             {/* 5 Summary Metric Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-                <p className="text-xs font-medium text-gray-500">
+              <div className="hover-lift bg-gradient-to-br from-[#f6faff] to-[#e9f2fe] dark:from-[#1e293b] dark:to-[#142238] rounded-2xl border border-blue-200/85 dark:border-slate-700/80 border-t-[3px] border-t-blue-600 dark:border-t-blue-500 p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Total Delivered
                 </p>
                 <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
@@ -626,8 +629,8 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-                <p className="text-xs font-medium text-gray-500">
+              <div className="hover-lift bg-gradient-to-br from-[#f7fdfc] to-[#e5f6f3] dark:from-[#1e293b] dark:to-[#13292d] rounded-2xl border border-teal-200/85 dark:border-slate-700/80 border-t-[3px] border-t-teal-600 dark:border-t-teal-500 p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Active Shifts
                 </p>
                 <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
@@ -638,8 +641,8 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-                <p className="text-xs font-medium text-gray-500">
+              <div className="hover-lift bg-gradient-to-br from-[#f7f8ff] to-[#ebeffe] dark:from-[#1e293b] dark:to-[#17213a] rounded-2xl border border-indigo-200/85 dark:border-slate-700/80 border-t-[3px] border-t-indigo-600 dark:border-t-indigo-500 p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Avg Daily Productivity
                 </p>
                 <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
@@ -650,8 +653,8 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
-                <p className="text-xs font-medium text-gray-500">
+              <div className="hover-lift bg-gradient-to-br from-[#fffdf7] to-[#fdf3dc] dark:from-[#1e293b] dark:to-[#282116] rounded-2xl border border-amber-200/85 dark:border-slate-700/80 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Monthly Target
                 </p>
                 <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
@@ -662,8 +665,8 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm col-span-2 sm:col-span-1">
-                <p className="text-xs font-medium text-gray-500">
+              <div className="hover-lift bg-gradient-to-br from-[#f8fafc] to-[#eaeff6] dark:from-[#1e293b] dark:to-[#161f2e] rounded-2xl border border-slate-300/85 dark:border-slate-700/80 border-t-[3px] border-t-slate-600 dark:border-t-slate-400 p-5 shadow-sm col-span-2 sm:col-span-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Operating Days
                 </p>
                 <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
@@ -693,10 +696,11 @@ export default function DashboardMonthlyPage() {
             </div>
 
             {/* Daily Breakdown Table */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+            <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-[#134074] dark:border-t-blue-500 shadow-sm p-6">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <Anchor className="h-4 w-4 text-[#134074] dark:text-sky-400 animate-ship-bob" />
                     <h3 className="text-base font-bold text-gray-900">
                       Daily Breakdown
                     </h3>

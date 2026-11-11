@@ -16,6 +16,7 @@ import {
 import toast from "react-hot-toast";
 import { parseFmsRows, FmsRow, ymdToMmDdYyyy } from "@/lib/fmsParser";
 import Link from "next/link";
+import { ProductivityCalendarWidget } from "./ProductivityCalendarWidget";
 
 // xlsx di-import dinamis agar tidak masuk ke server bundle
 type XlsxModule = typeof import("xlsx");
@@ -96,6 +97,8 @@ export function ProductivityInputSection({
     deletedExisting: number;
     wasReplace: boolean;
   } | null>(null);
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
+  const [lastDbDate, setLastDbDate] = useState<string | null>(null);
 
   const isSaving = pageState === "saving";
 
@@ -312,6 +315,7 @@ export function ProductivityInputSection({
       } else {
         toast.success(json.message || "Data berhasil disimpan!");
       }
+      setCalendarRefreshKey((k) => k + 1);
       setPageState("done");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal menyimpan.");
@@ -352,23 +356,57 @@ export function ProductivityInputSection({
 
   return (
     <div className="space-y-6">
-      {/* Info Sub-header khusus Tab Productivity */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-[#122346] dark:via-[#14274f] dark:to-[#182856] border border-blue-200 dark:border-blue-500/35 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-100 dark:ring-1 dark:ring-blue-400/25 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <FileSpreadsheet className="h-4 w-4 text-blue-700" />
+      {/* Info Sub-header + Mini Widget Kalender Cakupan Database Productivity */}
+      <div className="bg-gradient-to-r from-[#eef5ff] via-[#e6efff] to-[#eaf0ff] dark:from-[#122346] dark:via-[#14274f] dark:to-[#182856] border border-blue-200 dark:border-blue-500/35 border-l-4 border-l-blue-600 dark:border-l-blue-400 rounded-2xl p-4 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex-1 min-w-0 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:ring-1 dark:ring-blue-400/25 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <FileSpreadsheet className="h-4 w-4 text-blue-700" />
+            </div>
+            <div className="text-xs text-blue-900 space-y-0.5">
+              <p className="font-bold text-sm">
+                Mode Upload Data Produktivitas Kurir (File Excel / CSV FMS)
+              </p>
+              <p>
+                Upload file <strong>.xlsx</strong> atau <strong>.csv</strong> hasil
+                export FMS (mendukung <em>Fleet Productivity Harian</em> maupun{" "}
+                <em>Driver Performance Susulan</em>).
+              </p>
+            </div>
           </div>
-          <div className="text-xs text-blue-900 space-y-0.5">
-            <p className="font-bold text-sm">
-              Mode Upload Data Produktivitas Kurir (File Excel / CSV FMS)
-            </p>
-            <p>
-              Upload file <strong>.xlsx</strong> atau <strong>.csv</strong> hasil
-              export FMS (mendukung <em>Fleet Productivity Harian</em> maupun{" "}
-              <em>Driver Performance Susulan</em>).
-            </p>
+
+          {/* Keterangan status kalender database */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 pl-0 sm:pl-11 text-[11px] font-medium text-slate-600">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold">
+              <span className="w-2 h-2 rounded-xs bg-emerald-500 inline-block" />
+              Ada Database
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 font-semibold">
+              <span className="w-2 h-2 rounded-xs bg-rose-500 inline-block" />
+              Belum Ada
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-300 font-semibold">
+              <span className="w-2 h-2 rounded-xs ring-2 ring-amber-400 inline-block" />
+              Hari Ini
+            </span>
+            {lastDbDate && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200 font-semibold">
+                <Calendar className="h-3 w-3" />
+                Update Terakhir:{" "}
+                {new Date(lastDbDate + "T00:00:00").toLocaleDateString("id-ID", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </span>
+            )}
           </div>
         </div>
+
+        <ProductivityCalendarWidget
+          refreshKey={calendarRefreshKey}
+          onCoverageLoaded={({ lastDate }) => setLastDbDate(lastDate)}
+        />
       </div>
 
       {/* Done state */}
@@ -438,7 +476,7 @@ export function ProductivityInputSection({
       ) : (
         <>
           {/* Upload zone */}
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-[#134074] dark:border-t-blue-500 shadow-sm p-6">
             <div className="flex items-center gap-2 mb-4">
               <span className="w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
                 1
@@ -458,7 +496,7 @@ export function ProductivityInputSection({
                 className={`border-2 border-dashed rounded-xl p-10 text-center transition-colors ${
                   pageState === "parsing"
                     ? "border-blue-400 bg-blue-50/40 cursor-wait"
-                    : "border-gray-300 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30"
+                    : "bg-slate-50/70 border-gray-300 cursor-pointer hover:border-blue-400 hover:bg-blue-50/30"
                 }`}
               >
                 <div className="flex flex-col items-center gap-3">
@@ -530,7 +568,7 @@ export function ProductivityInputSection({
           {/* Preview tabel */}
           {(pageState === "preview" || pageState === "saving") &&
             rows.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-[#134074] dark:border-t-blue-500 shadow-sm p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 bg-blue-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
@@ -848,7 +886,7 @@ export function ProductivityInputSection({
       )}
 
       {/* Panduan format */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+      <div className="bg-blue-50 border border-blue-200 border-l-4 border-l-blue-600 dark:border-l-blue-400 rounded-xl p-4 text-sm text-blue-800 shadow-sm">
         <p className="font-semibold mb-1">
           📋 Format file yang didukung (Otomatis Terdeteksi):
         </p>

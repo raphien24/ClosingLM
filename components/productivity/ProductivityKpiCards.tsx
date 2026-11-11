@@ -1,7 +1,10 @@
 "use client";
 
 import { ProductivityKpi, WeeklyMitraSegment, WeeklyAllocation2wh, WeeklyActionPlan } from "@/types/productivity";
-import { TrendingUp, TrendingDown, Users, Target, Package, Bike, Truck, Activity, Lightbulb, CheckCircle2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Users, Target, Package, Bike, Truck, Activity, Lightbulb, CheckCircle2, CalendarClock, Anchor } from "lucide-react";
+import { format } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
+import { MaritimeWaveBackdrop, SailorCompassIcon } from "./MaritimeAnimations";
 
 interface Props { kpi: ProductivityKpi | null; isLoading?: boolean; filterLabel?: string; }
 
@@ -79,7 +82,7 @@ function MitraProductivityCard({
   const pctTextClass = isGood ? "text-emerald-600" : "text-red-600";
 
   return (
-    <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs flex flex-col justify-between">
+    <div className="hover-lift bg-gradient-to-br from-[#fffdf8] to-[#fbf1dc] dark:from-[#1e293b] dark:to-[#242017] rounded-xl border border-amber-200/90 dark:border-slate-700/80 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
       <div>
         {/* Card Header */}
         <div className="flex items-start justify-between gap-2">
@@ -197,48 +200,62 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
     );
   }
 
-  const prodColor = kpi.weeklyAvgProductivity.progress >= 100 ? "green"
-    : kpi.weeklyAvgProductivity.progress >= 90 ? "yellow" : "red";
-
   const afterThreshold = kpi.afterThreshold;
   const kpi2wStatus = afterThreshold ? getThresholdStatus(afterThreshold.kpi2w.achievement) : null;
   const ded2wStatus = afterThreshold ? getThresholdStatus(afterThreshold.kpi2w.dedicated2wh.achievement) : null;
   const kp2wStatus  = afterThreshold ? getThresholdStatus(afterThreshold.kpi2w.kurirPlus2wh.achievement) : null;
   const kpi4wStatus = afterThreshold ? getThresholdStatus(afterThreshold.kpi4w.achievement) : null;
 
+  const latestDataDate = kpi.databaseInfo?.latestDataDate ?? null;
+  const latestUploadAt = kpi.databaseInfo?.latestUploadAt ?? null;
+  const formattedDbDate = (() => {
+    if (!latestDataDate) return null;
+    const d = new Date(`${latestDataDate}T00:00:00`);
+    return isNaN(d.getTime())
+      ? latestDataDate
+      : format(d, "d MMMM yyyy", { locale: idLocale });
+  })();
+
   return (
     <div className="space-y-4">
       {/* Top 4 Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {/* Weekly Avg Productivity */}
-        <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Weekly Avg Productivity</p>
-              <p className="mt-0.5 text-xl font-bold text-gray-900 leading-tight">
-                {kpi.weeklyAvgProductivity.value}
-                <span className="text-xs font-normal text-gray-400 ml-1">/ shift</span>
+        {/* Database Last Update Info (Maritime Navy Hero Card) */}
+        <div className="relative overflow-hidden hover-lift bg-gradient-to-br from-[#0c2342] via-[#11305c] to-[#17427c] dark:from-[#0f2447] dark:to-[#173566] rounded-xl border border-sky-800/40 dark:border-blue-500/35 p-3.5 shadow-md text-white flex flex-col justify-between">
+          <MaritimeWaveBackdrop compact />
+          <div className="relative z-10 flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-bold text-amber-300 uppercase tracking-wide flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                Update Database Terakhir
               </p>
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                Target: <span className="font-medium">{kpi.weeklyAvgProductivity.target}</span>
-                {" · "}
-                <span className={prodColor === "green" ? "text-green-600 font-bold" : prodColor === "yellow" ? "text-yellow-600 font-bold" : "text-red-600 font-bold"}>
-                  {kpi.weeklyAvgProductivity.progress}%
-                </span>
+              <p className="mt-1 text-lg sm:text-xl font-extrabold text-white leading-tight">
+                {formattedDbDate || "Belum ada data"}
               </p>
-              <ProgressBar value={kpi.weeklyAvgProductivity.progress} color={prodColor} />
-              <p className="text-[10px] text-gray-400 mt-1">
-                {kpi.weeklyAvgProductivity.totalDelivered.toLocaleString("id-ID")} deliv · {kpi.weeklyAvgProductivity.activeShifts} shifts
+              <p className="text-[11px] text-sky-100/85 mt-1 leading-snug">
+                {formattedDbDate
+                  ? `Database kurir saat ini memuat data sampai tanggal ${formattedDbDate}.`
+                  : "Belum ada data produktivitas yang tersimpan di database."}
               </p>
             </div>
-            <div className="ml-2 w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <TrendingUp className="h-4 w-4 text-blue-600" />
+            <div className="ml-2 w-8 h-8 bg-white/10 border border-amber-300/35 rounded-lg flex items-center justify-center flex-shrink-0 text-amber-300">
+              <SailorCompassIcon className="h-4 w-4" />
             </div>
           </div>
+          {formattedDbDate && (
+            <p className="relative z-10 text-[10px] text-sky-200/80 mt-2 font-medium flex items-center gap-1">
+              <CalendarClock className="h-3 w-3 text-amber-300/90 flex-shrink-0" />
+              <span>
+                {latestUploadAt
+                  ? `Diupdate: ${latestUploadAt}`
+                  : `Total histori: ${kpi.databaseInfo?.totalDays ?? 0} hari`}
+              </span>
+            </p>
+          )}
         </div>
 
         {/* Daily Active */}
-        <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs">
+        <div className="hover-lift bg-gradient-to-br from-[#f8fdfc] to-[#e6f7f4] dark:from-[#1e293b] dark:to-[#13292d] rounded-xl border border-teal-200/85 dark:border-slate-700/80 border-t-[3px] border-t-teal-600 dark:border-t-teal-500 p-3.5 shadow-sm">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Daily Active Rate</p>
@@ -254,14 +271,14 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                 {kpi.dailyActive.uniqueHeadcount} kurir · {kpi.dailyActive.operatingDays} hari · avg {kpi.dailyActive.avgCouriersPerDay}/hr
               </p>
             </div>
-            <div className="ml-2 w-7 h-7 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Users className="h-4 w-4 text-green-600" />
+            <div className="ml-2 w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Users className="h-4 w-4 text-emerald-600" />
             </div>
           </div>
         </div>
 
         {/* Met Quota */}
-        <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs">
+        <div className="hover-lift bg-gradient-to-br from-[#fffdf7] to-[#fdf3dc] dark:from-[#1e293b] dark:to-[#282116] rounded-xl border border-amber-200/85 dark:border-slate-700/80 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 p-3.5 shadow-sm">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Met Quota</p>
@@ -277,14 +294,14 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
               </p>
               <ProgressBar value={kpi.metQuota.pct} color={kpi.metQuota.pct >= 70 ? "green" : kpi.metQuota.pct >= 50 ? "yellow" : "red"} />
             </div>
-            <div className="ml-2 w-7 h-7 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Target className="h-4 w-4 text-yellow-600" />
+            <div className="ml-2 w-7 h-7 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Target className="h-4 w-4 text-amber-600" />
             </div>
           </div>
         </div>
 
         {/* Summary */}
-        <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-xs">
+        <div className="hover-lift bg-gradient-to-br from-[#f6f9ff] to-[#e8efff] dark:from-[#1e293b] dark:to-[#17213a] rounded-xl border border-indigo-200/85 dark:border-slate-700/80 border-t-[3px] border-t-indigo-600 dark:border-t-indigo-500 p-3.5 shadow-sm">
           <div className="flex items-start justify-between">
             <div className="flex-1">
               <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Total Delivered</p>
@@ -299,8 +316,8 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                 {kpi.summary.totalFailed} fail · {kpi.summary.totalOnhold} onhold
               </p>
             </div>
-            <div className="ml-2 w-7 h-7 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Package className="h-4 w-4 text-purple-600" />
+            <div className="ml-2 w-7 h-7 bg-indigo-100 dark:bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+              <Package className="h-4 w-4 text-indigo-600 dark:text-purple-600" />
             </div>
           </div>
         </div>
@@ -310,17 +327,19 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
       {afterThreshold && kpi2wStatus && ded2wStatus && kp2wStatus && kpi4wStatus && (
         <div className="space-y-3">
           {/* Section Divider */}
-          <div className="flex items-center justify-center">
-            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-widest bg-amber-50 text-amber-800 border border-amber-300/80 shadow-2xs">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-              AFTER THRESHOLD & OPERATIONAL INSIGHTS
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
+            <span className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-gradient-to-r from-[#0d2444] to-[#163b6d] text-amber-300 border border-amber-400/40 shadow-sm">
+              <Anchor className="h-3 w-3 animate-ship-bob text-amber-300" />
+              AFTER THRESHOLD &amp; OPERATIONAL INSIGHTS
             </span>
+            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-300 to-transparent dark:via-slate-700" />
           </div>
 
           {/* 3-Column Grid: 6 cards fit into 2 compact rows */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {/* 1. ACHIEVEMENT KPI PRODUCTIVITY (2W) */}
-            <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs flex flex-col justify-between">
+            <div className="hover-lift bg-gradient-to-br from-[#f6faff] to-[#e8f1fe] dark:from-[#1e293b] dark:to-[#142238] rounded-xl border border-blue-200/85 dark:border-slate-700/80 border-t-[3px] border-t-blue-600 dark:border-t-blue-500 p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -362,7 +381,7 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                 {/* 2 Sub-cards: Dedicated 2WH & Kurir Plus 2WH */}
                 <div className="grid grid-cols-2 gap-2 mt-2.5">
                   {/* Dedicated 2WH */}
-                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-lg p-2">
+                  <div className="bg-white/90 dark:bg-slate-900/70 border border-blue-100/90 dark:border-slate-700/80 rounded-lg p-2">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-gray-600">Ded. 2WH</span>
                       <span className={`font-bold ${ded2wStatus.textClass}`}>
@@ -381,7 +400,7 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                   </div>
 
                   {/* Kurir Plus 2WH */}
-                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-lg p-2">
+                  <div className="bg-white/90 dark:bg-slate-900/70 border border-blue-100/90 dark:border-slate-700/80 rounded-lg p-2">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-gray-600">Plus 2WH</span>
                       <span className={`font-bold ${kp2wStatus.textClass}`}>
@@ -401,18 +420,18 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
                 </div>
               </div>
 
-              <p className="text-[10px] italic text-gray-400 mt-2.5 pt-1.5 border-t border-gray-100">
+              <p className="text-[10px] italic text-gray-400 mt-2.5 pt-1.5 border-t border-blue-100/80 dark:border-slate-700/60">
                 Formula: (Result − Tgt×75%) ÷ (Tgt − Tgt×75%)
               </p>
             </div>
 
             {/* 2. ACHIEVEMENT KPI PRODUCTIVITY (4W) */}
-            <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs flex flex-col justify-between">
+            <div className="hover-lift bg-gradient-to-br from-[#f4fbfc] to-[#e4f5f9] dark:from-[#1e293b] dark:to-[#122633] rounded-xl border border-cyan-200/85 dark:border-slate-700/80 border-t-[3px] border-t-cyan-600 dark:border-t-cyan-500 p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200/70 flex items-center justify-center flex-shrink-0">
-                      <Truck className="h-3.5 w-3.5 text-amber-600" />
+                    <div className="w-7 h-7 rounded-lg bg-cyan-50 dark:bg-cyan-950/60 border border-cyan-200/70 dark:border-cyan-500/30 flex items-center justify-center flex-shrink-0">
+                      <Truck className="h-3.5 w-3.5 text-cyan-700 dark:text-cyan-300" />
                     </div>
                     <div>
                       <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 leading-tight">
@@ -448,7 +467,7 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
 
                 {/* 1 Sub-card: Dedicated 4WH */}
                 <div className="mt-2.5">
-                  <div className="bg-slate-50/70 border border-slate-200/70 rounded-lg p-2">
+                  <div className="bg-white/90 dark:bg-slate-900/70 border border-cyan-100/90 dark:border-slate-700/80 rounded-lg p-2">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-gray-600">Dedicated 4WH</span>
                       <span className={`font-bold ${kpi4wStatus.textClass}`}>
@@ -509,7 +528,7 @@ function Allocation2whCard({ allocation }: { allocation: WeeklyAllocation2wh }) 
   const dedBarPct  = Math.min(100, (allocation.dedicatedProd / maxProd) * 100);
 
   return (
-    <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs flex flex-col justify-between">
+    <div className="hover-lift bg-gradient-to-br from-[#f7f9fc] to-[#e9eef6] dark:from-[#1e293b] dark:to-[#161f2e] rounded-xl border border-slate-300/85 dark:border-slate-700/80 border-t-[3px] border-t-slate-700 dark:border-t-slate-400 p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
       <div>
         {/* Card Header */}
         <div className="flex items-start justify-between gap-2">
@@ -566,7 +585,7 @@ function Allocation2whCard({ allocation }: { allocation: WeeklyAllocation2wh }) 
           <div>
             <div className="flex items-center justify-between text-[11px] mb-0.5">
               <span className="inline-flex items-center gap-1 font-semibold text-slate-700">
-                <span className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-700 dark:bg-slate-400" />
                 2W Ded.
               </span>
               <span className="font-semibold text-gray-700">
@@ -575,7 +594,7 @@ function Allocation2whCard({ allocation }: { allocation: WeeklyAllocation2wh }) 
             </div>
             <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full bg-slate-700 transition-all duration-700"
+                className="h-full rounded-full bg-slate-700 dark:bg-slate-400 transition-all duration-700"
                 style={{ width: `${dedBarPct}%` }}
               />
             </div>
@@ -617,13 +636,13 @@ function ActionPlanCard({ actionPlan }: { actionPlan: WeeklyActionPlan }) {
   const items = [actionPlan.riderDed, actionPlan.riderPlus, actionPlan.driverDed];
 
   return (
-    <div className="hover-lift bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs flex flex-col justify-between">
+    <div className="hover-lift bg-gradient-to-br from-[#f7f8ff] to-[#ebeffe] dark:from-[#1e293b] dark:to-[#171f36] rounded-xl border border-indigo-200/85 dark:border-slate-700/80 border-t-[3px] border-t-indigo-600 dark:border-t-indigo-500 p-3.5 sm:p-4 shadow-sm flex flex-col justify-between">
       <div>
         {/* Card Header */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200/70 flex items-center justify-center flex-shrink-0">
-              <Lightbulb className="h-3.5 w-3.5 text-amber-600" />
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/70 dark:border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+              <Lightbulb className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-300" />
             </div>
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 leading-tight">
@@ -634,7 +653,7 @@ function ActionPlanCard({ actionPlan }: { actionPlan: WeeklyActionPlan }) {
               </p>
             </div>
           </div>
-          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/70">
+          <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/70 dark:border-indigo-500/30">
             PLAN
           </span>
         </div>
@@ -646,7 +665,7 @@ function ActionPlanCard({ actionPlan }: { actionPlan: WeeklyActionPlan }) {
             return (
               <div
                 key={item.title}
-                className="rounded-lg border border-slate-200/70 bg-slate-50/70 p-2 space-y-1"
+                className="rounded-lg border border-indigo-100/90 dark:border-slate-700/80 bg-white/90 dark:bg-slate-900/70 p-2 space-y-1"
               >
                 {/* Title & Status Badge */}
                 <div className="flex items-center justify-between text-xs">

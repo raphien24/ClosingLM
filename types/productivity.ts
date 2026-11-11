@@ -137,6 +137,11 @@ export interface ProductivityKpi {
   hasL15D?: boolean;
   dataDaysCount?: number;
   excludedNewCount?: number;
+  databaseInfo?: {
+    latestDataDate: string | null; // YYYY-MM-DD
+    latestUploadAt: string | null; // dd-mm-yyyy hh:mm WIB
+    totalDays: number;
+  };
 }
 
 export interface CourierDailyDetail {

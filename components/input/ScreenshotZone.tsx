@@ -68,7 +68,7 @@ export function ScreenshotZone({
     <div className="space-y-4">
       {/* Paste Area */}
       <div
-        className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-red-400 hover:bg-red-50/30 transition-colors cursor-default"
+        className="bg-slate-50/70 border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-red-400 hover:bg-red-50/30 transition-colors cursor-default"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();

@@ -247,7 +247,7 @@ export function HubTable({ data, isLoading }: HubTableProps) {
   }
 
   return (
-    <div className="relative z-0 rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm w-full">
+    <div className="relative z-0 rounded-xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-[#0e3454] dark:border-t-cyan-500 overflow-hidden bg-white shadow-sm w-full">
       <div className="overflow-auto max-h-[calc(100vh-15.5rem)]">
       <table className="w-full text-xs border-separate border-spacing-0">
         <colgroup>

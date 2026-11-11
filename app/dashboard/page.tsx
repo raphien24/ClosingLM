@@ -13,6 +13,11 @@ import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { CaptainPovTransition } from "@/components/pirate/CaptainPovTransition";
+import {
+  MaritimeWaveBackdrop,
+  LighthouseBeaconIcon,
+  SailorCompassIcon,
+} from "@/components/productivity/MaritimeAnimations";
 
 const defaultKpi: KpiSummary = {
   totalDelivered: 0,
@@ -170,58 +175,70 @@ function DashboardContent() {
 
       {/* JANGAN render atau tampilkan elemen dashboard sebelum animasi mengemudi selesai */}
       {dashboardReady && (
-        <div className="w-full px-2 sm:px-4 py-4 space-y-4 animate-page-enter">
-          {/* Page Header */}
-          <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-blue-900 dark:from-slate-900 dark:via-[#0f2447] dark:to-[#132c57] dark:border dark:border-slate-700/70 text-white rounded-2xl px-5 py-4 shadow-md flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3.5">
-              <div>
-                <h1 className="text-xl font-extrabold tracking-tight">
-                  Closing Report LM JTT08
-                </h1>
-                <p className="text-xs text-blue-200 mt-0.5 flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-emerald-300 font-medium">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Live Monitoring
+        <div className="min-h-screen bg-[#e7eef4] dark:bg-transparent">
+          <div className="w-full px-2 sm:px-4 py-4 space-y-4 animate-page-enter">
+            {/* Page Header — Harbor Lighthouse Command */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-[#0a1d33] via-[#0e3454] to-[#0f4c5c] dark:from-slate-900 dark:via-[#0d2847] dark:to-[#0f3548] border border-cyan-900/35 dark:border-slate-700/70 text-white rounded-2xl px-5 py-4 shadow-lg">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-cyan-400/70 via-amber-300/70 to-cyan-400/70" />
+              <MaritimeWaveBackdrop />
+
+              <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3.5">
+                  <LighthouseBeaconIcon />
+                  <div>
+                    <h1 className="text-xl font-extrabold tracking-tight text-white">
+                      Closing Report LM JTT08
+                    </h1>
+                    <p className="text-xs text-cyan-100/90 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-300 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Live Monitoring
+                      </span>
+                      <span className="text-cyan-300/50">•</span>
+                      <span>
+                        {isToday
+                          ? "Hari ini — " + formatDate(selectedDate)
+                          : formatDate(selectedDate)}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/15 backdrop-blur-xs text-cyan-100 text-xs font-semibold rounded-full">
+                    <SailorCompassIcon className="h-3.5 w-3.5 text-amber-300" />
+                    Harbor Control • JTT08
                   </span>
-                  <span>•</span>
-                  <span>
-                    {isToday
-                      ? "Hari ini — " + formatDate(selectedDate)
-                      : formatDate(selectedDate)}
-                  </span>
-                </p>
+                  {!isToday && (
+                    <span className="px-3 py-1 bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-semibold rounded-full">
+                      Mode History
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            {!isToday && (
-              <div className="flex items-center gap-2">
-                <span className="px-3 py-1 bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-semibold rounded-full">
-                  Mode History
-                </span>
-              </div>
-            )}
+            {/* KPI Cards */}
+            <KpiCards kpi={kpi} isLoading={isLoading} />
+
+            {/* 5 Operational Insight Cards */}
+            <ClosingInsightCards data={closingData} isLoading={isLoading} />
+
+            {/* Filter Bar */}
+            <FilterBar
+              allHubs={allHubs}
+              missingHubs={closingData.filter((d) => !d.submitted_at).map((d) => d.nama_hub)}
+              selectedDate={selectedDate}
+              selectedHubs={selectedHubs}
+              onDateChange={setSelectedDate}
+              onHubsChange={setSelectedHubs}
+              onRefresh={fetchDashboard}
+              isLoading={isLoading}
+            />
+
+            {/* Hub Table */}
+            <HubTable data={closingData} isLoading={isLoading} />
           </div>
-
-          {/* KPI Cards */}
-          <KpiCards kpi={kpi} isLoading={isLoading} />
-
-          {/* 5 Operational Insight Cards */}
-          <ClosingInsightCards data={closingData} isLoading={isLoading} />
-
-          {/* Filter Bar */}
-          <FilterBar
-            allHubs={allHubs}
-            missingHubs={closingData.filter((d) => !d.submitted_at).map((d) => d.nama_hub)}
-            selectedDate={selectedDate}
-            selectedHubs={selectedHubs}
-            onDateChange={setSelectedDate}
-            onHubsChange={setSelectedHubs}
-            onRefresh={fetchDashboard}
-            isLoading={isLoading}
-          />
-
-          {/* Hub Table */}
-          <HubTable data={closingData} isLoading={isLoading} />
         </div>
       )}
     </>

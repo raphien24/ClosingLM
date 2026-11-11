@@ -25,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { ClosingCountdownWidget } from "./ClosingCountdownWidget";
 
 const mainLinks = [
   { href: "/dashboard", label: "Dashboard Closing", icon: LayoutDashboard },
@@ -122,20 +123,20 @@ export function Navbar() {
   const isProdActive = pathname.startsWith("/productivity");
 
   return (
-    <header className="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-slate-200/80 shadow-[0_2px_15px_-3px_rgba(15,23,42,0.06)] transition-all">
-      {/* Top thin maritime navy-blue & gold accent bar */}
-      <div className="h-1 w-full bg-gradient-to-r from-slate-900 via-blue-600 to-amber-500" />
+    <header className="sticky top-0 z-30 bg-gradient-to-r from-[#d4e3f6]/95 via-[#e5effb]/95 to-[#d2e2f5]/95 dark:from-[#091529]/95 dark:via-[#0f2240]/95 dark:to-[#0c1a33]/95 backdrop-blur-md border-b border-sky-200/90 dark:border-slate-700/80 shadow-[0_4px_20px_-4px_rgba(11,31,58,0.12)] dark:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.45)] transition-all">
+      {/* Top thin maritime navy, ocean-blue & brass gold horizon bar */}
+      <div className="relative z-10 h-[3px] w-full bg-gradient-to-r from-[#091930] via-[#0ea5e9] to-amber-400" />
 
-      <div className="w-full px-3 sm:px-6">
+      <div className="relative z-10 w-full px-3 sm:px-6">
         <div className="flex items-center h-16 gap-2">
           {/* Mobile Hamburger Button */}
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
-            className="sm:hidden p-2 -ml-1 rounded-xl text-slate-700 hover:bg-slate-100 active:bg-slate-200 transition-colors focus:outline-none"
+            className="sm:hidden p-2 -ml-1 rounded-xl text-[#122b4d] dark:text-slate-200 hover:bg-white/70 dark:hover:bg-slate-800/80 active:bg-white/90 transition-colors focus:outline-none"
             aria-label="Buka menu navigasi"
           >
-            <Menu className="h-6 w-6 text-slate-800" />
+            <Menu className="h-6 w-6" />
           </button>
 
           {/* Logo + Title */}
@@ -143,7 +144,7 @@ export function Navbar() {
             href="/dashboard"
             className="group flex items-center gap-2.5 sm:gap-3 mr-2 sm:mr-4 py-1 focus:outline-none"
           >
-            <div className="relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-slate-900 to-blue-950 p-1 shadow-md shadow-blue-950/15 ring-1 ring-amber-400/40 group-hover:scale-105 group-hover:shadow-lg group-hover:ring-amber-400 transition-all duration-300">
+            <div className="relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-slate-900 to-blue-950 p-1 shadow-md shadow-blue-950/20 ring-1 ring-amber-400/55 group-hover:scale-105 group-hover:shadow-lg group-hover:ring-amber-400 transition-all duration-300">
               <img
                 src="/logo-jtt08.png"
                 alt="Logo JTT08"
@@ -151,11 +152,11 @@ export function Navbar() {
               />
             </div>
             <div className="flex flex-col">
-              <p className="text-xs sm:text-sm font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-blue-900 to-blue-700 bg-clip-text text-transparent group-hover:from-blue-700 group-hover:to-indigo-600 dark:from-slate-100 dark:via-blue-100 dark:to-sky-300 dark:group-hover:from-sky-300 dark:group-hover:to-blue-200 transition-all">
+              <p className="text-xs sm:text-sm font-extrabold tracking-tight bg-gradient-to-r from-[#0a1d3a] via-[#133b74] to-[#1d5bbf] bg-clip-text text-transparent group-hover:from-blue-700 group-hover:to-sky-600 dark:from-slate-100 dark:via-sky-100 dark:to-cyan-300 dark:group-hover:from-sky-300 dark:group-hover:to-blue-200 transition-all">
                 <span className="sm:hidden">Closing LM</span>
                 <span className="hidden sm:inline">Closing Report LM JTT08</span>
               </p>
-              <p className="text-[10px] sm:text-[11px] font-medium text-slate-400 leading-tight">
+              <p className="text-[10px] sm:text-[11px] font-semibold text-[#3b5b84] dark:text-sky-300/75 leading-tight">
                 <span className="sm:hidden">{hubName || "JTT08"}</span>
                 <span className="hidden sm:inline">Last Mile Operations Portal</span>
               </p>
@@ -173,11 +174,11 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200",
                     active
-                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm shadow-blue-600/25 -translate-y-0.5"
-                      : "text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 hover:-translate-y-0.5"
+                      ? "bg-gradient-to-r from-[#0b2347] via-[#133b74] to-[#1d549f] dark:from-blue-600 dark:to-sky-600 text-white shadow-md shadow-[#0b2347]/20 ring-1 ring-amber-300/45 dark:ring-sky-400/40 -translate-y-0.5"
+                      : "text-[#1e3a5f] dark:text-slate-200 hover:bg-white/75 dark:hover:bg-slate-800/80 hover:text-[#0a1d3a] dark:hover:text-white hover:shadow-2xs hover:-translate-y-0.5"
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className={cn("h-4 w-4", active && "text-amber-300 dark:text-sky-100")} />
                   {label}
                 </Link>
               );
@@ -190,11 +191,11 @@ export function Navbar() {
                 className={cn(
                   "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200 cursor-pointer",
                   isProdActive
-                    ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm shadow-blue-600/25 -translate-y-0.5"
-                    : "text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 hover:-translate-y-0.5"
+                    ? "bg-gradient-to-r from-[#0b2347] via-[#133b74] to-[#1d549f] dark:from-blue-600 dark:to-sky-600 text-white shadow-md shadow-[#0b2347]/20 ring-1 ring-amber-300/45 dark:ring-sky-400/40 -translate-y-0.5"
+                    : "text-[#1e3a5f] dark:text-slate-200 hover:bg-white/75 dark:hover:bg-slate-800/80 hover:text-[#0a1d3a] dark:hover:text-white hover:shadow-2xs hover:-translate-y-0.5"
                 )}
               >
-                <BarChart2 className="h-4 w-4" />
+                <BarChart2 className={cn("h-4 w-4", isProdActive && "text-amber-300 dark:text-sky-100")} />
                 Productivity
                 <ChevronDown
                   className={cn(
@@ -244,74 +245,78 @@ export function Navbar() {
                   className={cn(
                     "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200",
                     active
-                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm shadow-blue-600/25 -translate-y-0.5"
-                      : "text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 hover:-translate-y-0.5"
+                      ? "bg-gradient-to-r from-[#0b2347] via-[#133b74] to-[#1d549f] dark:from-blue-600 dark:to-sky-600 text-white shadow-md shadow-[#0b2347]/20 ring-1 ring-amber-300/45 dark:ring-sky-400/40 -translate-y-0.5"
+                      : "text-[#1e3a5f] dark:text-slate-200 hover:bg-white/75 dark:hover:bg-slate-800/80 hover:text-[#0a1d3a] dark:hover:text-white hover:shadow-2xs hover:-translate-y-0.5"
                   )}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className={cn("h-4 w-4", active && "text-amber-300 dark:text-sky-100")} />
                   {guideLink.label}
                 </Link>
               );
             })()}
           </nav>
 
-          {/* Right actions: Theme Toggle + User menu */}
+          {/* Right actions: Closing Countdown + Theme Toggle + User menu */}
           <div className="flex items-center gap-2.5 ml-auto">
+            <ClosingCountdownWidget />
+
             {/* Light / Dark Mode Toggle */}
             <button
               type="button"
               onClick={toggleTheme}
               title={isDark ? "Ubah ke Light Mode" : "Ubah ke Dark Mode"}
               aria-label="Toggle Light/Dark Mode"
-              className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:border-blue-300 hover:shadow-xs transition-all duration-200 cursor-pointer group"
+              className="relative flex items-center gap-1.5 px-3 py-2 rounded-xl border border-sky-200/90 dark:border-slate-700 bg-white/70 hover:bg-white/95 dark:bg-slate-800/80 dark:hover:bg-slate-700/90 hover:border-amber-400/75 dark:hover:border-sky-400/60 hover:shadow-xs transition-all duration-200 cursor-pointer group"
             >
               {isDark ? (
                 <>
                   <Sun className="h-4 w-4 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
-                  <span className="hidden md:inline text-xs font-semibold text-slate-700">
+                  <span className="hidden md:inline text-xs font-semibold text-slate-200">
                     Light
                   </span>
                 </>
               ) : (
                 <>
-                  <Moon className="h-4 w-4 text-slate-600 group-hover:-rotate-12 group-hover:text-blue-600 transition-all duration-300" />
-                  <span className="hidden md:inline text-xs font-semibold text-slate-700">
+                  <Moon className="h-4 w-4 text-[#1e3a5f] group-hover:-rotate-12 group-hover:text-blue-700 transition-all duration-300" />
+                  <span className="hidden md:inline text-xs font-semibold text-[#1e3a5f]">
                     Dark
                   </span>
                 </>
               )}
             </button>
 
+            <div className="hidden sm:block h-6 w-px bg-sky-300/60 dark:bg-slate-700/80" />
+
             {/* User menu */}
             <div className="relative">
             <button
               onClick={() => setUserMenuOpen((p) => !p)}
-              className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:border-blue-300 hover:shadow-xs transition-all duration-200 cursor-pointer"
+              className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-sky-200/90 dark:border-slate-700 bg-white/70 hover:bg-white/95 dark:bg-slate-800/80 dark:hover:bg-slate-700/90 hover:border-amber-400/75 dark:hover:border-sky-400/60 hover:shadow-xs transition-all duration-200 cursor-pointer"
             >
               {avatarSrc ? (
                 <img
                   src={avatarSrc}
                   alt=""
-                  className="w-7 h-7 rounded-full object-cover ring-2 ring-blue-500/20"
+                  className="w-7 h-7 rounded-full object-cover ring-2 ring-amber-400/60 dark:ring-sky-400/45"
                 />
               ) : (
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-xs">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#0f2c59] to-[#1d5bbf] flex items-center justify-center shadow-xs ring-2 ring-amber-400/50">
                   <span className="text-white font-bold text-xs">
                     {(displayName || user?.email || "U")[0].toUpperCase()}
                   </span>
                 </div>
               )}
               <div className="hidden sm:block text-left">
-                <p className="text-xs font-bold text-slate-800 leading-tight">
+                <p className="text-xs font-bold text-[#0f2544] dark:text-slate-100 leading-tight">
                   {displayName}
                 </p>
-                <p className="text-[11px] font-semibold text-blue-600 leading-tight">
+                <p className="text-[11px] font-bold text-[#134074] dark:text-amber-300 leading-tight">
                   {hubName}
                 </p>
               </div>
               <ChevronDown
                 className={cn(
-                  "h-3.5 w-3.5 text-slate-400 hidden sm:block transition-transform duration-200",
+                  "h-3.5 w-3.5 text-[#3b5b84] dark:text-slate-400 hidden sm:block transition-transform duration-200",
                   userMenuOpen && "rotate-180"
                 )}
               />

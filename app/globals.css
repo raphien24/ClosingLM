@@ -46,6 +46,8 @@ html.dark .bg-gray-50,
 html.dark .bg-gray-50\/80,
 html.dark .bg-gray-50\/60,
 html.dark .bg-slate-50,
+html.dark .bg-slate-50\/90,
+html.dark .bg-slate-50\/80,
 html.dark .bg-slate-50\/70,
 html.dark .bg-slate-50\/50 {
   background-color: #0f172a !important;
@@ -238,6 +240,37 @@ html.dark .bg-blue-100 {
   background-color: rgba(30, 58, 138, 0.52) !important;
   color: #93c5fd !important;
   border-color: rgba(96, 165, 250, 0.32) !important;
+}
+html.dark .bg-teal-50 {
+  background-color: rgba(19, 78, 74, 0.45) !important;
+}
+html.dark .bg-cyan-50 {
+  background-color: rgba(21, 94, 117, 0.35) !important;
+}
+html.dark .bg-indigo-50 {
+  background-color: rgba(49, 46, 129, 0.35) !important;
+}
+html.dark .bg-indigo-100 {
+  background-color: rgba(55, 48, 163, 0.48) !important;
+  color: #c7d2fe !important;
+}
+html.dark .text-teal-800 {
+  color: #5eead4 !important;
+}
+html.dark .text-cyan-700 {
+  color: #67e8f9 !important;
+}
+html.dark .text-indigo-600 {
+  color: #a5b4fc !important;
+}
+html.dark .border-teal-200 {
+  border-color: rgba(45, 212, 191, 0.32) !important;
+}
+html.dark .border-cyan-200 {
+  border-color: rgba(34, 211, 238, 0.30) !important;
+}
+html.dark .border-indigo-200 {
+  border-color: rgba(129, 140, 248, 0.32) !important;
 }
 
 html.dark .text-red-600,
@@ -586,4 +619,160 @@ html.dark .hover-lift:hover {
 }
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Maritime / Sailor Theme Animations (Berlaku di Light Mode & Dark Mode) */
+@keyframes waveSlide {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes waveSlideReverse {
+  0% {
+    transform: translate3d(-50%, 0, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes shipBob {
+  0%, 100% {
+    transform: translateY(0px) rotate(-2.5deg);
+  }
+  50% {
+    transform: translateY(-3.5px) rotate(2.5deg);
+  }
+}
+
+@keyframes compassNeedle {
+  0%, 100% {
+    transform: rotate(-10deg);
+  }
+  50% {
+    transform: rotate(12deg);
+  }
+}
+
+@keyframes helmSpinSlow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-wave-slide {
+  animation: waveSlide 14s linear infinite;
+}
+
+.animate-wave-slide-reverse {
+  animation: waveSlideReverse 20s linear infinite;
+}
+
+.animate-ship-bob {
+  animation: shipBob 4.2s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.animate-compass-needle {
+  animation: compassNeedle 5.5s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+.animate-helm-spin {
+  animation: helmSpinSlow 28s linear infinite;
+  transform-origin: center center;
+}
+
+@keyframes beaconSweep {
+  0%, 100% {
+    opacity: 0.35;
+    transform: rotate(-18deg);
+  }
+  50% {
+    opacity: 0.9;
+    transform: rotate(18deg);
+  }
+}
+
+.animate-beacon-sweep {
+  animation: beaconSweep 4s ease-in-out infinite;
+  transform-origin: 16px 10px;
+}
+
+@keyframes pennantWave {
+  0%, 100% {
+    transform: skewY(0deg) scaleX(1);
+  }
+  50% {
+    transform: skewY(-6deg) scaleX(0.94);
+  }
+}
+
+.animate-pennant-wave {
+  animation: pennantWave 2.8s ease-in-out infinite;
+  transform-origin: 10px 8px;
+}
+
+@keyframes sonarSweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-sonar-sweep {
+  animation: sonarSweep 6.5s linear infinite;
+  transform-origin: 16px 15px;
+}
+
+@keyframes chronoHandSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-chrono-spin {
+  animation: chronoHandSpin 10s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes tideShimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+.animate-tide-shimmer {
+  animation: tideShimmer 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-wave-slide,
+  .animate-wave-slide-reverse,
+  .animate-ship-bob,
+  .animate-compass-needle,
+  .animate-helm-spin,
+  .animate-beacon-sweep,
+  .animate-pennant-wave,
+  .animate-sonar-sweep,
+  .animate-chrono-spin,
+  .animate-tide-shimmer {
+    animation: none;
+  }
 }

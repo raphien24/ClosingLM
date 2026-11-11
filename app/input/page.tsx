@@ -19,11 +19,8 @@ import {
   Upload,
   CheckCircle2,
   Plus,
-  ClipboardPaste,
   Calendar,
   History,
-  Sparkles,
-  Edit3,
   FileSpreadsheet,
   ArrowRight,
   Loader2,
@@ -32,6 +29,10 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import {
+  MaritimeWaveBackdrop,
+  CargoLogbookIcon,
+} from "@/components/productivity/MaritimeAnimations";
 
 interface OcrRow extends Partial<ClosingData> {
   anomalies: AnomalyField[];
@@ -143,8 +144,6 @@ function UnifiedInputContent() {
   const [pageState, setPageState] = useState<PageState>("idle");
   const [overwriteModal, setOverwriteModal] = useState(false);
   const [pendingData, setPendingData] = useState<ClosingData | null>(null);
-  const [pastedText, setPastedText] = useState("");
-  const [showTextBox, setShowTextBox] = useState(false);
   const [previousData, setPreviousData] = useState<ClosingData | null>(null);
   const [recentHistory, setRecentHistory] = useState<ClosingData[]>([]);
 const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
@@ -361,37 +360,6 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     window.addEventListener("paste", handler);
     return () => window.removeEventListener("paste", handler);
   }, [activeTab, detectedDate, mergeIntoOcrRow, screenshots, pageState]);
-
-  const handleParseManualText = () => {
-    if (!pastedText.trim()) {
-      toast.error("Tempel teks dari halaman FMS terlebih dahulu.");
-      return;
-    }
-    const psDates = detectParcelSweeperDates(pastedText);
-    const parsed = parseOcrText(pastedText);
-
-    const psErr = getParcelSweeperDateError(
-      psDates,
-      detectedDate,
-      "Ditolak: Tanggal pada halaman Parcel Sweeper"
-    );
-    if (psErr) {
-      toast.error(psErr, { duration: 6000 });
-      return;
-    }
-
-    const countFields = Object.values(parsed.row).filter(
-      (v) => v != null
-    ).length;
-    if (countFields === 0) {
-      toast.error("Tidak ditemukan angka FMS pada teks yang ditempel.");
-      return;
-    }
-    mergeIntoOcrRow(parsed.row);
-    setPastedText("");
-    setShowTextBox(false);
-    toast.success(`${countFields} angka berhasil diekstrak dari teks FMS!`);
-  };
 
   const runOcrForImages = async (targetImages: string[]) => {
     if (!targetImages.length) {
@@ -790,15 +758,6 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     );
   };
 
-  const handleStartEmptyForm = () => {
-    setOcrRow({
-      nama_hub: hubName || "",
-      tanggal: detectedDate,
-      anomalies: [],
-    });
-    setPageState("preview");
-  };
-
   const handleLoadHistoryItem = (item: ClosingData) => {
     setDetectedDate(item.tanggal);
     setOcrRow({ ...item, anomalies: [] });
@@ -824,64 +783,59 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
   };
 
   return (
-    <div className="w-full px-3 sm:px-6 py-5 space-y-6">
-      {/* Header Utama Pusat Input Data */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-              activeTab === "closing" ? "bg-red-100" : "bg-blue-100"
-            }`}
-          >
-            {activeTab === "closing" ? (
-              <Upload className="h-5 w-5 text-red-600" />
-            ) : (
-              <FileSpreadsheet className="h-5 w-5 text-blue-600" />
-            )}
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">
-              Pusat Input Data Harian
-            </h1>
-            <p className="text-sm text-gray-500">
-              Hub:{" "}
-              <span
-                className={`font-semibold ${
-                  activeTab === "closing" ? "text-red-600" : "text-blue-600"
-                }`}
-              >
-                {hubName}
-              </span>
-              {" · "}Pilih jenis laporan yang ingin diinput di bawah ini
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 bg-white rounded-xl px-3.5 py-2 border border-gray-200 shadow-sm">
-          <Calendar
-            className={`h-4 w-4 ${
-              activeTab === "closing" ? "text-red-500" : "text-blue-500"
-            }`}
-          />
-          <span className="text-xs font-medium text-gray-500">Hari Ini:</span>
-          <span className="text-sm font-bold text-gray-900">
-            {formatDate(todayWIB())}
-          </span>
-        </div>
-      </div>
-
-      {/* Guided 2-Mode Switcher Cards (Jelas & Tidak Membingungkan) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Card Mode 1: Input Closing Harian */}
-        <button
-          type="button"
-          onClick={() => switchTab("closing")}
-          className={`text-left rounded-2xl p-4 border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
+    <div className="min-h-screen bg-[#e8eef5] dark:bg-transparent">
+      <div className="w-full px-3 sm:px-6 py-5 space-y-6">
+        {/* Header Utama Pusat Input Data — Captain's Cargo & Logbook Dock */}
+        <div
+          className={`relative overflow-hidden rounded-2xl text-white px-5 py-4 shadow-lg border transition-colors duration-300 ${
             activeTab === "closing"
-              ? "border-red-600 bg-red-50/70 shadow-md ring-2 ring-red-500/20"
-              : "border-gray-200 bg-white hover:border-red-200 hover:bg-gray-50/60"
+              ? "bg-gradient-to-r from-[#0e1f3d] via-[#1c294b] to-[#4a1829] dark:from-slate-900 dark:via-[#1e213d] dark:to-[#3b1525] border-rose-900/35 dark:border-slate-700/80"
+              : "bg-gradient-to-r from-[#0b1f3a] via-[#113163] to-[#1a3f80] dark:from-slate-900 dark:via-[#0f2447] dark:to-[#132c57] border-sky-900/35 dark:border-slate-700/80"
           }`}
         >
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] ${
+              activeTab === "closing"
+                ? "bg-gradient-to-r from-rose-400/75 via-amber-300/75 to-rose-400/75"
+                : "bg-gradient-to-r from-amber-400/75 via-sky-300/75 to-amber-400/75"
+            }`}
+          />
+          <MaritimeWaveBackdrop />
+
+          <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <CargoLogbookIcon />
+              <div>
+                <h1 className="text-xl font-extrabold tracking-tight text-white">
+                  Pusat Input Data Harian
+                </h1>
+                <p className="text-xs sm:text-sm text-sky-100/90 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <span>Hub:</span>
+                  <span className="font-bold text-amber-300">{hubName}</span>
+                  <span className="text-sky-300/50">·</span>
+                  <span>
+                    {activeTab === "closing"
+                      ? "Logbook Harian — Closing & Parcel Sweeper"
+                      : "Muatan Armada — Data Produktivitas Kurir FMS"}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Guided 2-Mode Switcher Cards (Jelas & Tidak Membingungkan) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Card Mode 1: Input Closing Harian */}
+          <button
+            type="button"
+            onClick={() => switchTab("closing")}
+            className={`text-left rounded-2xl p-4 border-2 border-t-[3px] transition-all cursor-pointer flex items-start gap-3.5 ${
+              activeTab === "closing"
+                ? "border-rose-500 border-t-rose-600 bg-gradient-to-br from-[#fff7f8] to-[#fdebed] dark:from-[#261421] dark:to-[#1e1b2e] shadow-md ring-2 ring-rose-500/20"
+                : "border-slate-300/80 dark:border-slate-700/80 border-t-rose-300 dark:border-t-slate-600 bg-white/95 hover:border-rose-300 hover:bg-gray-50/60"
+            }`}
+          >
           <div
             className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 font-bold text-sm transition-colors ${
               activeTab === "closing"
@@ -925,10 +879,10 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
         <button
           type="button"
           onClick={() => switchTab("productivity")}
-          className={`text-left rounded-2xl p-4 border-2 transition-all cursor-pointer flex items-start gap-3.5 ${
+          className={`text-left rounded-2xl p-4 border-2 border-t-[3px] transition-all cursor-pointer flex items-start gap-3.5 ${
             activeTab === "productivity"
-              ? "border-blue-600 bg-blue-50/70 shadow-md ring-2 ring-blue-500/20"
-              : "border-gray-200 bg-white hover:border-blue-200 hover:bg-gray-50/60"
+              ? "border-blue-500 border-t-blue-600 bg-gradient-to-br from-[#f5f9ff] to-[#e7f0fe] dark:from-[#122244] dark:to-[#172a54] shadow-md ring-2 ring-blue-500/20"
+              : "border-slate-300/80 dark:border-slate-700/80 border-t-blue-300 dark:border-t-slate-600 bg-white/95 hover:border-blue-300 hover:bg-gray-50/60"
           }`}
         >
           <div
@@ -977,80 +931,6 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       {/* TAB 1: INPUT CLOSING HARIAN                                  */}
       {/* ============================================================ */}
       <div className={activeTab === "closing" ? "space-y-6" : "hidden"}>
-        {/* Tips Akurasi 100% Tanpa OCR */}
-        <div className="tips-banner bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Sparkles className="h-4 w-4 text-emerald-700" />
-            </div>
-            <div className="text-xs text-emerald-900 space-y-0.5">
-              <p className="font-bold text-sm">
-                Mode Input Closing Harian — Cara Cepat &amp; Akurasi 100% (Tanpa
-                Tunggu OCR):
-              </p>
-              <p>
-                Di halaman web FMS, tekan{" "}
-                <kbd className="px-1.5 py-0.5 bg-white border border-emerald-300 rounded font-mono">
-                  Ctrl+A
-                </kbd>{" "}
-                lalu{" "}
-                <kbd className="px-1.5 py-0.5 bg-white border border-emerald-300 rounded font-mono">
-                  Ctrl+C
-                </kbd>
-                , kemudian pindah ke halaman ini dan tekan{" "}
-                <kbd className="px-1.5 py-0.5 bg-white border border-emerald-300 rounded font-mono">
-                  Ctrl+V
-                </kbd>
-                . Angka langsung terisi instan!
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowTextBox((p) => !p)}
-            >
-              <ClipboardPaste className="h-3.5 w-3.5" />
-              {showTextBox ? "Tutup Kotak Teks" : "Tempel Teks Manual"}
-            </Button>
-            {pageState === "idle" && (
-              <Button variant="ghost" size="sm" onClick={handleStartEmptyForm}>
-                <Edit3 className="h-3.5 w-3.5" /> Isi Manual
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Kotak tempel teks FMS manual */}
-        {showTextBox && (
-          <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-4 space-y-3">
-            <p className="text-xs font-medium text-gray-700">
-              Salin seluruh teks dari halaman FMS (Operation Progress /
-              Ringkasan Hub) lalu tempel di bawah ini:
-            </p>
-            <textarea
-              value={pastedText}
-              onChange={(e) => setPastedText(e.target.value)}
-              rows={4}
-              placeholder="Paste teks dari FMS di sini..."
-              className="w-full rounded-xl border border-gray-200 p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-400"
-            />
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowTextBox(false)}
-              >
-                Batal
-              </Button>
-              <Button size="sm" onClick={handleParseManualText}>
-                Ekstrak Angka dari Teks
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Done */}
         {pageState === "done" ? (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-12 text-center">
@@ -1085,30 +965,35 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
         ) : (
           <>
             {/* Pemilih Tanggal Closing */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-2.5">
-                <Calendar className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-l-4 border-l-rose-600 dark:border-l-rose-500 shadow-sm p-4 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-100/90 dark:bg-rose-900/40 flex items-center justify-center flex-shrink-0 mt-0.5 ring-1 ring-rose-200 dark:ring-rose-700/50">
+                  <Calendar className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+                </div>
                 <div className="text-xs">
                   <div className="flex flex-wrap items-center gap-2">
                     <label
                       htmlFor="closing-date-picker"
-                      className="font-bold text-sm text-gray-900"
+                      className="font-bold text-sm sm:text-base text-gray-900"
                     >
-                      Tanggal Closing: {formatDate(detectedDate)}
+                      Tanggal Closing:
                     </label>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg text-sm font-extrabold bg-rose-100 text-rose-800 border border-rose-200 tabular-nums">
+                      {formatDate(detectedDate)}
+                    </span>
                     {detectedDate !== todayWIB() && (
                       <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
                         Tanggal Lain / Susulan
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-500 mt-0.5">
+                  <p className="text-gray-500 mt-1">
                     Default hari ini. Ubah tanggal jika ingin menginput atau
                     memperbaiki closing tanggal sebelumnya.
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2.5 flex-shrink-0">
                 {detectedDate !== todayWIB() && (
                   <Button
                     type="button"
@@ -1119,19 +1004,21 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                     Hari Ini
                   </Button>
                 )}
-                <input
-                  id="closing-date-picker"
-                  type="date"
-                  value={detectedDate}
-                  max={todayWIB()}
-                  onChange={(e) => handleClosingDateChange(e.target.value)}
-                  className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-red-400"
-                />
+                <div className="rounded-xl bg-gradient-to-r from-rose-100/90 via-amber-100/70 to-rose-100/90 dark:from-rose-900/50 dark:via-amber-900/30 dark:to-rose-900/50 p-1 border-2 border-rose-500/80 dark:border-rose-400/75 shadow-sm ring-2 ring-rose-500/15">
+                  <input
+                    id="closing-date-picker"
+                    type="date"
+                    value={detectedDate}
+                    max={todayWIB()}
+                    onChange={(e) => handleClosingDateChange(e.target.value)}
+                    className="px-4 py-2 text-base sm:text-lg font-extrabold tracking-wide rounded-lg border-0 bg-white text-rose-950 focus:outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer tabular-nums"
+                  />
+                </div>
               </div>
             </div>
 
             {/* Step 1 — Screenshot zone */}
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+            <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-rose-600 dark:border-t-rose-500 shadow-sm p-6">
               <div className="flex items-center gap-2 mb-4">
                 <span className="w-6 h-6 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
                   1
@@ -1195,7 +1082,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
 
             {/* Step 2 — Preview & simpan */}
             {(pageState === "preview" || pageState === "saving") && ocrRow && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+              <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-rose-600 dark:border-t-rose-500 shadow-sm p-6">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
@@ -1284,7 +1171,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
 
             {/* Riwayat Singkat 7 Hari Terakhir Hub Ini */}
             {recentHistory.length > 0 && (
-              <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
+              <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-slate-700 dark:border-t-slate-500 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <History className="h-4 w-4 text-gray-500" />
@@ -1368,6 +1255,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           onStatusChange={setProdStatus}
           onSwitchToClosing={() => switchTab("closing")}
         />
+      </div>
       </div>
     </div>
   );

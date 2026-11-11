@@ -125,7 +125,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
       {/* Card 1: Hub Belum Mengisi Report */}
-      <div className="hover-lift bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-col">
+      <div className="hover-lift bg-gradient-to-br from-[#fff9fa] to-[#fdf0f2] dark:from-[#1e293b] dark:to-[#281921] rounded-2xl border border-rose-200/80 dark:border-slate-700/80 border-t-[3px] border-t-rose-500 shadow-sm p-4 flex flex-col">
         <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
             <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">
@@ -175,7 +175,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
       </div>
 
       {/* Card 2: Hub dengan Delivering Belum Clear */}
-      <div className="hover-lift bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-col">
+      <div className="hover-lift bg-gradient-to-br from-[#fffdf8] to-[#fdf5e2] dark:from-[#1e293b] dark:to-[#262015] rounded-2xl border border-amber-200/80 dark:border-slate-700/80 border-t-[3px] border-t-amber-500 shadow-sm p-4 flex flex-col">
         <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
             <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">
@@ -226,7 +226,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
       </div>
 
       {/* Card 3: TOP 5 Backlog Paling Tinggi */}
-      <div className="hover-lift bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-col">
+      <div className="hover-lift bg-gradient-to-br from-[#f8fafc] to-[#edf2f7] dark:from-[#1e293b] dark:to-[#231922] rounded-2xl border border-slate-300/80 dark:border-slate-700/80 border-t-[3px] border-t-rose-600 shadow-sm p-4 flex flex-col">
         <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
             <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">
@@ -286,7 +286,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
       </div>
 
       {/* Card 4: TOP 5 Expedite */}
-      <div className="hover-lift bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-col">
+      <div className="hover-lift bg-gradient-to-br from-[#fffaf6] to-[#fdf1e6] dark:from-[#1e293b] dark:to-[#281d15] rounded-2xl border border-orange-200/80 dark:border-slate-700/80 border-t-[3px] border-t-orange-500 shadow-sm p-4 flex flex-col">
         <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
             <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">
@@ -346,7 +346,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
       </div>
 
       {/* Card 5: Daftar Hub Masih Ada Gantungan Onhold */}
-      <div className="hover-lift bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-col">
+      <div className="hover-lift bg-gradient-to-br from-[#faf8ff] to-[#f1ecfe] dark:from-[#1e293b] dark:to-[#221a30] rounded-2xl border border-purple-200/80 dark:border-slate-700/80 border-t-[3px] border-t-purple-500 shadow-sm p-4 flex flex-col">
         <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
           <div>
             <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">

@@ -11,7 +11,7 @@ import {
   getDefaultTarget,
 } from "@/types/productivity";
 import { format, startOfWeek } from "date-fns";
-import { formatDateForSheet, nowWIBTimestamp, serialToYMD } from "./dateUtils";
+import { formatDateForSheet, nowWIBTimestamp, parseTimestamp, serialToYMD } from "./dateUtils";
 import { parseSheetNumber } from "./utils";
 import { normalizeContractType, normalizeVehicleType } from "./fmsParser";
 
@@ -393,6 +393,38 @@ export async function getRawData(hubName: string): Promise<CourierRecord[]> {
     .map((row) => rowToRecord(row, hubName));
 }
 
+/** Hitung jumlah kurir unik per tanggal (YYYY-MM-DD) yang sudah tersimpan di database RAW hub. */
+export async function getProductivityDatesCoverage(hubName: string): Promise<{
+  dates: Record<string, number>;
+  lastDate: string | null;
+}> {
+  const allRaw = await getRawData(hubName);
+  const couriersByDate = new Map<string, Set<string>>();
+
+  for (const r of allRaw) {
+    if (!r.courier_id) continue;
+    const ymd = normalizeDateKey(r.date);
+    if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue;
+    let set = couriersByDate.get(ymd);
+    if (!set) {
+      set = new Set<string>();
+      couriersByDate.set(ymd, set);
+    }
+    set.add(r.courier_id.trim());
+  }
+
+  const dates: Record<string, number> = {};
+  let lastDate: string | null = null;
+  for (const [ymd, set] of couriersByDate.entries()) {
+    dates[ymd] = set.size;
+    if (!lastDate || ymd > lastDate) {
+      lastDate = ymd;
+    }
+  }
+
+  return { dates, lastDate };
+}
+
 // ── KPI Metrics ──────────────────────────────────────────────
 
 export async function getKpiMetrics(
@@ -411,6 +443,21 @@ export async function getKpiMetrics(
 
   const { hasL15D, uniqueDaysCount } = checkHubL15D(allRaw);
   const firstJoinMap = buildCourierFirstJoinMap(allRaw);
+
+  // Cari tanggal data terbaru & timestamp upload terbaru di seluruh database hub (RAW_<HUB>)
+  let latestDataDate: string | null = null;
+  let latestUploadDateObj: Date | null = null;
+  for (const r of allRaw) {
+    const ymd = normalizeDateKey(r.date);
+    if (ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+      if (!latestDataDate || ymd > latestDataDate) latestDataDate = ymd;
+    }
+    const ts = parseTimestamp(r.submitted_at);
+    if (ts && (!latestUploadDateObj || ts.getTime() > latestUploadDateObj.getTime())) {
+      latestUploadDateObj = ts;
+    }
+  }
+  const latestUploadAt = latestUploadDateObj ? nowWIBTimestamp(latestUploadDateObj) : null;
 
   // Cek apakah record berada dalam Grace Period 14 hari
   const isGracePeriodRecord = (r: CourierRecord): boolean => {
@@ -662,6 +709,11 @@ export async function getKpiMetrics(
     hasL15D,
     dataDaysCount: uniqueDaysCount,
     excludedNewCount: excludedNewCouriers.size,
+    databaseInfo: {
+      latestDataDate,
+      latestUploadAt,
+      totalDays: uniqueDaysCount,
+    },
   };
 }
 
@@ -867,6 +919,21 @@ export async function getMonthlyMetrics(
 
   const { hasL15D, uniqueDaysCount } = checkHubL15D(allRaw);
   const firstJoinMap = buildCourierFirstJoinMap(allRaw);
+
+  // Cari tanggal data terbaru & timestamp upload terbaru di seluruh database hub (RAW_<HUB>)
+  let latestDataDate: string | null = null;
+  let latestUploadDateObj: Date | null = null;
+  for (const r of allRaw) {
+    const ymd = normalizeDateKey(r.date);
+    if (ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+      if (!latestDataDate || ymd > latestDataDate) latestDataDate = ymd;
+    }
+    const ts = parseTimestamp(r.submitted_at);
+    if (ts && (!latestUploadDateObj || ts.getTime() > latestUploadDateObj.getTime())) {
+      latestUploadDateObj = ts;
+    }
+  }
+  const latestUploadAt = latestUploadDateObj ? nowWIBTimestamp(latestUploadDateObj) : null;
 
   const allMonthActive = dedup(filterActive(allRaw, { start: monthStart, end: monthEnd }));
 

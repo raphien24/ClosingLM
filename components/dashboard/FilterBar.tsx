@@ -49,7 +49,7 @@ export function FilterBar({
     selectedDate !== today || selectedHubs.length > 0;
 
   return (
-    <div className="relative z-30 bg-white rounded-xl border border-gray-200 px-4 py-3 shadow-sm">
+    <div className="relative z-30 bg-white rounded-xl border border-slate-300/75 dark:border-slate-700/80 border-l-4 border-l-[#0f4c5c] dark:border-l-cyan-500 px-4 py-3 shadow-sm">
       <div className="flex flex-wrap items-center gap-3">
         {/* Date Picker */}
         <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border border-gray-200">
