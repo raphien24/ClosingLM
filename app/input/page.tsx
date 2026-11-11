@@ -399,15 +399,21 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
         for (const k of Object.keys(rowRec)) {
           let v1 = rowRec[k];
           const v2 = altRec[k];
-          // Bacaan 1 gagal tapi bacaan 2 (biner) berhasil -> isi dari bacaan 2 (keyakinan rendah).
-          let filled = false;
+          if (v1 == null && v2 == null) continue;
+          // Bacaan 1 gagal tapi bacaan 2 (biner) berhasil -> isi dari bacaan 2.
+          let c: number;
           if (v1 == null && v2 != null) {
             rowRec[k] = v2;
             v1 = v2;
-            filled = true;
+            c = Math.min(baseConf || 70, 70);
+          } else if (v2 == null) {
+            c = Math.min(baseConf || 75, 75);
+          } else if (String(v1) === String(v2)) {
+            c = Math.max(baseConf, 80);
+          } else {
+            // Pass 1 dan Pass 2 menghasilkan angka berbeda -> tandai rendah agar dicek ulang.
+            c = Math.min(baseConf || 55, 55);
           }
-          const sama = v1 != null && String(v1) === String(v2);
-          const c = filled ? Math.min(baseConf, 55) : sama ? baseConf : Math.min(baseConf, 60);
           fieldConf[k] = Math.max(fieldConf[k] ?? 0, c);
         }
         if (!isParcelSweeperPage(rawText)) {
@@ -484,7 +490,15 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       }
 
       const merged = mergeOcrBatches(batches);
-      setOcrConfidence(Math.round(totalConf / texts.length));
+      const mergedRec = (merged.row || {}) as Record<string, unknown>;
+      const populatedConfs = Object.keys(mergedRec)
+        .filter((k) => mergedRec[k] != null && fieldConf[k] != null)
+        .map((k) => fieldConf[k]);
+      const avgConf =
+        populatedConfs.length > 0
+          ? Math.round(populatedConfs.reduce((sum, v) => sum + v, 0) / populatedConfs.length)
+          : Math.round(totalConf / texts.length);
+      setOcrConfidence(avgConf);
       setFieldConfidence(fieldConf);
       setOcrEngine("tesseract");
       mergeIntoOcrRow(merged.row || {});

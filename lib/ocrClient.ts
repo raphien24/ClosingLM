@@ -229,14 +229,12 @@ export async function runOcrLocally(
     const bin200 = await binarizeForOcr(processed, 200);
     const r200 = await worker.recognize(processed);
     const r225 = await worker.recognize(bin200);
-    const norm = (s: string) => s.replace(/ +/g, " ").trim();
-    const cocok = norm(r200.data.text) === norm(r225.data.text);
+    const c1 = r200.data.confidence ?? 0;
+    const c2 = r225.data.confidence ?? 0;
     texts.push(r200.data.text);
     altTexts.push(r225.data.text);
     confidences.push(
-      cocok
-        ? Math.round(((r200.data.confidence ?? 0) + (r225.data.confidence ?? 0)) / 2)
-        : 60
+      c1 && c2 ? Math.round((c1 + c2) / 2) : Math.round(c1 || c2)
     );
 
     try {
@@ -270,8 +268,8 @@ export async function runOcrLocally(
         /\bA[sS][a-z]{2,5}[gn]g\b[^\n]*\d/i.test(combinedMain) &&
         /\bA[sm]{1,2}[a-z]{1,4}n[aeo]?d\b[^\n]*\d/i.test(combinedMain);
       const hasFhcRatios =
-        /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){2}/i.test(combinedMain) &&
-        /(?:4|A)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){2}/i.test(combinedMain);
+        /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){3}/i.test(combinedMain) &&
+        /(?:4|A)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){3}/i.test(combinedMain);
       const isDashFhc = /-\s*\/\s*-|Attendance\s+Rate\s*[-~]\s*%/i.test(combinedMain);
 
       const regions: [number, number, number, number][] = [];
@@ -287,6 +285,12 @@ export async function runOcrLocally(
             if (!cropUrl) continue;
             const res = await worker.recognize(cropUrl);
             if (res.data.text) crops.push(res.data.text);
+            // Untuk Fleet Head Counts (kuadran kiri-bawah), coba binarized 200 bila rasio sel hilang '/'
+            if (sy >= 0.49) {
+              const binCropUrl = await binarizeForOcr(cropUrl, 200);
+              const resBin = await worker.recognize(binCropUrl);
+              if (resBin.data.text) crops.push(resBin.data.text);
+            }
           }
         } catch {
           // abaikan error crop fallback
