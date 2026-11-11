@@ -267,10 +267,23 @@ export async function runOcrLocally(
         /\bR[eo][ce][aeiu]{1,3}[tv]?[ea]?d\b[^\n]*\d/i.test(combinedMain) &&
         /\bA[sS][a-z]{2,5}[gn]g\b[^\n]*\d/i.test(combinedMain) &&
         /\bA[sm]{1,2}[a-z]{1,4}n[aeo]?d\b[^\n]*\d/i.test(combinedMain);
-      const hasFhcRatios =
-        /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){3}/i.test(combinedMain) &&
-        /(?:4|A)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){3}/i.test(combinedMain);
-      const isDashFhc = /-\s*\/\s*-|Attendance\s+Rate\s*[-~]\s*%/i.test(combinedMain);
+      // Pastikan rasio Fleet Productivity ("Delivered / Handed Over", "Order") tidak memicu skip crop Fleet Head Counts
+      const stripProd = (txt: string) =>
+        txt
+          .replace(/(?:\b\d\s+)?Fleet\s+Productivity[\s\S]*/i, "")
+          .split(/\r?\n/)
+          .map((l) => {
+            const cut = l.search(/Delivered\s*\/\s*Handed|\b\d+\s*Order\b/i);
+            return cut !== -1 ? l.slice(0, cut) : l;
+          })
+          .join("\n");
+      const fhcTexts = [stripProd(r200.data.text), stripProd(r225.data.text)];
+      const hasFhcRatios = fhcTexts.some(
+        (t) =>
+          /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){3}/i.test(t) &&
+          /(?:4|A)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){3}/i.test(t)
+      );
+      const isDashFhc = /-\s*\/\s*-|Attendance\s+Rate\s*[-~]\s*%/i.test(fhcTexts.join("\n"));
 
       const regions: [number, number, number, number][] = [];
       if (!hasOnHoldNums) regions.push([0.46, 0.22, 0.54, 0.40]);

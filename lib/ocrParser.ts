@@ -399,12 +399,12 @@ function extractFleetHeadCounts(text: string): {
         if (prodCut !== -1) left = left.slice(0, prodCut);
         // Jika header "Actual/Schedule" sejajar dengan baris "2WH/4WH/Lainnya" milik Fleet Productivity di kanan, buang bagian kanan
         if (/Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}/i.test(left)) {
-          const rightTableCut = left.search(/[ \t]+(?:(?:2|Z)[80B]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b/i);
+          const rightTableCut = left.search(/[ \t]+(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b/i);
           if (rightTableCut !== -1) left = left.slice(0, rightTableCut);
         }
         // Jika di baris yang sama ada 2WH/4WH/Lainnya milik Fleet Productivity setelah kolom Head Counts, potong di kemunculan ke-2
         const secondRowLabel = left.match(
-          /^([\s\S]*?\b(?:(?:2|Z)[80B]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b[\s\S]*?)[ \t]+(?=(?:(?:2|Z)[80B]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b)/i
+          /^([\s\S]*?\b(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b[\s\S]*?)[ \t]+(?=(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b)/i
         );
         if (secondRowLabel) left = secondRowLabel[1];
         leftLines.push(left);
@@ -456,7 +456,7 @@ function extractFleetHeadCounts(text: string): {
   let mitraTotal: number | null = null;
   const hdrLineMatch =
     hcNorm.match(/De[a-z]{3,8}\b(?![^\n]*Actual)[^\n]*\n\s*(\d{1,3}(?:\s+\d{1,3}){0,2})(?!\s*\/)\b/i) ??
-    hcNorm.match(/\n[ \t]*(\d{1,3}[ \t]+\d{1,3}[ \t]+\d{1,3})[ \t]*\r?\n\s*[^\n]*(?:Att|Ada|An|Ate|Ame|Lte|Adm)[a-z]{3,10}/i);
+    hcNorm.match(/\n[ \t]*(\d{1,3}[ \t]+\d{1,3}[ \t]+\d{1,3})[ \t]*\r?\n\s*[^\n]*(?:(?:Att|Ada|An|Ate|Ame|Lte|Adm)[a-z]{3,10}|100[.,]?\d{1,2}\s*%)/i);
   if (hdrLineMatch) {
     const hdrNums = hdrLineMatch[1].trim().split(/\s+/).map((x) => parseInt(x, 10));
     if (hdrNums[0] != null && !isNaN(hdrNums[0])) dedicatedTotal = hdrNums[0];
@@ -533,7 +533,7 @@ function extractFleetHeadCounts(text: string): {
   const ROW4_PAT = "(?:(?:^|[^A-Za-z])(?:4|A)(?:[A-Z]?[ \\t]*W[ \\t]*H|[nr][ \\t]*H)|(?:^|[^0-9A-Za-z])[aA][ \\t]*H(?=[ \\t\\r\\n\\d/|]|$))";
   const m2wh = hcNorm.match(
     new RegExp(
-      `(?:(?:2|Z)(?:[ \\t]*W[ \\t]*H|[80B][ \\t]*H)|(?:^|[^4Aa0-9A-Za-z])W[ \\t]*H(?=[ \\t\\r\\n\\d/|]|$))([\\s\\S]{0,600}?)(?:${ROW4_PAT}|Lainnya|Lawr[a-z]{1,4}|Dedicated\\s+${ACT_PAT}|${KP_PAT}\\s+${ACT_PAT}|${MITRA_PAT}\\s+${ACT_PAT}|$)`,
+      `(?:(?:2|Z)(?:[ \\t]*W[ \\t]*H|[809BNM][ \\t]*H)|(?:^|[^4Aa0-9A-Za-z])W[ \\t]*H(?=[ \\t\\r\\n\\d/|]|$))([\\s\\S]{0,600}?)(?:${ROW4_PAT}|Lainnya|Lawr[a-z]{1,4}|Dedicated\\s+${ACT_PAT}|${KP_PAT}\\s+${ACT_PAT}|${MITRA_PAT}\\s+${ACT_PAT}|$)`,
       "i"
     )
   );
@@ -572,6 +572,28 @@ function extractFleetHeadCounts(text: string): {
   const lastNonEmptyLine = (s: string) =>
     s.split(/\n/).map((l) => l.trim()).filter(Boolean).slice(-1)[0] ?? "";
   const ROW_LABEL_IN_BLOCK = /\bDedicated\b|\b(?:2|Z)?[ \t]*W[ \t]*H\b|\b(?:4|A)[ \t]*W[ \t]*H\b|Attendance/i;
+
+  if (result.dedicated_2wh === null) {
+    const dStop = `${ROW4_PAT}|Lainnya|${KP_PAT}|${MITRA_PAT}|To\\s+Handover|To\\s+Deliver|Fleet\\s+status|Selesai|Attendance|$`;
+    const dMatch = hcNorm.match(
+      new RegExp(
+        `(?:^|\\n)[^\\n]{0,20}(?![^\\n]*(?:Vehicle|${KP_PAT}|${MITRA_PAT}))De[a-z]{3,9}\\s+${ACT_PAT}[^\\n]*\\n([\\s\\S]{0,260}?)(?=${dStop})`,
+        "i"
+      )
+    );
+    if (dMatch && !/\bAttendance\b|\bKurir\b|\bMitra\b/i.test(dMatch[1])) {
+      const ratios = [...dMatch[1].matchAll(RATIO_RE)];
+      if (ratios[0]) {
+        result.dedicated_2wh = ratioNum(ratios[0][1]);
+      } else {
+        const numLine = dMatch[1].split(/\n/).map((l) => l.trim()).find((l) => /\d/.test(l) && !/%/.test(l));
+        if (numLine) {
+          const val = parseHeadCountCell(numLine, dedicatedTotal);
+          if (val !== null) result.dedicated_2wh = val;
+        }
+      }
+    }
+  }
 
   if (result.kurir_plus_2wh === null) {
     const kpStop = `(?:^|\\n)[ \\t]*${MITRA_PAT}\\b|${MITRA_PAT}\\s+${ACT_PAT}|To\\s+Deliver|Fleet\\s+status|Selesai|Attendance|$`;
