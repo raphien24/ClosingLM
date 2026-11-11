@@ -12,11 +12,11 @@ function Card({ title, value, subtitle, icon: Icon, color, isLoading }: {
   isLoading?: boolean;
 }) {
   const c = {
-    blue:   { bg: "bg-white border-slate-200/80 hover:border-blue-300",    icon: "bg-blue-50 text-blue-600 ring-1 ring-blue-100",       val: "text-blue-700" },
-    red:    { bg: "bg-white border-slate-200/80 hover:border-rose-300",    icon: "bg-rose-50 text-rose-600 ring-1 ring-rose-100",       val: "text-rose-700" },
-    yellow: { bg: "bg-white border-slate-200/80 hover:border-amber-300",   icon: "bg-amber-50 text-amber-600 ring-1 ring-amber-100",    val: "text-amber-700" },
-    green:  { bg: "bg-white border-slate-200/80 hover:border-emerald-300", icon: "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100", val: "text-emerald-700" },
-    purple: { bg: "bg-white border-slate-200/80 hover:border-purple-300",  icon: "bg-purple-50 text-purple-600 ring-1 ring-purple-100",  val: "text-purple-700" },
+    blue:   { bg: "bg-white border-slate-200/80 hover:border-blue-300 dark:hover:border-blue-500/40",       icon: "bg-blue-50 text-blue-600 ring-1 ring-blue-100",       val: "text-blue-700" },
+    red:    { bg: "bg-white border-slate-200/80 hover:border-rose-300 dark:hover:border-rose-500/40",       icon: "bg-rose-50 text-rose-600 ring-1 ring-rose-100",       val: "text-rose-700" },
+    yellow: { bg: "bg-white border-slate-200/80 hover:border-amber-300 dark:hover:border-amber-500/40",     icon: "bg-amber-50 text-amber-600 ring-1 ring-amber-100",    val: "text-amber-700" },
+    green:  { bg: "bg-white border-slate-200/80 hover:border-emerald-300 dark:hover:border-emerald-500/40", icon: "bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100", val: "text-emerald-700" },
+    purple: { bg: "bg-white border-slate-200/80 hover:border-purple-300 dark:hover:border-purple-500/40",   icon: "bg-purple-50 text-purple-600 ring-1 ring-purple-100",  val: "text-purple-700" },
   }[color];
 
   return (
@@ -49,7 +49,7 @@ export function KpiCards({ kpi, isLoading }: Props) {
         subtitle="Ringkasan Hub"            icon={ArchiveX}  color="red"    isLoading={isLoading} />
 
       {/* Hub Update */}
-      <div className="hover-lift rounded-2xl p-5 border border-slate-200/80 hover:border-emerald-300 shadow-xs bg-white">
+      <div className="hover-lift rounded-2xl p-5 border border-slate-200/80 hover:border-emerald-300 dark:hover:border-emerald-500/40 shadow-xs bg-white">
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hub Update</p>

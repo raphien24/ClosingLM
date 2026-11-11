@@ -18,6 +18,9 @@ import {
   BookOpen,
   Menu,
   X,
+  UserPlus,
+  Building2,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -38,16 +41,48 @@ const productivityLinks = [
 
 export function Navbar() {
   const pathname = usePathname();
-  const { user, hubName, hubUser } = useAuth();
+  const { user, hubName, hubUser, isSuperAdmin } = useAuth();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [prodMenuOpen, setProdMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [customAvatar, setCustomAvatar] = useState<string>("");
+  const [customName, setCustomName] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setCustomAvatar("");
+    setCustomName(null);
+    if (!user?.email) return;
+    let active = true;
+    fetch("/api/profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!active || !json?.profile) return;
+        setCustomAvatar(json.profile.avatar_url || "");
+        if (json.profile.nama_user) setCustomName(json.profile.nama_user);
+      })
+      .catch(() => {});
+
+    const onProfileUpdated = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ nama_user?: string; avatar_url?: string }>).detail;
+      if (!detail) return;
+      if (typeof detail.avatar_url === "string") setCustomAvatar(detail.avatar_url);
+      if (typeof detail.nama_user === "string") setCustomName(detail.nama_user);
+    };
+    window.addEventListener("jtt08-profile-updated", onProfileUpdated);
+    return () => {
+      active = false;
+      window.removeEventListener("jtt08-profile-updated", onProfileUpdated);
+    };
+  }, [user?.email]);
+
+  const displayName = customName || hubUser || user?.name || "";
+  const avatarSrc = customAvatar || user?.image || "";
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -115,7 +150,7 @@ export function Navbar() {
               />
             </div>
             <div className="flex flex-col">
-              <p className="text-xs sm:text-sm font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-blue-900 to-blue-700 bg-clip-text text-transparent group-hover:from-blue-700 group-hover:to-indigo-600 transition-all">
+              <p className="text-xs sm:text-sm font-extrabold tracking-tight bg-gradient-to-r from-slate-900 via-blue-900 to-blue-700 bg-clip-text text-transparent group-hover:from-blue-700 group-hover:to-indigo-600 dark:from-slate-100 dark:via-blue-100 dark:to-sky-300 dark:group-hover:from-sky-300 dark:group-hover:to-blue-200 transition-all">
                 <span className="sm:hidden">Closing LM</span>
                 <span className="hidden sm:inline">Closing Report LM JTT08</span>
               </p>
@@ -232,22 +267,22 @@ export function Navbar() {
               onClick={() => setUserMenuOpen((p) => !p)}
               className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:border-blue-300 hover:shadow-xs transition-all duration-200 cursor-pointer"
             >
-              {user?.image ? (
+              {avatarSrc ? (
                 <img
-                  src={user.image}
+                  src={avatarSrc}
                   alt=""
-                  className="w-7 h-7 rounded-full ring-2 ring-blue-500/20"
+                  className="w-7 h-7 rounded-full object-cover ring-2 ring-blue-500/20"
                 />
               ) : (
                 <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center shadow-xs">
                   <span className="text-white font-bold text-xs">
-                    {(user?.name || user?.email || "U")[0].toUpperCase()}
+                    {(displayName || user?.email || "U")[0].toUpperCase()}
                   </span>
                 </div>
               )}
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-bold text-slate-800 leading-tight">
-                  {hubUser || user?.name}
+                  {displayName}
                 </p>
                 <p className="text-[11px] font-semibold text-blue-600 leading-tight">
                   {hubName}
@@ -262,10 +297,10 @@ export function Navbar() {
             </button>
 
             {userMenuOpen && (
-              <div className="animate-dropdown absolute right-0 mt-2 w-60 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/90 py-1.5 z-50">
+              <div className="animate-dropdown absolute right-0 mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/90 py-1.5 z-50">
                 <div className="px-4 py-3 border-b border-slate-100">
                   <p className="text-sm font-bold text-slate-900">
-                    {hubUser || user?.name}
+                    {displayName}
                   </p>
                   <p className="text-xs text-slate-400 truncate">
                     {user?.email}
@@ -273,6 +308,72 @@ export function Navbar() {
                   <span className="inline-block mt-1.5 px-2.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 text-xs rounded-full font-semibold">
                     {hubName}
                   </span>
+                </div>
+
+                <div className="py-1.5 border-b border-slate-100">
+                  <Link
+                    href="/profile"
+                    onClick={() => setUserMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 mx-1.5 px-3 py-2 rounded-xl text-sm transition-colors",
+                      pathname === "/profile"
+                        ? "bg-blue-50 text-blue-700 font-semibold"
+                        : "text-slate-700 font-medium hover:bg-slate-100/80"
+                    )}
+                  >
+                    <UserCog
+                      className={cn(
+                        "h-4 w-4 flex-shrink-0",
+                        pathname === "/profile" ? "text-blue-600" : "text-slate-400"
+                      )}
+                    />
+                    <span>Edit Profil</span>
+                  </Link>
+
+                  <Link
+                    href="/users"
+                    onClick={() => setUserMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2.5 mx-1.5 mt-0.5 px-3 py-2 rounded-xl text-sm transition-colors",
+                      pathname === "/users"
+                        ? "bg-blue-50 text-blue-700 font-semibold"
+                        : "text-slate-700 font-medium hover:bg-slate-100/80"
+                    )}
+                  >
+                    <UserPlus
+                      className={cn(
+                        "h-4 w-4 flex-shrink-0",
+                        pathname === "/users" ? "text-blue-600" : "text-slate-400"
+                      )}
+                    />
+                    <span>Tambahkan Pengguna</span>
+                  </Link>
+
+                  {isSuperAdmin && (
+                    <Link
+                      href="/hubs/new"
+                      onClick={() => setUserMenuOpen(false)}
+                      className={cn(
+                        "flex items-center justify-between gap-2 mx-1.5 mt-0.5 px-3 py-2 rounded-xl text-sm transition-colors",
+                        pathname === "/hubs/new"
+                          ? "bg-emerald-50 text-emerald-700 font-semibold"
+                          : "text-slate-700 font-medium hover:bg-slate-100/80"
+                      )}
+                    >
+                      <span className="flex items-center gap-2.5">
+                        <Building2
+                          className={cn(
+                            "h-4 w-4 flex-shrink-0",
+                            pathname === "/hubs/new" ? "text-emerald-600" : "text-slate-400"
+                          )}
+                        />
+                        <span>Tambahkan Hub Baru</span>
+                      </span>
+                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                        Admin
+                      </span>
+                    </Link>
+                  )}
                 </div>
 
                 <button
@@ -490,6 +591,110 @@ export function Navbar() {
                     })}
                   </div>
                 </div>
+
+                {/* Manajemen Akses Section */}
+                <div>
+                  <p
+                    className={cn(
+                      "px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider",
+                      isDark ? "text-slate-400" : "text-slate-400"
+                    )}
+                  >
+                    Manajemen Akses
+                  </p>
+                  <div className="space-y-1">
+                    <Link
+                      href="/profile"
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150",
+                        pathname === "/profile"
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 font-bold"
+                          : isDark
+                          ? "text-slate-200 hover:bg-slate-800 hover:text-white"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      <UserCog
+                        className={cn(
+                          "h-4 w-4 flex-shrink-0",
+                          pathname === "/profile"
+                            ? "text-white"
+                            : isDark
+                            ? "text-slate-400"
+                            : "text-slate-500"
+                        )}
+                      />
+                      <span>Edit Profil</span>
+                    </Link>
+
+                    <Link
+                      href="/users"
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150",
+                        pathname === "/users"
+                          ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 font-bold"
+                          : isDark
+                          ? "text-slate-200 hover:bg-slate-800 hover:text-white"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      )}
+                    >
+                      <UserPlus
+                        className={cn(
+                          "h-4 w-4 flex-shrink-0",
+                          pathname === "/users"
+                            ? "text-white"
+                            : isDark
+                            ? "text-slate-400"
+                            : "text-slate-500"
+                        )}
+                      />
+                      <span>Tambahkan Pengguna</span>
+                    </Link>
+
+                    {isSuperAdmin && (
+                      <Link
+                        href="/hubs/new"
+                        onClick={() => setMobileOpen(false)}
+                        className={cn(
+                          "flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150",
+                          pathname === "/hubs/new"
+                            ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30 font-bold"
+                            : isDark
+                            ? "text-slate-200 hover:bg-slate-800 hover:text-white"
+                            : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                        )}
+                      >
+                        <span className="flex items-center gap-3">
+                          <Building2
+                            className={cn(
+                              "h-4 w-4 flex-shrink-0",
+                              pathname === "/hubs/new"
+                                ? "text-white"
+                                : isDark
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                            )}
+                          />
+                          <span>Tambahkan Hub Baru</span>
+                        </span>
+                        <span
+                          className={cn(
+                            "text-[10px] font-bold uppercase px-1.5 py-0.5 rounded",
+                            pathname === "/hubs/new"
+                              ? "bg-white/20 text-white"
+                              : isDark
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-emerald-100 text-emerald-700"
+                          )}
+                        >
+                          Admin
+                        </span>
+                      </Link>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Drawer Footer with Theme Switcher, User Info & Sign Out */}
@@ -527,15 +732,15 @@ export function Navbar() {
 
                 {/* User Info */}
                 <div className="flex items-center gap-2.5 px-2 py-1.5">
-                  {user?.image ? (
+                  {avatarSrc ? (
                     <img
-                      src={user.image}
+                      src={avatarSrc}
                       alt=""
-                      className="w-8 h-8 rounded-full ring-2 ring-blue-500/20"
+                      className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/20"
                     />
                   ) : (
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white font-bold text-xs shadow-xs">
-                      {(user?.name || user?.email || "U")[0].toUpperCase()}
+                      {(displayName || user?.email || "U")[0].toUpperCase()}
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
@@ -545,7 +750,7 @@ export function Navbar() {
                         isDark ? "text-white" : "text-slate-900"
                       )}
                     >
-                      {hubUser || user?.name}
+                      {displayName}
                     </p>
                     <p
                       className={cn(

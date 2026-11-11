@@ -610,3 +610,44 @@ export async function dropFirstColumnIfHeaderMatches(
   invalidateSheetCache(sheetName);
   return true;
 }
+
+/**
+ * Hapus tepat satu baris (1-indexed, wajib > 1 agar header tidak pernah terhapus) secara atomik via deleteDimension.
+ */
+export async function deleteSheetRow(
+  sheetName: string,
+  rowIndex: number
+): Promise<void> {
+  if (!Number.isInteger(rowIndex) || rowIndex <= 1) {
+    throw new Error("Row index tidak valid atau mencoba menghapus header");
+  }
+
+  const sheets = getSheetsClient();
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+    fields: "sheets.properties(sheetId,title)",
+  });
+  const sheet = meta.data.sheets?.find((s) => s.properties?.title === sheetName);
+  if (sheet?.properties?.sheetId == null) {
+    throw new Error(`Sheet "${sheetName}" tidak ditemukan`);
+  }
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId: sheet.properties.sheetId,
+              dimension: "ROWS",
+              startIndex: rowIndex - 1,
+              endIndex: rowIndex,
+            },
+          },
+        },
+      ],
+    },
+  });
+  invalidateSheetCache(sheetName);
+}

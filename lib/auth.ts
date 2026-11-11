@@ -1,6 +1,7 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { getUserHub } from "./userMapping";
+import { isSuperAdminEmail } from "./authConstants";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -27,34 +28,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       if (session.user && token) {
         // Attach custom fields dari token ke session
-        (session.user as typeof session.user & {
+        const extendedUser = session.user as typeof session.user & {
           hubName: string | null;
           hubUser: string | null;
           isAuthorized: boolean;
           isExpired: boolean;
-        }).hubName = (token.hubName as string | null) ?? null;
-        (session.user as typeof session.user & {
-          hubName: string | null;
-          hubUser: string | null;
-          isAuthorized: boolean;
-          isExpired: boolean;
-        }).hubUser = (token.hubUser as string | null) ?? null;
-        (session.user as typeof session.user & {
-          hubName: string | null;
-          hubUser: string | null;
-          isAuthorized: boolean;
-          isExpired: boolean;
-        }).isAuthorized = !isExpired && ((token.isAuthorized as boolean) ?? false);
-        (session.user as typeof session.user & {
-          hubName: string | null;
-          hubUser: string | null;
-          isAuthorized: boolean;
-          isExpired: boolean;
-        }).isExpired = isExpired;
+          isSuperAdmin: boolean;
+        };
+        extendedUser.hubName = (token.hubName as string | null) ?? null;
+        extendedUser.hubUser = (token.hubUser as string | null) ?? null;
+        extendedUser.isAuthorized = !isExpired && ((token.isAuthorized as boolean) ?? false);
+        extendedUser.isExpired = isExpired;
+        extendedUser.isSuperAdmin =
+          !isExpired && isSuperAdminEmail((session.user.email || token.email) as string | undefined);
       }
       return session;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       const now = Date.now();
       const MAX_SESSION_MS = 24 * 60 * 60 * 1000; // 24 jam
 
@@ -73,6 +63,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const email = (user?.email || token.email) as string | undefined;
       const shouldCheck =
         !!user ||
+        trigger === "update" ||
         !token.checkedAt ||
         now - Number(token.checkedAt) > RECHECK_MS;
 
@@ -113,6 +104,7 @@ declare module "next-auth" {
       hubUser: string | null;
       isAuthorized: boolean;
       isExpired?: boolean;
+      isSuperAdmin?: boolean;
     };
   }
 }

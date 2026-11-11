@@ -73,6 +73,7 @@ export interface UserMapping {
   nama_hub: string;
   nama_user: string;
   status: "active" | "inactive";
+  avatar_url?: string;
 }
 
 export interface KpiSummary {

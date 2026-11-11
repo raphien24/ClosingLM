@@ -172,15 +172,8 @@ function DashboardContent() {
       {dashboardReady && (
         <div className="w-full px-2 sm:px-4 py-4 space-y-4 animate-page-enter">
           {/* Page Header */}
-          <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-blue-900 text-white rounded-2xl px-5 py-4 shadow-md flex flex-wrap items-center justify-between gap-3">
+          <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-blue-900 dark:from-slate-900 dark:via-[#0f2447] dark:to-[#132c57] dark:border dark:border-slate-700/70 text-white rounded-2xl px-5 py-4 shadow-md flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-xl bg-white/10 backdrop-blur-xs p-1 border border-white/15 flex items-center justify-center shadow-inner">
-                <img
-                  src="/logo-jtt08.png"
-                  alt="Logo JTT08"
-                  className="w-full h-full object-contain"
-                />
-              </div>
               <div>
                 <h1 className="text-xl font-extrabold tracking-tight">
                   Closing Report LM JTT08

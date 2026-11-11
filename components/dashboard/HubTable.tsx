@@ -83,7 +83,7 @@ function NumCell({
   decimals?: number;
 }) {
   if (value === null || value === undefined) {
-    return <td className="px-1.5 py-1.5 text-right text-gray-300">-</td>;
+    return <td className="px-1.5 py-1.5 text-right text-gray-300 dark:text-slate-600">-</td>;
   }
   const formatted =
     decimals > 0
@@ -122,7 +122,7 @@ function ProdCell({
   invertTarget?: boolean;
 }) {
   if (value === null || value === undefined) {
-    return <td className="px-1.5 py-1.5 text-right text-gray-300">-</td>;
+    return <td className="px-1.5 py-1.5 text-right text-gray-300 dark:text-slate-600">-</td>;
   }
 
   const formatted = formatNumber(value, 1).replace(/,0$/, "");
@@ -450,16 +450,16 @@ export function HubTable({ data, isLoading }: HubTableProps) {
       {/* Legend */}
       <div className="px-3 py-2 border-t border-gray-100 bg-gray-50 flex flex-wrap items-center gap-3 text-[10px] text-gray-500">
         <span className="font-medium text-gray-600">Color = Delivered/Transported:</span>
-        <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded bg-green-300" /><span>≥ 98%</span></div>
-        <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded bg-yellow-300" /><span>95–97%</span></div>
-        <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded bg-red-300" /><span>&lt; 95%</span></div>
-        <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded bg-orange-200" /><span>Belum Update</span></div>
-        <div className="h-3 w-px bg-gray-300 mx-1" />
+        <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded bg-green-300 dark:bg-emerald-500/50 dark:ring-1 dark:ring-emerald-400/50" /><span>≥ 98%</span></div>
+        <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded bg-yellow-300 dark:bg-amber-500/50 dark:ring-1 dark:ring-amber-400/50" /><span>95–97%</span></div>
+        <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded bg-red-300 dark:bg-rose-500/50 dark:ring-1 dark:ring-rose-400/50" /><span>&lt; 95%</span></div>
+        <div className="flex items-center gap-1"><div className="w-2.5 h-2.5 rounded bg-orange-200 dark:bg-orange-500/25 dark:ring-1 dark:ring-orange-400/40" /><span>Belum Update</span></div>
+        <div className="h-3 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
         <div className="flex items-center gap-1">
           <span className="px-1 py-0 text-[8px] font-bold text-purple-700 bg-purple-200 border border-purple-300 rounded">M</span>
           <span>Angka Diinput / Diedit Manual</span>
         </div>
-        <div className="h-3 w-px bg-gray-300 mx-1" />
+        <div className="h-3 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
         <span className="font-medium text-gray-600">Daily Productivity:</span>
         <div className="flex items-center gap-1">
           <span className="px-1.5 py-0 text-[9px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 rounded">Hijau</span>

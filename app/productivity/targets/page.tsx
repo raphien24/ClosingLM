@@ -6,9 +6,28 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Trash2, Save, Target, AlertTriangle, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
-import { TargetAppeal, DEFAULT_TARGETS } from "@/types/productivity";
+import { TargetAppeal } from "@/types/productivity";
 import { parseTimestamp } from "@/lib/dateUtils";
 import { format, startOfWeek, addWeeks } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
+
+/** Format rentang Senin–Minggu agar mudah dibaca (mis. "9 – 15 Nov 2026" atau "26 Okt – 1 Nov 2026"). */
+function formatWeekRange(monday: Date): string {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  if (monday.getFullYear() !== sunday.getFullYear()) {
+    return `${format(monday, "d MMM yyyy", { locale: idLocale })} – ${format(sunday, "d MMM yyyy", { locale: idLocale })}`;
+  }
+  if (monday.getMonth() === sunday.getMonth()) {
+    return `${format(monday, "d", { locale: idLocale })} – ${format(sunday, "d MMM yyyy", { locale: idLocale })}`;
+  }
+  return `${format(monday, "d MMM", { locale: idLocale })} – ${format(sunday, "d MMM yyyy", { locale: idLocale })}`;
+}
+
+function formatWeekRangeFromYMD(ymd: string): string {
+  const m = new Date(`${ymd}T00:00:00`);
+  return isNaN(m.getTime()) ? ymd : formatWeekRange(m);
+}
 
 function getWeekOptions(extraWeek?: string | null) {
   const weeks: { value: string; label: string }[] = [];
@@ -16,21 +35,19 @@ function getWeekOptions(extraWeek?: string | null) {
   const thisMonday = startOfWeek(today, { weekStartsOn: 1 });
   for (let i = -24; i <= 4; i++) {
     const monday = addWeeks(thisMonday, i);
-    const sunday = addWeeks(monday, 1);
-    sunday.setDate(sunday.getDate() - 1);
+    const base = formatWeekRange(monday);
+    const suffix = i === 0 ? " (Minggu ini)" : i === -1 ? " (Minggu lalu)" : "";
     weeks.push({
       value: format(monday, "yyyy-MM-dd"),
-      label: `${format(monday, "dd/MM")} – ${format(sunday, "dd/MM/yyyy")}`,
+      label: `${base}${suffix}`,
     });
   }
   if (extraWeek && !weeks.some((w) => w.value === extraWeek)) {
     const m = new Date(extraWeek + "T00:00:00");
     if (!isNaN(m.getTime())) {
-      const s = new Date(m);
-      s.setDate(m.getDate() + 6);
       weeks.push({
         value: extraWeek,
-        label: `${format(m, "dd/MM")} – ${format(s, "dd/MM/yyyy")}`,
+        label: formatWeekRange(m),
       });
     }
   }
@@ -81,12 +98,6 @@ function AdjustTargetContent() {
   };
 
   useEffect(() => { fetchAppeals(); }, []);
-
-  // Auto-fill target dari static default saat pilihan berubah
-  useEffect(() => {
-    const def = DEFAULT_TARGETS[selectedFleet.contract]?.[selectedFleet.vehicle];
-    if (def) setTargetValue(String(def));
-  }, [fleetTypeIdx]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,9 +160,9 @@ function AdjustTargetContent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Form */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 shadow-sm p-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">Tambah / Update Target</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -184,15 +195,8 @@ function AdjustTargetContent() {
               </label>
               <input type="number" step="0.01" min="1" value={targetValue}
                 onChange={(e)=>setTargetValue(e.target.value)} required
-                placeholder={`Default: ${DEFAULT_TARGETS[selectedFleet.contract]?.[selectedFleet.vehicle] ?? "-"}`}
+                placeholder="Masukkan target (mis. 65)"
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400" />
-              <p className="text-xs text-gray-400 mt-1">
-                Default: <span className="font-medium">{DEFAULT_TARGETS[selectedFleet.contract]?.[selectedFleet.vehicle] ?? "-"}</span>
-                {" · "}
-                <button type="button"
-                  onClick={() => { const d = DEFAULT_TARGETS[selectedFleet.contract]?.[selectedFleet.vehicle]; if(d) setTargetValue(String(d)); }}
-                  className="text-orange-500 hover:underline">pakai default</button>
-              </p>
             </div>
 
             {submitStatus && (
@@ -210,73 +214,57 @@ function AdjustTargetContent() {
           </form>
         </div>
 
-        {/* Default targets info */}
-        <div className="space-y-4">
-          <div className="bg-gray-50 rounded-xl border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Target Default (Static Fallback)</h3>
-            <div className="space-y-2 text-sm">
-              {Object.entries(DEFAULT_TARGETS).map(([contract, vehicles])=>(
-                Object.entries(vehicles).map(([vehicle, target])=>(
-                  <div key={`${contract}-${vehicle}`} className="flex items-center justify-between">
-                    <span className="text-gray-600">{contract} · {vehicle}</span>
-                    <span className="font-semibold text-gray-800">{target}</span>
-                  </div>
-                ))
-              ))}
-            </div>
-            <p className="text-xs text-gray-400 mt-3">Target ini dipakai jika tidak ada appeal target dan tidak ada data Senin.</p>
+        {/* Existing appeals */}
+        <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 shadow-sm">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="text-base font-semibold text-gray-800">Target yang Sudah Diset — {hubName}</h2>
           </div>
-        </div>
-      </div>
-
-      {/* Existing appeals */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="px-5 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-800">Target yang Sudah Diset — {hubName}</h2>
-        </div>
-        {isLoading ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Memuat...</div>
-        ) : sortedAppeals.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Belum ada target appeal yang diset.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  {["Minggu","Contract","Kendaraan","Target","Dibuat","Hapus"].map((h)=>(
-                    <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {sortedAppeals.map((a, i)=>(
-                  <tr key={i} className="hover:bg-gray-50">
-                    <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap">{a.week_start}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
-                        a.contract_type==="Dedicated" ? "bg-blue-100 text-blue-700"
-                        : a.contract_type.includes("Kurir") ? "bg-purple-100 text-purple-700"
-                        : "bg-orange-100 text-orange-700"
-                      }`}>{a.contract_type}</span>
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-700">{a.vehicle_type}</td>
-                    <td className="px-4 py-2.5 font-semibold text-gray-900">{a.target}</td>
-                    <td className="px-4 py-2.5 text-xs text-gray-400">
-                      {a.created_at
-                        ? (parseTimestamp(a.created_at)?.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" }) ?? a.created_at)
-                        : "-"}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <button onClick={()=>handleDelete(a)} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
+          {isLoading ? (
+            <div className="p-8 text-center text-gray-400 text-sm">Memuat...</div>
+          ) : sortedAppeals.length === 0 ? (
+            <div className="p-8 text-center text-gray-400 text-sm">Belum ada target appeal yang diset.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    {["Minggu","Contract","Kendaraan","Target","Dibuat","Hapus"].map((h)=>(
+                      <th key={h} className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {sortedAppeals.map((a, i)=>(
+                    <tr key={i} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 text-gray-700 whitespace-nowrap" title={a.week_start}>
+                        {formatWeekRangeFromYMD(a.week_start)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
+                          a.contract_type==="Dedicated" ? "bg-blue-100 text-blue-700"
+                          : a.contract_type.includes("Kurir") ? "bg-purple-100 text-purple-700"
+                          : "bg-orange-100 text-orange-700"
+                        }`}>{a.contract_type}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-gray-700">{a.vehicle_type}</td>
+                      <td className="px-4 py-2.5 font-semibold text-gray-900">{a.target}</td>
+                      <td className="px-4 py-2.5 text-xs text-gray-400">
+                        {a.created_at
+                          ? (parseTimestamp(a.created_at)?.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" }) ?? a.created_at)
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <button onClick={()=>handleDelete(a)} className="p-1 text-gray-400 hover:text-red-500 transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

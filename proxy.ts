@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
+import { isSuperAdminEmail } from "@/lib/authConstants";
 
 export const proxy = auth((req) => {
   const { pathname } = req.nextUrl;
@@ -49,6 +50,11 @@ export const proxy = auth((req) => {
   // Sudah login tapi email tidak terdaftar di USER_MAPPING → unauthorized
   if (!user.isAuthorized) {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
+  }
+
+  // Halaman manajemen Hub Baru khusus Super Admin
+  if (pathname.startsWith("/hubs") && !isSuperAdminEmail(session.user?.email)) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   return NextResponse.next();
