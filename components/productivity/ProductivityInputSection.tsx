@@ -353,9 +353,9 @@ export function ProductivityInputSection({
   return (
     <div className="space-y-6">
       {/* Info Sub-header khusus Tab Productivity */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-[#122346] dark:via-[#14274f] dark:to-[#182856] border border-blue-200 dark:border-blue-500/35 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <div className="w-8 h-8 rounded-lg bg-blue-100 dark:ring-1 dark:ring-blue-400/25 flex items-center justify-center flex-shrink-0 mt-0.5">
             <FileSpreadsheet className="h-4 w-4 text-blue-700" />
           </div>
           <div className="text-xs text-blue-900 space-y-0.5">

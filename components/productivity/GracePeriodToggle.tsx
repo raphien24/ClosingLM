@@ -70,7 +70,7 @@ export function GracePeriodToggle({
           <span
             className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${
               enabled
-                ? "bg-emerald-200/80 text-emerald-800"
+                ? "bg-emerald-200/80 text-emerald-800 dark:bg-emerald-500/25 dark:text-emerald-300"
                 : "bg-slate-100 text-slate-500 border border-slate-200"
             }`}
           >
@@ -90,14 +90,14 @@ export function GracePeriodToggle({
       <div
         className={`w-8 h-4.5 rounded-full transition-colors relative flex items-center px-0.5 ml-1 flex-shrink-0 ${
           !isAvailable
-            ? "bg-slate-200"
+            ? "bg-slate-200 dark:bg-slate-700"
             : enabled
             ? "bg-emerald-500"
-            : "bg-slate-300"
+            : "bg-slate-300 dark:bg-slate-600"
         }`}
       >
         <div
-          className={`w-3.5 h-3.5 rounded-full bg-white shadow-xs transition-transform transform ${
+          className={`toggle-thumb w-3.5 h-3.5 rounded-full bg-white shadow-xs transition-transform transform ${
             enabled && isAvailable ? "translate-x-3.5" : "translate-x-0"
           }`}
         />

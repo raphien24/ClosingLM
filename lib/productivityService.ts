@@ -780,6 +780,14 @@ export interface CoreSegmentMetrics {
   totalDelivered: number;
 }
 
+export interface DailySegmentMetrics {
+  cour: number;
+  deliv: number;
+  prod: number;
+  targ: number;
+  achv: number;
+}
+
 export interface DailyBreakdownRow {
   dateKey: string;      // YYYY-MM-DD
   date: string;         // MM/DD/YYYY
@@ -789,6 +797,15 @@ export interface DailyBreakdownRow {
   productivity: number;
   target: number;
   achievement: number;
+  riderDedicated: DailySegmentMetrics;
+  riderPlus: DailySegmentMetrics;
+  driverDedicated: DailySegmentMetrics;
+}
+
+export interface DailyBreakdownTotals {
+  riderDedicated: DailySegmentMetrics;
+  riderPlus: DailySegmentMetrics;
+  driverDedicated: DailySegmentMetrics;
 }
 
 function calcThresholdAchievement(avg: number, target: number): number {
@@ -829,6 +846,7 @@ export async function getMonthlyMetrics(
     dedicated4wh: CoreSegmentMetrics;
   };
   dailyBreakdown: DailyBreakdownRow[];
+  dailyBreakdownTotals: DailyBreakdownTotals;
   weeklyBreakdown: { week: string; avgProductivity: number; shifts: number }[];
   missingTargetWeeks: string[];
   hasL15D?: boolean;
@@ -964,16 +982,52 @@ export async function getMonthlyMetrics(
   const totalShifts     = active.length;
   const avgProductivity = totalShifts > 0 ? totalDelivered / totalShifts : 0;
 
-  // Bangun Daily Breakdown
-  const dayMap = new Map<string, { dateObj: Date; delivered: number; shifts: number; targetSum: number }>();
+  // Bangun Daily Breakdown gabungan (Rider Dedicated, Rider Plus, Driver Dedicated)
+  const buildDailySegmentMetrics = (
+    records: CourierRecord[],
+    segContract: string,
+    segVehicle: string
+  ): DailySegmentMetrics => {
+    const cour = records.length;
+    const deliv = records.reduce((s, r) => s + (r.delivered || 0), 0);
+    if (cour === 0) {
+      return { cour: 0, deliv: 0, prod: 0, targ: 0, achv: 0 };
+    }
+    const rawProd = deliv / cour;
+    const rawTarg = getShiftTarget({
+      date: records[0].date,
+      contract_type: segContract,
+      vehicle_type: segVehicle,
+    });
+    const rawAchv = rawTarg > 0 ? (rawProd / rawTarg) * 100 : 0;
+    return {
+      cour,
+      deliv,
+      prod: Math.round(rawProd * 10) / 10,
+      targ: Math.round(rawTarg * 10) / 10,
+      achv: Math.round(rawAchv * 10) / 10,
+    };
+  };
+
+  const dayMap = new Map<
+    string,
+    { dateObj: Date; delivered: number; shifts: number; targetSum: number; records: CourierRecord[] }
+  >();
   for (const r of active) {
     const dKey = normalizeDateKey(r.date);
     const dObj = parseDate(r.date);
     if (!dKey || !dObj) continue;
-    const prev = dayMap.get(dKey) || { dateObj: dObj, delivered: 0, shifts: 0, targetSum: 0 };
+    const prev = dayMap.get(dKey) || {
+      dateObj: dObj,
+      delivered: 0,
+      shifts: 0,
+      targetSum: 0,
+      records: [],
+    };
     prev.delivered += r.delivered || 0;
     prev.shifts += 1;
     prev.targetSum += getShiftTarget(r);
+    prev.records.push(r);
     dayMap.set(dKey, prev);
   }
 
@@ -983,6 +1037,17 @@ export async function getMonthlyMetrics(
     const prod = item.shifts > 0 ? item.delivered / item.shifts : 0;
     const tgt  = item.shifts > 0 ? item.targetSum / item.shifts : 0;
     const ach  = tgt > 0 ? Math.min(100, (prod / tgt) * 100) : 0;
+
+    const dayDed2wh = item.records.filter(
+      (r) => r.contract_type === "Dedicated" && r.vehicle_type === "2WH"
+    );
+    const dayKp2wh = item.records.filter(
+      (r) => r.contract_type.includes("Kurir Plus") && r.vehicle_type === "2WH"
+    );
+    const dayDed4wh = item.records.filter(
+      (r) => r.contract_type === "Dedicated" && r.vehicle_type === "4WH"
+    );
+
     return {
       dateKey: dKey,
       date: format(item.dateObj, "MM/dd/yyyy"),
@@ -992,8 +1057,36 @@ export async function getMonthlyMetrics(
       productivity: Math.round(prod * 10) / 10,
       target: Math.round(tgt * 10) / 10,
       achievement: Math.round(ach * 10) / 10,
+      riderDedicated: buildDailySegmentMetrics(dayDed2wh, "Dedicated", "2WH"),
+      riderPlus: buildDailySegmentMetrics(dayKp2wh, "Kurir Plus", "2WH"),
+      driverDedicated: buildDailySegmentMetrics(dayDed4wh, "Dedicated", "4WH"),
     };
   });
+
+  const buildTotalSegmentMetrics = (
+    segRecords: CourierRecord[],
+    coreSeg: CoreSegmentMetrics
+  ): DailySegmentMetrics => {
+    const hasShifts = coreSeg.totalShifts > 0;
+    const targ = hasShifts ? coreSeg.target : 0;
+    const actualAchv =
+      hasShifts && targ > 0
+        ? Math.round((coreSeg.avgProductivity / targ) * 1000) / 10
+        : 0;
+    return {
+      cour: new Set(segRecords.map((r) => r.courier_id.trim())).size,
+      deliv: coreSeg.totalDelivered,
+      prod: coreSeg.avgProductivity,
+      targ,
+      achv: actualAchv,
+    };
+  };
+
+  const dailyBreakdownTotals: DailyBreakdownTotals = {
+    riderDedicated: buildTotalSegmentMetrics(ded2whRecords, dedicated2wh),
+    riderPlus: buildTotalSegmentMetrics(kp2whRecords, kurirPlus2wh),
+    driverDedicated: buildTotalSegmentMetrics(ded4whRecords, dedicated4wh),
+  };
 
   const operatingDays = dailyBreakdown.length;
 
@@ -1072,6 +1165,7 @@ export async function getMonthlyMetrics(
       dedicated4wh,
     },
     dailyBreakdown,
+    dailyBreakdownTotals,
     weeklyBreakdown: sortedWeeks.map((wk) => {
       const data = weekMap[wk];
       return {

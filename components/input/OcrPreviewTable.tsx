@@ -184,7 +184,7 @@ export function OcrPreviewTable({ rows, onUpdate, previousData, manualFields = [
                   <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">#</th>
                   {COLS.map((c) => (
                     <th key={c.key} className="px-2 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase whitespace-nowrap">
-                      {c.group && <span className="text-gray-300 mr-1 font-normal">{c.group} /</span>}
+                      {c.group && <span className="text-gray-300 dark:text-slate-400 mr-1 font-normal">{c.group} /</span>}
                       {c.label}
                     </th>
                   ))}

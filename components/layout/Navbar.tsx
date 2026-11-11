@@ -29,8 +29,9 @@ import { createPortal } from "react-dom";
 const mainLinks = [
   { href: "/dashboard", label: "Dashboard Closing", icon: LayoutDashboard },
   { href: "/input",     label: "Input Data",        icon: Upload },
-  { href: "/guide",     label: "User Guide",        icon: BookOpen },
 ];
+
+const guideLink = { href: "/guide", label: "User Guide", icon: BookOpen };
 
 const productivityLinks = [
   { href: "/productivity/weekly",    label: "Weekly Productivity",  icon: BarChart2 },
@@ -232,6 +233,26 @@ export function Navbar() {
                 </div>
               )}
             </div>
+
+            {/* User Guide (setelah Productivity) */}
+            {(() => {
+              const Icon = guideLink.icon;
+              const active = pathname.startsWith(guideLink.href);
+              return (
+                <Link
+                  href={guideLink.href}
+                  className={cn(
+                    "flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-semibold transition-all duration-200",
+                    active
+                      ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm shadow-blue-600/25 -translate-y-0.5"
+                      : "text-slate-600 hover:bg-slate-100/90 hover:text-slate-900 hover:-translate-y-0.5"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {guideLink.label}
+                </Link>
+              );
+            })()}
           </nav>
 
           {/* Right actions: Theme Toggle + User menu */}
@@ -589,6 +610,50 @@ export function Navbar() {
                         </Link>
                       );
                     })}
+                  </div>
+                </div>
+
+                {/* Panduan Section (setelah Productivity) */}
+                <div>
+                  <p
+                    className={cn(
+                      "px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider",
+                      isDark ? "text-slate-400" : "text-slate-400"
+                    )}
+                  >
+                    Panduan
+                  </p>
+                  <div className="space-y-1">
+                    {(() => {
+                      const Icon = guideLink.icon;
+                      const active = pathname.startsWith(guideLink.href);
+                      return (
+                        <Link
+                          href={guideLink.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={cn(
+                            "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-150",
+                            active
+                              ? "bg-blue-600 text-white shadow-md shadow-blue-600/30 font-bold"
+                              : isDark
+                              ? "text-slate-200 hover:bg-slate-800 hover:text-white"
+                              : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                          )}
+                        >
+                          <Icon
+                            className={cn(
+                              "h-4 w-4 flex-shrink-0",
+                              active
+                                ? "text-white"
+                                : isDark
+                                ? "text-slate-400"
+                                : "text-slate-500"
+                            )}
+                          />
+                          <span>{guideLink.label}</span>
+                        </Link>
+                      );
+                    })()}
                   </div>
                 </div>
 
