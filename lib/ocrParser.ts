@@ -325,27 +325,52 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
     if (/^\s*(?:\[\s*\]|\(\s*\))(?:\s|$)/.test(cell)) return 0;
     return dashToZero(cell, null);
   };
-  // Jika kolom dipisahkan >= 2 spasi (mis. "a   52   17.3%)" atau "43   52   9(17,3%)"), pertahankan posisi kolom Volume & Total
+  // Perbaiki bila Total terbaca < Volume (mis. "103   13   10(8,8%)" -> "113" hilang digit "1"):
+  // Dalam tabel FMS, On-hold Total >= On-hold Volume dan Total = Volume + Selesai.
+  const finalizeOnHold = (
+    vol: number | null,
+    tot: number | null,
+    doneText: string
+  ): { oh_volume: number | null; oh_total: number | null } => {
+    const fixedVol = tot === 0 && vol === null ? 0 : vol;
+    if (fixedVol !== null && tot !== null && tot < fixedVol) {
+      const doneMatch = doneText.match(/(\d[\d.,]*)\s*\(\s*(\d+(?:[.,]\d+)?)\s*%/);
+      if (doneMatch) {
+        const done = parseNumber(doneMatch[1]);
+        const pct = parseFloat(doneMatch[2].replace(",", "."));
+        if (done !== null && !isNaN(pct) && fixedVol + done > 0) {
+          const calcPct = (done / (fixedVol + done)) * 100;
+          if (Math.abs(calcPct - pct) <= 1.2) {
+            return { oh_volume: fixedVol, oh_total: fixedVol + done };
+          }
+        }
+      }
+      // Tolak nilai Total yang mustahil (< Volume) agar pass/crop lain dapat mengisi Total yang benar
+      return { oh_volume: fixedVol, oh_total: null };
+    }
+    return { oh_volume: fixedVol, oh_total: tot };
+  };
+
+  // Jika kolom dipisahkan >= 2 spasi (mis. "a   52   17.3%)" atau "103   113   10(8,8%)"), pertahankan posisi kolom Volume & Total
   const cells = afterLabel.trim().split(/\s{2,}/).filter(Boolean);
   if (cells.length >= 2) {
-    const ohVol = parseOnHoldCell(cells[0]);
-    const ohTot = parseOnHoldCell(cells[1]);
-    return {
-      // On-hold Volume <= On-hold Total; bila Total terbaca 0 sedangkan Volume garbled ("a   0"), Volume pasti 0
-      oh_volume: ohTot === 0 && ohVol === null ? 0 : ohVol,
-      oh_total:  ohTot,
-    };
+    return finalizeOnHold(parseOnHoldCell(cells[0]), parseOnHoldCell(cells[1]), cells.slice(2).join(" "));
   }
 
   let nums = allNumbers(afterLabel);
+  let fullSegment = afterLabel;
   if (nums.length < 2) {
     const extra = collectFollowingLines(lines, idx);
-    if (extra) nums = allNumbers(`${afterLabel} ${extra}`);
+    if (extra) {
+      fullSegment = `${afterLabel} ${extra}`;
+      nums = allNumbers(fullSegment);
+    }
   }
-  return {
-    oh_volume: dashToZero(afterLabel, nums[0] ?? null),  // Volume (kiri)
-    oh_total:  dashToZero(afterLabel, nums[1] ?? null),  // Total (kanan, jangan salin Volume bila Total belum terbaca)
-  };
+  return finalizeOnHold(
+    dashToZero(afterLabel, nums[0] ?? null),  // Volume (kiri)
+    dashToZero(afterLabel, nums[1] ?? null),  // Total (kanan, jangan salin Volume bila Total belum terbaca)
+    fullSegment
+  );
 }
 
 /**

@@ -258,10 +258,22 @@ export async function runOcrLocally(
 
     const crops: string[] = [];
     if (isOpProgress) {
+      const onHoldRe =
+        /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1tk]{0,2}d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b[ \t:-]*(\d[\d.,]*)[ \t]+(\d[\d.,]*|-)/i;
+      const checkValidOh = (txt: string) => {
+        const m = txt.match(onHoldRe);
+        if (!m) return null;
+        if (m[2] === "-") return true;
+        const v = parseInt(m[1].replace(/[.,]/g, ""), 10);
+        const t = parseInt(m[2].replace(/[.,]/g, ""), 10);
+        return !isNaN(v) && !isNaN(t) && t >= v ? t : false;
+      };
+      const oh1 = checkValidOh(r200.data.text);
+      const oh2 = checkValidOh(r225.data.text);
+      // Jalankan crop On-hold bila salah satu pass gagal, Total < Volume (mis. 13 < 103), atau dua pass berbeda Total-nya
       const hasOnHoldNums =
-        /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1tk]{0,2}d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b[ \t:-]*\d[\d.,]*[ \t]+(?:\d|-)/i.test(
-          combinedMain
-        );
+        (oh1 !== null && oh1 !== false) &&
+        (oh2 === null || (oh2 !== false && oh2 === oh1));
       const hasInHubAll =
         /\b(?:[TI]ransp[o0]rt(?:ed)?|Iranspored)\b[^\n]*\d/i.test(combinedMain) &&
         /\bR[eo][ce][aeiu]{1,3}[tv]?[ea]?d\b[^\n]*\d/i.test(combinedMain) &&
@@ -298,8 +310,8 @@ export async function runOcrLocally(
             if (!cropUrl) continue;
             const res = await worker.recognize(cropUrl);
             if (res.data.text) crops.push(res.data.text);
-            // Untuk Fleet Head Counts (kuadran kiri-bawah), coba binarized 200 bila rasio sel hilang '/'
-            if (sy >= 0.49) {
+            // Untuk Fleet Head Counts (kiri-bawah) & On-hold (kanan-atas), coba juga binarized 200 bila grayscale salah baca digit tipis
+            if (sy >= 0.49 || sx >= 0.45) {
               const binCropUrl = await binarizeForOcr(cropUrl, 200);
               const resBin = await worker.recognize(binCropUrl);
               if (resBin.data.text) crops.push(resBin.data.text);

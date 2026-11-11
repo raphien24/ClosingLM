@@ -118,8 +118,11 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
   const [manualFields, setManualFields] = useState<string[]>([]);
   const [ocrStep, setOcrStep] = useState<string>("Mengoptimalkan gambar...");
   const [ocrElapsed, setOcrElapsed] = useState<number>(0);
+  const [processingCount, setProcessingCount] = useState<number>(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const cancelledRef = useRef(false);
+  const ocrBusyRef = useRef(false);
+  const runOcrRef = useRef<((targetImages: string[]) => Promise<void>) | null>(null);
 
   const isProcessing = pageState === "processing";
   const isSaving = pageState === "saving";
@@ -236,14 +239,32 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
         i.type.startsWith("image/")
       );
       if (items.length > 0) {
-        items.forEach((item) => {
-          const blob = item.getAsFile();
-          if (!blob) return;
-          compressImageFile(blob).then((dataUrl) => {
-            setScreenshots((p) => [...p, dataUrl]);
-            toast.success("Screenshot ditambahkan!");
+        if (ocrBusyRef.current || pageState === "processing") {
+          toast("Proses OCR masih berjalan, tunggu sebentar...");
+          return;
+        }
+        e.preventDefault();
+        const blobs = items
+          .map((item) => item.getAsFile())
+          .filter((f): f is File => f !== null);
+        if (blobs.length === 0) return;
+
+        ocrBusyRef.current = true;
+        Promise.all(blobs.map(compressImageFile))
+          .then((dataUrls) => {
+            const batch = [...screenshots, ...dataUrls];
+            if (batch.length === 0) {
+              ocrBusyRef.current = false;
+              return;
+            }
+            // Hapus gambar dari area upload lalu langsung jalankan OCR
+            setScreenshots([]);
+            return runOcrRef.current?.(batch);
+          })
+          .catch(() => {
+            ocrBusyRef.current = false;
+            toast.error("Gagal memproses gambar dari clipboard.");
           });
-        });
         return;
       }
 
@@ -305,7 +326,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     };
     window.addEventListener("paste", handler);
     return () => window.removeEventListener("paste", handler);
-  }, [activeTab, detectedDate, mergeIntoOcrRow]);
+  }, [activeTab, detectedDate, mergeIntoOcrRow, screenshots, pageState]);
 
   const handleParseManualText = () => {
     if (!pastedText.trim()) {
@@ -338,11 +359,14 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     toast.success(`${countFields} angka berhasil diekstrak dari teks FMS!`);
   };
 
-  const handleProcessOcr = async () => {
-    if (!screenshots.length) {
+  const runOcrForImages = async (targetImages: string[]) => {
+    if (!targetImages.length) {
+      ocrBusyRef.current = false;
       toast.error("Belum ada screenshot.");
       return;
     }
+    ocrBusyRef.current = true;
+    setProcessingCount(targetImages.length);
     setPageState("processing");
     cancelledRef.current = false;
     setOcrStep("Membaca screenshot di perangkat...");
@@ -371,7 +395,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
 
     try {
       const { texts, sparseTexts, confidences, altTexts, extraTexts } = await runOcrLocally(
-        screenshots,
+        targetImages,
         {
           onProgress: (step) => setOcrStep(step),
           isCancelled: () => cancelledRef.current,
@@ -468,6 +492,28 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             for (const ek of extraKeys) {
               applyFallback(ek, cropParsed.row[ek] as number | null | undefined);
             }
+            // Bila fleet_oh_total sebelumnya terbaca < fleet_oh_volume (mustahil, mis. 13 < 103), ganti dari crop yang valid (>= Volume)
+            if (
+              parsed.row.fleet_oh_volume != null &&
+              parsed.row.fleet_oh_total != null &&
+              parsed.row.fleet_oh_total < parsed.row.fleet_oh_volume &&
+              cropParsed.row.fleet_oh_total != null &&
+              cropParsed.row.fleet_oh_total >= parsed.row.fleet_oh_volume
+            ) {
+              parsed.row.fleet_oh_total = cropParsed.row.fleet_oh_total;
+              fieldConf.fleet_oh_total = fallbackConf;
+            }
+          }
+          // Sama seperti crop: bila altPass punya On-hold Total valid (>= Volume) dan pass 1 menghasilkan nilai mustahil (< Volume)
+          if (
+            parsed.row.fleet_oh_volume != null &&
+            parsed.row.fleet_oh_total != null &&
+            parsed.row.fleet_oh_total < parsed.row.fleet_oh_volume &&
+            altParsed.row.fleet_oh_total != null &&
+            altParsed.row.fleet_oh_total >= parsed.row.fleet_oh_volume
+          ) {
+            parsed.row.fleet_oh_total = altParsed.row.fleet_oh_total;
+            fieldConf.fleet_oh_total = fallbackConf;
           }
         }
 
@@ -491,17 +537,20 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
 
       const merged = mergeOcrBatches(batches);
       const mergedRec = (merged.row || {}) as Record<string, unknown>;
-      const populatedConfs = Object.keys(mergedRec)
-        .filter((k) => mergedRec[k] != null && fieldConf[k] != null)
-        .map((k) => fieldConf[k]);
+      const nextFieldConf: Record<string, number> = ocrRow ? { ...fieldConfidence } : {};
+      for (const [k, v] of Object.entries(fieldConf)) {
+        if (mergedRec[k] != null) nextFieldConf[k] = v;
+      }
+      const populatedConfs = Object.values(nextFieldConf);
       const avgConf =
         populatedConfs.length > 0
           ? Math.round(populatedConfs.reduce((sum, v) => sum + v, 0) / populatedConfs.length)
           : Math.round(totalConf / texts.length);
       setOcrConfidence(avgConf);
-      setFieldConfidence(fieldConf);
+      setFieldConfidence(nextFieldConf);
       setOcrEngine("tesseract");
       mergeIntoOcrRow(merged.row || {});
+      setScreenshots([]);
       toast.success("OCR selesai! Periksa dan simpan data.");
     } catch (err: unknown) {
       clearTimeout(timeoutId);
@@ -519,7 +568,17 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       setPageState(ocrRow ? "preview" : "idle");
     } finally {
       abortControllerRef.current = null;
+      ocrBusyRef.current = false;
+      setProcessingCount(0);
     }
+  };
+
+  useEffect(() => {
+    runOcrRef.current = runOcrForImages;
+  });
+
+  const handleProcessOcr = () => {
+    void runOcrForImages(screenshots);
   };
 
   const handleCancelOcr = () => {
@@ -1028,7 +1087,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                     <Clock className="h-3.5 w-3.5 text-gray-400" /> {ocrElapsed}s
                   </span>
                   <span>•</span>
-                  <span>{screenshots.length} screenshot</span>
+                  <span>{processingCount || screenshots.length} screenshot</span>
                 </div>
                 <div className="mt-5">
                   <button
