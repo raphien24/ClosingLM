@@ -104,30 +104,27 @@ function parseCourierCell(raw: string): { id: string; name: string } {
 }
 
 /**
- * Parse "2026-11-07 07:31:10" → "11/07/2026" (MM/DD/YYYY)
+ * Parse "2026-11-07 07:31:10" → "2026-11-07" (YYYY-MM-DD)
  * Juga handle Date object dari xlsx (jika cellDates: true)
  */
-function parseDeliveryDate(raw: unknown): string | null {
+function parseDeliveryDateYMD(raw: unknown): string | null {
   if (!raw) return null;
 
-  // xlsx mungkin return Date object
   if (raw instanceof Date) {
     if (isNaN(raw.getTime())) return null;
     const m = String(raw.getMonth() + 1).padStart(2, "0");
     const d = String(raw.getDate()).padStart(2, "0");
     const y = raw.getFullYear();
-    return `${m}/${d}/${y}`;
+    return `${y}-${m}-${d}`;
   }
 
   const s = String(raw).trim();
   if (!s || s === "-") return null;
 
-  // "2026-11-07 07:31:10" → ambil "2026-11-07"
-  const datePart = s.split(" ")[0];
+  const datePart = s.split(/[ T]/)[0];
   const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) {
-    const [, y, m, d] = match;
-    return `${m}/${d}/${y}`; // MM/DD/YYYY
+    return `${match[1]}-${match[2]}-${match[3]}`;
   }
 
   return null;
@@ -163,9 +160,10 @@ function isHeaderRow(row: unknown[]): boolean {
 export function parseFmsRows(rawRows: unknown[][], manualDateYMD?: string | null): FmsParseResult {
   const rows: FmsRow[] = [];
   const errors: string[] = [];
-  let dateDetected: string | null = manualDateYMD || null;
+  let dateDetected: string | null = null;
   let formatDetected: "daily_fleet" | "historical_performance" = "daily_fleet";
   let skippedOffCount = 0;
+  const dailyDateCounts = new Map<string, number>();
 
   // Default index kolom berdasarkan export standar FMS (19 kolom)
   const colIdx = {
@@ -204,6 +202,7 @@ export function parseFmsRows(rawRows: unknown[][], manualDateYMD?: string | null
 
       if (isHistorical) {
         formatDetected = "historical_performance";
+        dateDetected = manualDateYMD || null;
         colIdx.zone = -1;
         colIdx.assignedTarget = -1;
         colIdx.assignedProgress = -1;
@@ -318,9 +317,9 @@ export function parseFmsRows(rawRows: unknown[][], manualDateYMD?: string | null
 
     // ── Format 1: Daily Fleet Export ──
     const firstDelivRaw = row[colIdx.firstDeliveringTime];
-    const parsedDate = parseDeliveryDate(firstDelivRaw);
+    const rowYmd = parseDeliveryDateYMD(firstDelivRaw);
 
-    if (!parsedDate) {
+    if (!rowYmd) {
       const delivCount = n(row[colIdx.delivered]);
       // Jika delivered > 0 tapi First Delivering Time kosong, baru catat warning
       if (delivCount && delivCount > 0) {
@@ -329,16 +328,8 @@ export function parseFmsRows(rawRows: unknown[][], manualDateYMD?: string | null
       continue;
     }
 
-    // Simpan tanggal YYYY-MM-DD dari data pertama yang valid
-    if (!dateDetected) {
-      const rawStr = String(firstDelivRaw ?? "").trim();
-      const ymdMatch = rawStr.split(" ")[0]?.match(/^(\d{4}-\d{2}-\d{2})$/);
-      if (ymdMatch) dateDetected = ymdMatch[1];
-      else if (firstDelivRaw instanceof Date) {
-        const d = firstDelivRaw as Date;
-        dateDetected = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-      }
-    }
+    dailyDateCounts.set(rowYmd, (dailyDateCounts.get(rowYmd) ?? 0) + 1);
+    const parsedDate = ymdToMmDdYyyy(rowYmd);
 
     rows.push({
       courier_id,
@@ -361,6 +352,20 @@ export function parseFmsRows(rawRows: unknown[][], manualDateYMD?: string | null
       stuck_at_delivering: n(row[colIdx.stuckAtDelivering]),
       onhold:              n(row[colIdx.onhold]),
     });
+  }
+
+  // Untuk Format Daily Fleet: pakai 1 tanggal mayoritas (First Delivering Time) agar 1 kurir carryover kemarin
+  // tidak memecah uploadDates dan menghapus seluruh data tanggal sebelumnya di database.
+  if (formatDetected === "daily_fleet" && rows.length > 0 && dailyDateCounts.size > 0) {
+    const sorted = [...dailyDateCounts.entries()].sort((a, b) =>
+      b[1] !== a[1] ? b[1] - a[1] : b[0].localeCompare(a[0])
+    );
+    const modalYmd = sorted[0][0];
+    dateDetected = modalYmd;
+    const uniformDate = ymdToMmDdYyyy(modalYmd);
+    for (const r of rows) {
+      r.date = uniformDate;
+    }
   }
 
   return { rows, errors, dateDetected, formatDetected, skippedOffCount };

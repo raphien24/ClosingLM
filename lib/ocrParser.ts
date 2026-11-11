@@ -403,19 +403,21 @@ function extractFleetHeadCounts(text: string): {
     mitra_4wh:      null as number | null,
   };
 
-  // Isolasi section Fleet Head Counts (tangani kasus berdampingan dengan Fleet Productivity)
+  // Isolasi section Fleet Head Counts (tangani kasus berdampingan dengan Fleet Productivity & typo OCR "Fleot"/"Float")
+  const FHC_HEADING_RE = /F[il1][aeo]{1,3}[rt]\s+H[aeo]{2,3}[ad]\s+C[o0][au][nr][tl]s?/i;
+  const PROD_STOP_RE = /(?:\b\d\s+)?F[il1][aeo]{1,3}[rt]\s+P[a-z]{0,3}[o0]du[ce]tiv[a-z]{2,6}|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand[aeo]d|Keuangan|Ringkasan/i;
   let hcSource = "";
-  const hcHeading = text.match(/F[il1]e{1,2}t\s+H[aeo]{2,3}d\s+C[o0]unts?/i);
+  const hcHeading = text.match(FHC_HEADING_RE);
   if (hcHeading && hcHeading.index !== undefined) {
     const afterStart = text.slice(hcHeading.index + hcHeading[0].length);
     const firstNewline = afterStart.indexOf("\n");
     const firstLine = firstNewline === -1 ? afterStart : afterStart.slice(0, firstNewline);
-    const stopMatch = afterStart.match(/(?:\b\d\s+)?Fleet\s+Productivity|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand[aeo]d|Keuangan|Ringkasan/i);
+    const stopMatch = afterStart.match(PROD_STOP_RE);
     const hasImmediateStop =
       stopMatch &&
       stopMatch.index !== undefined &&
       afterStart.slice(0, stopMatch.index).trim().length < 8;
-    const isSideBySide = /Fleet\s+Productivity/i.test(firstLine) || !!hasImmediateStop;
+    const isSideBySide = /F[il1][aeo]{1,3}[rt]\s+P[a-z]{0,3}[o0]du[ce]tiv[a-z]{2,6}/i.test(firstLine) || !!hasImmediateStop;
 
     if (isSideBySide) {
       const lines = afterStart.split(/\r?\n/).filter((l) => l.trim().length > 0).slice(0, 55);
@@ -448,7 +450,7 @@ function extractFleetHeadCounts(text: string): {
     // Fallback jika header "Fleet Head Counts" terpotong OCR, tapi label "Actual/Schedule" atau Dedicated+KurirPlus terbaca
     const actualMatch =
       text.match(/Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}/i) ??
-      (!/\b(?:Fleet\s+Productivity|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand|\d+\s*Order\b)/i.test(text)
+      (!/\b(?:F[il1][aeo]{1,3}[rt]\s+P[a-z]{0,3}[o0]du|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand|\d+\s*Order\b)/i.test(text)
         ? text.match(/Dedicated[\s\S]{0,60}?K[au]r[a-z]{0,4}\s+P[a-z]{1,4}\b/i)
         : null);
     if (!actualMatch || actualMatch.index === undefined) return result;
@@ -463,7 +465,7 @@ function extractFleetHeadCounts(text: string): {
       }
     }
     const suffixRaw = text.slice(actualMatch.index, actualMatch.index + 700);
-    const stopMatch = suffixRaw.match(/(?:\b\d\s+)?Fleet\s+Productivity|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand|Keuangan/i);
+    const stopMatch = suffixRaw.match(PROD_STOP_RE);
     const suffix = stopMatch && stopMatch.index !== undefined
       ? suffixRaw.slice(0, stopMatch.index)
       : suffixRaw;
@@ -483,9 +485,13 @@ function extractFleetHeadCounts(text: string): {
   let dedicatedTotal: number | null = null;
   let kurirPlusTotal: number | null = null;
   let mitraTotal: number | null = null;
+  const attOrPctLine =
+    "(?:(?:Att|At[aeio]|Ada|An|Ate|Ame|Lte|Adm|Emo|Empo)[a-z]{2,12}|(?:Rate|Sate|Nate|fate)\\b|(?:1[06eO][0O]|\\d{2,3})(?:[.,]\\d{1,2})?\\s*%|\\b100[.,]?0[8%])";
   const hdrLineMatch =
-    hcNorm.match(/De[a-z]{3,8}\b(?![^\n]*Actual)[^\n]*\n\s*(\d{1,3}(?:\s+\d{1,3}){0,2})(?!\s*\/)\b/i) ??
-    hcNorm.match(/\n[ \t]*(\d{1,3}[ \t]+\d{1,3}[ \t]+\d{1,3})[ \t]*\r?\n\s*[^\n]*(?:(?:Att|Ada|An|Ate|Ame|Lte|Adm)[a-z]{3,10}|100[.,]?\d{1,2}\s*%)/i);
+    hcNorm.match(/De[a-z]{3,8}\b(?![^\n]*Actual)[^\n]*\n\s*(\d{1,3}(?:[ \t]+\d{1,3}){0,2})(?!\s*\/)\b/i) ??
+    hcNorm.match(
+      new RegExp(`(?:^|\\n)[ \\t]*(\\d{1,3}[ \\t]+\\d{1,3}(?:[ \\t]+\\d{1,3})?)[ \\t]*(?=\\r?\\n[ \\t]*[^\\n]*${attOrPctLine})`, "i")
+    );
   if (hdrLineMatch) {
     const hdrNums = hdrLineMatch[1].trim().split(/\s+/).map((x) => parseInt(x, 10));
     if (hdrNums[0] != null && !isNaN(hdrNums[0])) dedicatedTotal = hdrNums[0];
@@ -571,8 +577,27 @@ function extractFleetHeadCounts(text: string): {
     if (cols[0] !== undefined && cols[0] !== null) result.dedicated_2wh  = cols[0];
     if (cols[1] !== undefined && cols[1] !== null) result.kurir_plus_2wh = cols[1];
     if (cols[2] !== undefined && cols[2] !== null) result.mitra_2wh      = cols[2];
+  } else {
+    // Fallback posisional ketat hanya pada baris tepat di bawah header tabel ("Vehicle Type / Actual/Schedule") bila label "2WH" salah baca (mis. "ww" / "TH")
+    const afterColHdr = hcNorm.match(
+      /(?:V[aeo][htl]?[il]?[o0]?[a-z]{0,4}\s+T[ya]p[ae]|Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}|DOSCH\w*[ \t]+AC[a-z]+)[^\n]*\r?\n[ \t]*([^\r\n]+)/i
+    );
+    if (afterColHdr && !/(?:Lainnya|Lar[a-z]{2,5}|Lawr[a-z]{1,4})/i.test(afterColHdr[1])) {
+      const rawCells = afterColHdr[1].trim().split(/\s{2,}/).filter(Boolean);
+      const stripped =
+        rawCells.length >= 4
+          ? rawCells.slice(1).join("  ")
+          : afterColHdr[1].replace(/^[^\d\s/-]+(?:[ \t]+|$)/, "");
+      if (/\d[ \t]*\/[ \t]*\d|\b\d{4}\b/.test(stripped)) {
+        const cols = parseCols(stripped, [dedicatedTotal, kurirPlusTotal, mitraTotal]);
+        if (cols[0] !== undefined && cols[0] !== null) result.dedicated_2wh  = cols[0];
+        if (cols[1] !== undefined && cols[1] !== null) result.kurir_plus_2wh = cols[1];
+        if (cols[2] !== undefined && cols[2] !== null) result.mitra_2wh      = cols[2];
+      }
+    }
   }
 
+  let kurir_plus_4wh: number | null = null;
   const m4wh = hcNorm.match(
     new RegExp(
       `${ROW4_PAT}([\\s\\S]{0,600}?)(?:Lainnya|Lar[a-z]{2,5}|Lawr[a-z]{1,4}|Dedicated\\s+${ACT_PAT}|${KP_PAT}|${MITRA_PAT}|$)`,
@@ -594,6 +619,7 @@ function extractFleetHeadCounts(text: string): {
         : mitraTotal;
     const cols = parseCols(m4wh[1], [ded4Hint, kp4Hint, m4Hint]);
     if (cols[0] !== undefined && cols[0] !== null) result.dedicated_4wh = cols[0];
+    if (cols[1] !== undefined && cols[1] !== null) kurir_plus_4wh       = cols[1];
     if (cols[2] !== undefined && cols[2] !== null) result.mitra_4wh     = cols[2];
   }
 
@@ -643,7 +669,13 @@ function extractFleetHeadCounts(text: string): {
       const prevLine = lastNonEmptyLine(hcNorm.slice(0, kpMatch.index ?? 0));
       if (!new RegExp(`Dedicated\\s+${ACT_PAT}`, "i").test(prevLine)) {
         const ratios = [...kpMatch[1].matchAll(RATIO_RE)];
-        if (ratios[0]) result.kurir_plus_2wh = ratioNum(ratios[0][1]);
+        if (ratios[0]) {
+          const kpVal = ratioNum(ratios[0][1]);
+          // Jangan terima "0" (sering bocor dari 4WH 0/0 saat sel 7/7 gagal OCR) bila total header Kurir Plus > 0
+          if (kpVal !== null && !(kpVal === 0 && kurirPlusTotal !== null && kurirPlusTotal > 0)) {
+            result.kurir_plus_2wh = kpVal;
+          }
+        }
       }
     }
   }
@@ -671,25 +703,47 @@ function extractFleetHeadCounts(text: string): {
     }
   }
 
+  // Turunkan nilai sel 2WH/4WH yang hilang OCR dari angka total header (hanya bila total >= bagian, agar angka terpotong mis. "2" vs "13" tidak menghasilkan 0 palsu)
+  if (result.dedicated_2wh === null && dedicatedTotal !== null && result.dedicated_4wh !== null && dedicatedTotal >= result.dedicated_4wh) {
+    result.dedicated_2wh = dedicatedTotal - result.dedicated_4wh;
+  } else if (result.dedicated_4wh === null && dedicatedTotal !== null && result.dedicated_2wh !== null && dedicatedTotal >= result.dedicated_2wh) {
+    result.dedicated_4wh = dedicatedTotal - result.dedicated_2wh;
+  }
+  if (result.mitra_2wh === null && mitraTotal !== null && result.mitra_4wh !== null && mitraTotal >= result.mitra_4wh) {
+    result.mitra_2wh = mitraTotal - result.mitra_4wh;
+  } else if (result.mitra_4wh === null && mitraTotal !== null && result.mitra_2wh !== null && mitraTotal >= result.mitra_2wh) {
+    result.mitra_4wh = mitraTotal - result.mitra_2wh;
+  }
+  if (result.kurir_plus_2wh === null && kurirPlusTotal !== null) {
+    result.kurir_plus_2wh =
+      kurir_plus_4wh !== null && kurirPlusTotal >= kurir_plus_4wh
+        ? kurirPlusTotal - kurir_plus_4wh
+        : kurirPlusTotal;
+  }
+
   // 3. Jika Fleet Head Counts bernilai "-/-" / belum ada kurir ("Attendance Rate -%" tanpa rasio aktif > 0):
   //    tulis 0 pada semua hasil Fleet Head Counts.
   //    Abaikan angka persen atau tanggal (mis. "15/50000%)" atau "11/11/2026") agar tidak membatalkan deteksi "-/-".
   const hasPositiveRatio = /\b(?:[1-9]\d*\s*\/\s*\d{1,3}|\d{1,3}\s*\/\s*[1-9]\d*)\b(?!\s*[%\/])/.test(hcNorm);
   const hasAnyRatioSlash = /\d[ \t]*\/[ \t]*\d/.test(hcNorm);
+  const hasAnyPositiveTotal =
+    (dedicatedTotal ?? 0) > 0 || (kurirPlusTotal ?? 0) > 0 || (mitraTotal ?? 0) > 0;
+  const hasActiveAttendance = /\b(?:100|[1-9]\d)(?:[.,]\d)?\s*%|\b100[.,]?0[8%]/i.test(hcNorm);
   const hasDashRatio = /-\s*\/\s*-/.test(hcNorm);
   const hasDashAttendance =
     /(?:Attendance|A[a-z]{4,9}nce)\s+Ra[a-z]{1,3}\s*[-~]\s*%/i.test(hcNorm) &&
     !/Attendance\s+Rate\s*\d/i.test(hcNorm);
   const hasEmptyHeaderDash =
     (/Updated\s*:\s*-/i.test(hcNorm) || /(?:^|\n)\s*-\s*(?:\n|$)/.test(hcNorm)) &&
-    !/\b\d{1,3}\s*%/.test(hcNorm);
+    !hasActiveAttendance;
   const hasEmptyFhcCards =
     !hasPositiveRatio &&
     !hasAnyRatioSlash &&
+    !hasAnyPositiveTotal &&
     dedicatedTotal === null &&
     kurirPlusTotal === null &&
     mitraTotal === null &&
-    !/\b\d{2,3}[.,]\d\s*%/.test(hcNorm) &&
+    !hasActiveAttendance &&
     /(?:Att|Adm|A[nt]t|Ate)[a-z]{3,10}/i.test(hcNorm);
   if (hasEmptyFhcCards) {
     result.dedicated_2wh  = 0;
@@ -699,6 +753,8 @@ function extractFleetHeadCounts(text: string): {
     result.mitra_4wh      = 0;
   } else if (
     !hasPositiveRatio &&
+    !hasAnyPositiveTotal &&
+    !hasActiveAttendance &&
     !/\bAttendance\s+Rate\s*\d/i.test(hcNorm) &&
     (hasDashRatio || hasDashAttendance || hasEmptyHeaderDash)
   ) {

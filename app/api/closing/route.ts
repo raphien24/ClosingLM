@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { appendRow, getSheetData, updateRow } from "@/lib/sheets";
+import { appendRow, getSheetData, sortSheetByDateKey, updateRow } from "@/lib/sheets";
 import { closingDataToRow, detectAnomalies, rowToClosingData } from "@/lib/utils";
-import { normalizeToYMD, todayWIB } from "@/lib/dateUtils";
+import { normalizeToYMD, nowWIBTimestamp, todayWIB } from "@/lib/dateUtils";
 import { ClosingData } from "@/types/closing";
 
 const SHEET = "DATA_CLOSING";
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const submittedAt = new Date().toISOString();
+    const submittedAt = nowWIBTimestamp();
     const submittedBy = session.user?.email || "unknown";
     const rowValues = closingDataToRow(data, submittedAt, submittedBy);
 
@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
     } else {
       await appendRow(SHEET, rowValues);
     }
+    await sortSheetByDateKey(SHEET, 0, normalizeToYMD);
 
     return NextResponse.json({
       success: true,

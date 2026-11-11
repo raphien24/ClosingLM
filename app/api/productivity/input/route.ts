@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { saveCourierRecordsBatch, getRawData } from "@/lib/productivityService";
+import { saveCourierRecordsBatch, checkExistingCourierRecords } from "@/lib/productivityService";
 import { CourierRecord } from "@/types/productivity";
 
 export async function POST(req: NextRequest) {
@@ -22,32 +22,16 @@ export async function POST(req: NextRequest) {
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid body" }, { status: 400 }); }
 
-  // Mode check-only: cek duplikat tanpa simpan
+  // Mode check-only: cek duplikat & profil kurir akurat tanpa simpan
   if (body.checkOnly) {
     try {
-      const existing = await getRawData(user.hubName);
-      const uploadDates = new Set(
-        (body.records || []).map((r) => {
-          const parts = r.date.split("/");
-          if (parts.length === 3) {
-            return `${parts[2]}-${parts[0].padStart(2,"0")}-${parts[1].padStart(2,"0")}`;
-          }
-          return r.date;
-        })
+      const check = await checkExistingCourierRecords(
+        (body.records || []).map((r) => ({ courier_id: r.courier_id, date: r.date })),
+        user.hubName
       );
-      const existingOnDate = existing.filter((r) => {
-        const parts = r.date.split("/");
-        if (parts.length !== 3) return false;
-        const key = `${parts[2]}-${parts[0].padStart(2,"0")}-${parts[1].padStart(2,"0")}`;
-        return uploadDates.has(key);
-      });
       return NextResponse.json({
         success: true,
-        existingOnDateCount: existingOnDate.length,
-        willOverwriteCount: existingOnDate.length,
-        newCount: (body.records?.length ?? 0),
-        overwriteKeys: [],
-        courierProfiles: {},
+        ...check,
       });
     } catch (err) {
       return NextResponse.json({ error: err instanceof Error ? err.message : "Error" }, { status: 500 });

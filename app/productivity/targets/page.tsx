@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Trash2, Save, Target, AlertTriangle, CheckCircle } from "lucide-react";
 import toast from "react-hot-toast";
 import { TargetAppeal, DEFAULT_TARGETS } from "@/types/productivity";
+import { parseTimestamp } from "@/lib/dateUtils";
 import { format, startOfWeek, addWeeks } from "date-fns";
 
 function getWeekOptions(extraWeek?: string | null) {
@@ -261,7 +262,9 @@ function AdjustTargetContent() {
                     <td className="px-4 py-2.5 text-gray-700">{a.vehicle_type}</td>
                     <td className="px-4 py-2.5 font-semibold text-gray-900">{a.target}</td>
                     <td className="px-4 py-2.5 text-xs text-gray-400">
-                      {a.created_at ? new Date(a.created_at).toLocaleDateString("id-ID") : "-"}
+                      {a.created_at
+                        ? (parseTimestamp(a.created_at)?.toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta" }) ?? a.created_at)
+                        : "-"}
                     </td>
                     <td className="px-4 py-2.5">
                       <button onClick={()=>handleDelete(a)} className="p-1 text-gray-400 hover:text-red-500 transition-colors">

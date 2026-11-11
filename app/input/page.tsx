@@ -73,6 +73,41 @@ function getParcelSweeperDateError(
   return `${sourceLabel} (${formatDate(mismatchedDate)}) tidak sesuai dengan tanggal closing yang dipilih (${formatDate(targetDate)}). Ubah tanggal closing di date picker jika ingin menginput tanggal lain.`;
 }
 
+/**
+ * Hitung skor keyakinan per field (0–100) dari konsensus seluruh bacaan (Pass 1, Pass 2, dan Crop zoom)
+ * agar tidak tertahan <= 79% hanya karena watermark/grafik menurunkan skor rata-rata halaman Tesseract.
+ */
+function computeFieldConfidenceScore(
+  finalVal: unknown,
+  readings: unknown[],
+  baseConf: number,
+  options?: { isCropTouch?: boolean; isPass2Only?: boolean; isPass1Only?: boolean }
+): number {
+  const valid = readings.filter((v) => v != null);
+  const target = String(finalVal);
+  const agreeCount = valid.filter((v) => String(v) === target).length;
+  const conflictCount = valid.filter((v) => String(v) !== target).length;
+
+  if (agreeCount >= 3 && conflictCount === 0) return Math.max(baseConf, 94);
+  if (agreeCount >= 2 && conflictCount === 0) return Math.max(baseConf, 88);
+  if (agreeCount >= 2 && conflictCount > 0) return Math.max(baseConf, 84);
+
+  if (conflictCount > 0) {
+    // Jika nilai diubah sengaja oleh crop zoom (mis. On-hold/Linehaul/2WH) tetap aman, kecuali konflik murni Pass 1 vs Pass 2
+    return options?.isCropTouch ? 78 : Math.min(Math.max(baseConf, 50), 60);
+  }
+  if (options?.isCropTouch) {
+    return Math.max(Math.min(baseConf || 80, 86), 80);
+  }
+  if (options?.isPass2Only) {
+    return Math.max(Math.min(baseConf || 76, 82), 74);
+  }
+  if (options?.isPass1Only) {
+    return Math.max(Math.min(baseConf || 80, 86), 78);
+  }
+  return Math.max(Math.min(baseConf || 80, 86), 78);
+}
+
 function UnifiedInputContent() {
   const { hubName } = useAuth();
   const searchParams = useSearchParams();
@@ -422,40 +457,36 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           return detectParcelSweeperDates(`${rawText}\n${altRawText}\n${sparseTexts[idx] || ""}`);
         })();
         const parsed = parseOcrText(rawText);
-        // Keyakinan per field: bandingkan hasil pass 1 (grayscale) dan pass 2 (biner 200).
+        // Keyakinan per field: konsensus lintas-pass (pass 1 grayscale, pass 2 biner 200, dan crop zoom).
         const altParsed = parseOcrText(altRawText);
         const baseConf = confidences[idx] ?? 0;
         const rowRec = parsed.row as Record<string, unknown>;
+        const pass1Snapshot: Record<string, unknown> = { ...rowRec };
         const altRec = altParsed.row as Record<string, unknown>;
         const agreedMainKeys = new Set<string>();
+        const pass1OnlyKeys = new Set<string>();
+        const pass2OnlyKeys = new Set<string>();
+        const cropTouchKeys = new Set<string>();
+        const cropRecs: Record<string, unknown>[] = [];
         for (const k of Object.keys(rowRec)) {
-          let v1 = rowRec[k];
+          const v1 = rowRec[k];
           const v2 = altRec[k];
           if (v1 == null && v2 == null) continue;
-          // Bacaan 1 gagal tapi bacaan 2 (biner) berhasil -> isi dari bacaan 2.
-          let c: number;
           if (v1 == null && v2 != null) {
             rowRec[k] = v2;
-            v1 = v2;
-            c = Math.min(baseConf || 70, 70);
+            pass2OnlyKeys.add(k);
           } else if (v2 == null) {
-            c = Math.min(baseConf || 75, 75);
+            pass1OnlyKeys.add(k);
           } else if (String(v1) === String(v2)) {
-            c = Math.max(baseConf, 80);
             agreedMainKeys.add(k);
-          } else {
-            // Pass 1 dan Pass 2 menghasilkan angka berbeda -> tandai rendah agar dicek ulang.
-            c = Math.min(baseConf || 55, 55);
           }
-          fieldConf[k] = Math.max(fieldConf[k] ?? 0, c);
         }
         if (!isPs) {
-          const fallbackConf = Math.min(baseConf || 75, 75);
           const hasSideBySideLinehaul = /Linehaul|Transporting|\bLT[0O]Q/i.test(`${rawText}\n${altRawText}`);
           const applyFallback = (fk: keyof ClosingData, val: number | null | undefined) => {
             if (val == null || parsed.row[fk] != null) return;
             (parsed.row as Record<string, unknown>)[fk] = val;
-            fieldConf[fk] = Math.max(fieldConf[fk] ?? 0, fallbackConf);
+            cropTouchKeys.add(fk);
           };
 
           const extraKeys = [
@@ -478,11 +509,26 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             "backlog_to_transfer",
             "total_expedite",
           ] as const;
+          const hasMain2whRatios = /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){2,}/i.test(
+            `${rawText}\n${altRawText}`
+          );
           for (const cropText of extraTexts[idx] || []) {
             if (!cropText) continue;
             const cropParsed = parseOcrText(cropText);
+            cropRecs.push(cropParsed.row as Record<string, unknown>);
             for (const ek of extraKeys) {
               applyFallback(ek, cropParsed.row[ek] as number | null | undefined);
+            }
+            // Bila crop 3x membaca rasio 2WH eksplisit sementara full-page hanya menurunkan dari total header (atau terbaca 0), utamakan crop
+            if (
+              cropParsed.row.kurir_plus_actual_2wh != null &&
+              (!hasMain2whRatios && /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){2,}/i.test(cropText) ||
+                (parsed.row.kurir_plus_actual_2wh === 0 &&
+                  cropParsed.row.kurir_plus_actual_2wh > 0 &&
+                  !agreedMainKeys.has("kurir_plus_actual_2wh")))
+            ) {
+              parsed.row.kurir_plus_actual_2wh = cropParsed.row.kurir_plus_actual_2wh;
+              cropTouchKeys.add("kurir_plus_actual_2wh");
             }
             // Crop donut ter-zoom 2.5x mengisolasi sisi kiri sehingga bebas noise Linehaul Trip dan angka kecil terpotong (mis. "2" dari "20")
             for (const dk of ["backlog_total", "total_expedite"] as const) {
@@ -498,7 +544,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                 dk === "total_expedite" && hasSideBySideLinehaul && cropText.startsWith("To Expedite\n");
               if (replaceTruncated || replaceLinehaulPolluted) {
                 parsed.row[dk] = cropVal;
-                fieldConf[dk] = fallbackConf;
+                cropTouchKeys.add(dk);
               }
             }
             // Bila fleet_oh_total sebelumnya terbaca < fleet_oh_volume (mustahil, mis. 13 < 103), ganti dari crop yang valid (>= Volume)
@@ -510,7 +556,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
               cropParsed.row.fleet_oh_total >= parsed.row.fleet_oh_volume
             ) {
               parsed.row.fleet_oh_total = cropParsed.row.fleet_oh_total;
-              fieldConf.fleet_oh_total = fallbackConf;
+              cropTouchKeys.add("fleet_oh_total");
             }
           }
           // Sama seperti crop: bila altPass punya On-hold Total valid (>= Volume) dan pass 1 menghasilkan nilai mustahil (< Volume)
@@ -522,7 +568,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             altParsed.row.fleet_oh_total >= parsed.row.fleet_oh_volume
           ) {
             parsed.row.fleet_oh_total = altParsed.row.fleet_oh_total;
-            fieldConf.fleet_oh_total = fallbackConf;
+            pass2OnlyKeys.add("fleet_oh_total");
           }
 
           const sparseText = sparseTexts[idx] || "";
@@ -543,6 +589,23 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           }
           applyFallback("backlog_total", extractBacklogSparse(sparseText));
           applyFallback("total_expedite", extractExpediteSparse(sparseText));
+        }
+
+        // Hitung skor keyakinan akhir tiap field menggunakan seluruh bacaan (Pass 1, Pass 2, dan seluruh Crop)
+        for (const k of Object.keys(rowRec)) {
+          const val = rowRec[k];
+          if (val == null) continue;
+          const score = computeFieldConfidenceScore(
+            val,
+            [pass1Snapshot[k], altRec[k], ...cropRecs.map((cr) => cr[k])],
+            baseConf,
+            {
+              isCropTouch: cropTouchKeys.has(k),
+              isPass2Only: pass2OnlyKeys.has(k),
+              isPass1Only: pass1OnlyKeys.has(k),
+            }
+          );
+          fieldConf[k] = Math.max(fieldConf[k] ?? 0, score);
         }
 
         if (isPs && psDates.length === 0) {

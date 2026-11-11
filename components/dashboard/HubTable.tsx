@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ClosingData } from "@/types/closing";
 import { formatNumber, getRowColor, getRowColorClass } from "@/lib/utils";
+import { parseTimestamp } from "@/lib/dateUtils";
 import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -196,6 +197,11 @@ export function HubTable({ data, isLoading }: HubTableProps) {
     if (!sortKey || !sortDir) return 0;
     const av = a[sortKey], bv = b[sortKey];
     if (av == null) return 1; if (bv == null) return -1;
+    if (sortKey === "submitted_at") {
+      const at = parseTimestamp(String(av))?.getTime() ?? 0;
+      const bt = parseTimestamp(String(bv))?.getTime() ?? 0;
+      return sortDir === "asc" ? at - bt : bt - at;
+    }
     if (typeof av === "number" && typeof bv === "number")
       return sortDir === "asc" ? av - bv : bv - av;
     return sortDir === "asc"
@@ -427,7 +433,11 @@ export function HubTable({ data, isLoading }: HubTableProps) {
                 {/* Update */}
                 <td className="px-1.5 py-1.5 text-center text-gray-400 whitespace-nowrap">
                   {row.submitted_at
-                    ? new Date(row.submitted_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })
+                    ? (parseTimestamp(row.submitted_at)?.toLocaleTimeString("id-ID", {
+                        timeZone: "Asia/Jakarta",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }) ?? row.submitted_at)
                     : <span className="text-orange-400 font-medium">Belum</span>}
                 </td>
               </tr>

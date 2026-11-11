@@ -23,6 +23,30 @@ export function nowWIBDate(): Date {
 }
 
 /**
+ * Ambil timestamp saat ini dalam format "dd-mm-yyyy hh:mm WIB" (contoh: "12-11-2026 00:31 WIB").
+ */
+export function nowWIBTimestamp(date: Date = new Date()): string {
+  const wib = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  const iso = wib.toISOString();
+  return `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)} ${iso.slice(11, 16)} WIB`;
+}
+
+/**
+ * Parse timestamp dari format "dd-mm-yyyy hh:mm WIB" maupun ISO-8601 (+07:00 / Z) menjadi Date.
+ */
+export function parseTimestamp(raw: string | null | undefined): Date | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  const m = s.match(/^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\s*WIB)?$/i);
+  if (m) {
+    const d = new Date(`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6] || "00"}+07:00`);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const parsed = new Date(s);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
  * Format Date ke MM/DD/YYYY (format yang dipakai di sheet PRODUCTIVITY_RAW)
  */
 export function formatDateForSheet(date: Date): string {

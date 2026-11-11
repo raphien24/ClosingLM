@@ -4,7 +4,7 @@ import { getSheetData } from "@/lib/sheets";
 import { getAllHubs } from "@/lib/userMapping";
 import { rowToClosingData } from "@/lib/utils";
 import { ClosingData, KpiSummary } from "@/types/closing";
-import { todayWIB, normalizeToYMD } from "@/lib/dateUtils";
+import { todayWIB, normalizeToYMD, parseTimestamp } from "@/lib/dateUtils";
 import { getDailyProductivityByHubs, HubDailyProductivity } from "@/lib/productivityService";
 
 const SHEET = "DATA_CLOSING";
@@ -37,7 +37,11 @@ export async function GET(req: NextRequest) {
     for (const d of parsedRows) {
       const key = d.nama_hub.toLowerCase().trim();
       const prev = latestByHub.get(key);
-      if (!prev || (d.submitted_at || "") >= (prev.submitted_at || "")) {
+      if (
+        !prev ||
+        (parseTimestamp(d.submitted_at)?.getTime() ?? 0) >=
+          (parseTimestamp(prev.submitted_at)?.getTime() ?? 0)
+      ) {
         latestByHub.set(key, d);
       }
     }

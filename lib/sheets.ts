@@ -78,22 +78,13 @@ export async function getSheetData(
 }
 
 /**
- * Append satu row ke sheet
+ * Append satu row ke sheet (lewat appendRows agar selalu ditulis tepat setelah baris terakhir terisi).
  */
 export async function appendRow(
   sheetName: string,
   values: (string | number | null)[]
-): Promise<void> {
-  const sheets = getSheetsClient();
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A1`,
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [values],
-    },
-  });
-  invalidateSheetCache(sheetName);
+): Promise<number> {
+  return appendRows(sheetName, [values]);
 }
 
 /**
@@ -290,22 +281,120 @@ export async function batchGetSheetData(
 }
 
 /**
- * Batch append banyak rows sekaligus — hanya 1 API call.
- * Jauh lebih efisien dari appendRow satu per satu.
+ * Hitung nomor baris terakhir yang benar-benar berisi data (1-indexed), aman meski ada baris kosong di tengah atau kolom A kosong.
+ */
+export function findLastNonEmptyRow(rows: string[][]): number {
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const row = rows[i];
+    if (row && row.some((cell) => String(cell ?? "").trim() !== "")) {
+      return i + 1;
+    }
+  }
+  return 0;
+}
+
+/** Pastikan jumlah baris grid sheet mencukupi sebelum menulis hingga baris target (1-indexed). */
+async function ensureRowCapacity(sheetName: string, requiredLastRow: number): Promise<void> {
+  const sheets = getSheetsClient();
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+    fields: "sheets.properties(sheetId,title,gridProperties.rowCount)",
+  });
+  const sheetMeta = meta.data.sheets?.find((s) => s.properties?.title === sheetName);
+  const sheetId = sheetMeta?.properties?.sheetId;
+  const currentRowCount = sheetMeta?.properties?.gridProperties?.rowCount ?? 1000;
+  if (sheetId != null && requiredLastRow > currentRowCount) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            appendDimension: {
+              sheetId,
+              dimension: "ROWS",
+              length: requiredLastRow - currentRowCount + 200,
+            },
+          },
+        ],
+      },
+    });
+  }
+}
+
+/**
+ * Tulis ulang seluruh isi sheet (header + data) memakai valueInputOption: "RAW"
+ * agar tidak mengubah format tanggal yang sudah tersimpan dan membuang celah kosong lama.
+ */
+export async function rewriteSheetRows(
+  sheetName: string,
+  allRows: (string | number | null)[][]
+): Promise<void> {
+  if (allRows.length === 0) return;
+  const sheets = getSheetsClient();
+  await ensureRowCapacity(sheetName, allRows.length);
+  await sheets.spreadsheets.values.clear({ spreadsheetId: SPREADSHEET_ID, range: sheetName });
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A1`,
+    valueInputOption: "RAW",
+    requestBody: { values: allRows },
+  });
+  invalidateSheetCache(sheetName);
+}
+
+/**
+ * Urutkan baris data sheet secara stabil (lama -> baru) berdasarkan key hasil getSortKey.
+ * Hanya menulis ke Google Sheets jika urutan berubah atau ada baris kosong di tengah.
+ */
+export async function sortSheetByDateKey(
+  sheetName: string,
+  columnIndex: number,
+  getSortKey: (rawCell: string) => string
+): Promise<boolean> {
+  const all = await getSheetData(sheetName, { skipCache: true });
+  if (all.length <= 2) return false;
+  const header = all[0];
+  const nonBlank = all.slice(1).filter((r) => r && r.some((c) => String(c ?? "").trim() !== ""));
+  const keyed = nonBlank.map((row, idx) => ({
+    row,
+    idx,
+    key: getSortKey(String(row[columnIndex] ?? "")) || "9999-99-99",
+  }));
+  keyed.sort((a, b) => (a.key !== b.key ? a.key.localeCompare(b.key) : a.idx - b.idx));
+  const changed =
+    nonBlank.length !== all.length - 1 ||
+    keyed.some((entry, pos) => entry.idx !== pos);
+  if (!changed) return false;
+  await rewriteSheetRows(sheetName, [header, ...keyed.map((e) => e.row)]);
+  return true;
+}
+
+/**
+ * Batch append banyak rows langsung ke baris tepat di bawah data paling akhir (`A${startRow}`) memakai `values.update`.
+ * Menghindari Google Sheets `values.append` (mode default OVERWRITE pada deteksi tabel A1) menimpa data tanggal sebelumnya
+ * ketika kolom A kosong atau terdapat celah baris kosong di tengah sheet.
+ * Return: nomor baris awal (1-indexed) tempat batch baru ditulis.
  */
 export async function appendRows(
   sheetName: string,
   values: (string | number | null)[][]
-): Promise<void> {
-  if (values.length === 0) return;
+): Promise<number> {
+  if (values.length === 0) return 0;
   const sheets = getSheetsClient();
-  await sheets.spreadsheets.values.append({
+
+  const existing = await getSheetData(sheetName, { skipCache: true });
+  const lastNonEmptyRow = findLastNonEmptyRow(existing);
+  const startRow = Math.max(1, lastNonEmptyRow + 1);
+  await ensureRowCapacity(sheetName, startRow + values.length - 1);
+
+  await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A1`,
+    range: `${sheetName}!A${startRow}`,
     valueInputOption: "RAW",
     requestBody: { values },
   });
   invalidateSheetCache(sheetName);
+  return startRow;
 }
 
 /**
@@ -344,38 +433,39 @@ export async function updateRows(
 export async function deleteRowsByColumnValue(
   sheetName: string,
   columnIndex: number,
-  value: string
+  matcher: string | ((cellValue: string) => boolean)
 ): Promise<number> {
   const sheets = getSheetsClient();
   const spreadsheetId = SPREADSHEET_ID;
 
-  // Baca semua data
-  const all = await getSheetData(sheetName);
+  // Baca data terbaru langsung dari Sheets agar tidak memproses cache lama
+  const all = await getSheetData(sheetName, { skipCache: true });
   if (all.length <= 1) return 0; // hanya header atau kosong
 
   const header = all[0];
   const dataRows = all.slice(1);
+  const isMatch =
+    typeof matcher === "function"
+      ? (cell: string) => matcher(cell)
+      : (cell: string) => cell.toLowerCase().trim() === matcher.toLowerCase().trim();
 
   // Pisahkan: yang match (akan dihapus) vs yang tidak
-  const toKeep = dataRows.filter(
-    (row) =>
-      !row[columnIndex] ||
-      row[columnIndex].toLowerCase().trim() !== value.toLowerCase().trim()
-  );
+  const toKeep = dataRows.filter((row) => !row[columnIndex] || !isMatch(String(row[columnIndex])));
   const deletedCount = dataRows.length - toKeep.length;
 
   if (deletedCount === 0) return 0;
 
-  // Clear sheet lalu tulis ulang
+  // Clear sheet lalu tulis ulang memakai RAW agar tanggal "MM/DD/YYYY" lain tidak dikonversi ulang oleh locale Sheets
   await sheets.spreadsheets.values.clear({ spreadsheetId, range: sheetName });
 
   const newData = [header, ...toKeep];
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `${sheetName}!A1`,
-    valueInputOption: "USER_ENTERED",
+    valueInputOption: "RAW",
     requestBody: { values: newData },
   });
+  invalidateSheetCache(sheetName);
 
   return deletedCount;
 }
@@ -473,4 +563,50 @@ export async function clearRowColors(sheetName: string): Promise<void> {
       ],
     },
   });
+}
+
+/**
+ * Hapus kolom A secara atomik via `deleteDimension` apabila header kolom A dan B cocok dengan schema lama
+ * (mis. A1="district", B1="courier_id"). Menggeser kolom B..end menjadi A..end tanpa merusak nilai/format tanggal.
+ */
+export async function dropFirstColumnIfHeaderMatches(
+  sheetName: string,
+  expectedHeaderA: string,
+  expectedHeaderB: string
+): Promise<boolean> {
+  const rows = await getSheetData(sheetName, { skipCache: true });
+  const h0 = String(rows[0]?.[0] ?? "").trim().toLowerCase();
+  const h1 = String(rows[0]?.[1] ?? "").trim().toLowerCase();
+  const colAIsEmptyHeader = h0 === "" && rows.slice(1).every((r) => !String(r[0] ?? "").trim());
+  if ((h0 !== expectedHeaderA.toLowerCase() && !colAIsEmptyHeader) || h1 !== expectedHeaderB.toLowerCase()) {
+    return false;
+  }
+
+  const sheets = getSheetsClient();
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+    fields: "sheets.properties(sheetId,title)",
+  });
+  const sheet = meta.data.sheets?.find((s) => s.properties?.title === sheetName);
+  if (sheet?.properties?.sheetId == null) return false;
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId: sheet.properties.sheetId,
+              dimension: "COLUMNS",
+              startIndex: 0,
+              endIndex: 1,
+            },
+          },
+        },
+      ],
+    },
+  });
+  invalidateSheetCache(sheetName);
+  return true;
 }

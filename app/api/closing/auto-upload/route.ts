@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendRow, getSheetData, updateRow } from "@/lib/sheets";
+import { appendRow, getSheetData, sortSheetByDateKey, updateRow } from "@/lib/sheets";
 import { closingDataToRow, detectAnomalies } from "@/lib/utils";
-import { normalizeToYMD, todayWIB } from "@/lib/dateUtils";
+import { normalizeToYMD, nowWIBTimestamp, todayWIB } from "@/lib/dateUtils";
 import { ClosingData } from "@/types/closing";
 
 const SHEET = "DATA_CLOSING";
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
     }
 
     closing.nama_hub = exactHubNameInSheet;
-    const submittedAt = new Date().toISOString();
+    const submittedAt = nowWIBTimestamp();
     const submittedBy = "Auto Script SPX (GAS)";
     const rowValues = closingDataToRow(closing, submittedAt, submittedBy);
 
@@ -206,6 +206,7 @@ export async function POST(req: NextRequest) {
     } else {
       await appendRow(SHEET, rowValues);
     }
+    await sortSheetByDateKey(SHEET, 0, normalizeToYMD);
 
     return NextResponse.json({
       success: true,

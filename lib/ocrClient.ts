@@ -252,7 +252,7 @@ export async function runOcrLocally(
     const combinedMain = `${r200.data.text}\n${r225.data.text}`;
     const isParcelSweeper = isParcelSweeperPage(combinedMain);
     const hasOpBody =
-      /In\s+Hub\s+Status|Fleet\s+Head\s+Counts|Fleet\s+Productivity|Clear\s+Floor\s+Rate|To\s+Handover|To\s+Deliver|Fleet\s+stat/i.test(
+      /In\s+Hub\s+Status|F[il1][aeo]{1,3}[rt]\s+(?:H[aeo]{2,3}[ad]\s+C[o0][au][nr][tl]s?|P[a-z]{0,3}[o0]du[ce]tiv|stat)|Clear\s+Fl?[o0]{2}r\s+Rate|To\s+Handover|To\s+Deliver/i.test(
         combinedMain
       );
     const isOpProgress =
@@ -294,7 +294,7 @@ export async function runOcrLocally(
       // Pastikan rasio Fleet Productivity ("Delivered / Handed Over", "Order") tidak memicu skip crop Fleet Head Counts
       const stripProd = (txt: string) =>
         txt
-          .replace(/(?:\b\d\s+)?Fleet\s+Productivity[\s\S]*/i, "")
+          .replace(/(?:\b\d\s+)?F[il1][aeo]{1,3}[rt]\s+P[a-z]{0,3}[o0]du[ce]tiv[\s\S]*/i, "")
           .split(/\r?\n/)
           .map((l) => {
             const cut = l.search(/Delivered\s*\/\s*Handed|\b\d+\s*Order\b/i);

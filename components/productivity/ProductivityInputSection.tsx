@@ -218,6 +218,11 @@ export function ProductivityInputSection({
               result.skippedOffCount || 0
             } kurir off/resign dilewati).`
           );
+        } else if (filenameDate && result.dateDetected && filenameDate !== result.dateDetected) {
+          toast(
+            `Tanggal di dalam kolom First Delivering Time file adalah ${result.dateDetected} (berbeda dari nama file ${filenameDate}). Koreksi di pemilih tanggal bila perlu.`,
+            { icon: "📅", duration: 6000 }
+          );
         } else if (result.errors.length > 0) {
           toast(
             `${result.rows.length} data dibaca, ${result.errors.length} baris dilewati.`,

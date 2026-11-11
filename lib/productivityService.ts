@@ -1,4 +1,4 @@
-import { getSheetData, batchGetSheetData, appendRow, findRows, updateRow, ensureSheet, appendRows, updateRows, deleteRowsByColumnValue, colorRowYellow, clearRowColors } from "./sheets";
+import { getSheetData, batchGetSheetData, appendRow, findRows, updateRow, ensureSheet, appendRows, updateRows, deleteRowsByColumnValue, rewriteSheetRows, colorRowYellow, clearRowColors, dropFirstColumnIfHeaderMatches } from "./sheets";
 import {
   CourierRecord,
   CourierScheduleRow,
@@ -11,7 +11,7 @@ import {
   getDefaultTarget,
 } from "@/types/productivity";
 import { format, startOfWeek } from "date-fns";
-import { formatDateForSheet, serialToYMD } from "./dateUtils";
+import { formatDateForSheet, nowWIBTimestamp, serialToYMD } from "./dateUtils";
 import { parseSheetNumber } from "./utils";
 import { normalizeContractType, normalizeVehicleType } from "./fmsParser";
 
@@ -20,9 +20,9 @@ import { normalizeContractType, normalizeVehicleType } from "./fmsParser";
 const RAW_SHEET    = (hubName: string) => `RAW_${hubName.toUpperCase().trim()}`;
 const TARGETS_SHEET = (hubName: string) => `TARGETS_${hubName.toUpperCase().trim()}`;
 
-// Header untuk sheet RAW per hub
+// Header untuk sheet RAW per hub (dimulai langsung dari courier_id di kolom A)
 const RAW_HEADER = [
-  "district","courier_id","courier_name","date","driver_name",
+  "courier_id","courier_name","date","driver_name",
   "contract_type","vehicle_type","zone_id",
   "assigned","assigned_target","assigned_progress",
   "delivery_progress","handed_over","delivered","delivered_pct",
@@ -38,13 +38,40 @@ const TARGETS_HEADER = [
 
 // ── Index kolom RAW sheet ────────────────────────────────────
 const COL = {
-  DISTRICT:0, COURIER_ID:1, COURIER_NAME:2, DATE:3, DRIVER_NAME:4,
-  CONTRACT:5, VEHICLE:6, ZONE:7, ASSIGNED:8, ASSIGNED_TARGET:9,
-  ASSIGNED_PROGRESS:10, DELIVERY_PROGRESS:11, HANDED_OVER:12,
-  DELIVERED:13, DELIVERED_PCT:14, DELIVERING_COUNT:15,
-  DELIVERING_PCT:16, FAILED:17, FAILED_PCT:18, STUCK:19, ONHOLD:20,
-  SUBMITTED_AT:21, SUBMITTED_BY:22,
+  COURIER_ID:0, COURIER_NAME:1, DATE:2, DRIVER_NAME:3,
+  CONTRACT:4, VEHICLE:5, ZONE:6, ASSIGNED:7, ASSIGNED_TARGET:8,
+  ASSIGNED_PROGRESS:9, DELIVERY_PROGRESS:10, HANDED_OVER:11,
+  DELIVERED:12, DELIVERED_PCT:13, DELIVERING_COUNT:14,
+  DELIVERING_PCT:15, FAILED:16, FAILED_PCT:17, STUCK:18, ONHOLD:19,
+  SUBMITTED_AT:20, SUBMITTED_BY:21,
 };
+
+const migratedRawSheets = new Set<string>();
+
+/**
+ * Pastikan sheet RAW_<HUB> memakai schema terbaru (tanpa kolom kosong "district" di kolom A).
+ * Jika sheet lama masih punya header A="district" dan B="courier_id", hapus kolom A secara atomik 1 kali.
+ */
+async function ensureRawSheetReady(hubName: string): Promise<string> {
+  const sheet = RAW_SHEET(hubName);
+  await ensureSheet(sheet, RAW_HEADER);
+  if (!migratedRawSheets.has(sheet)) {
+    await dropFirstColumnIfHeaderMatches(sheet, "district", "courier_id");
+    migratedRawSheets.add(sheet);
+  }
+  return sheet;
+}
+
+/** Lepas kolom A lama ("district" atau header kosong saat B1="courier_id") bila batchGet menemui sheet sebelum migrasi. */
+export function normalizeRawSheetRows(rows: string[][]): string[][] {
+  if (rows.length === 0) return rows;
+  const h0 = String(rows[0]?.[0] ?? "").trim().toLowerCase();
+  const h1 = String(rows[0]?.[1] ?? "").trim().toLowerCase();
+  if (h0 === "district" || (h0 === "" && h1 === "courier_id")) {
+    return rows.map((r) => r.slice(1));
+  }
+  return rows;
+}
 
 // ── Index kolom TARGETS sheet ────────────────────────────────
 const TCOL = {
@@ -96,7 +123,7 @@ export function parseDate(dateStr: string | undefined): Date | null {
 /** Konversi row Sheets ke CourierRecord */
 function rowToRecord(row: string[], hubName: string): CourierRecord {
   return {
-    district:            row[COL.DISTRICT]          || "",
+    district:            "",
     courier_id:          row[COL.COURIER_ID]         || "",
     courier_name:        row[COL.COURIER_NAME]       || "",
     date:                row[COL.DATE]               || "",
@@ -256,7 +283,7 @@ export async function submitTargetAppeal(
   userEmail: string
 ): Promise<void> {
   await ensureSheet(TARGETS_SHEET(appeal.nama_hub), TARGETS_HEADER);
-  const createdAt = new Date().toISOString();
+  const createdAt = nowWIBTimestamp();
   const row = [
     appeal.week_start, appeal.contract_type, appeal.vehicle_type,
     appeal.target, createdAt, userEmail,
@@ -359,10 +386,10 @@ function hasWeekTarget(
 // ── Ambil raw data hub ───────────────────────────────────────
 
 export async function getRawData(hubName: string): Promise<CourierRecord[]> {
-  await ensureSheet(RAW_SHEET(hubName), RAW_HEADER);
-  const data = await getSheetData(RAW_SHEET(hubName));
+  const sheet = await ensureRawSheetReady(hubName);
+  const data = normalizeRawSheetRows(await getSheetData(sheet));
   return data.slice(1)
-    .filter((row) => row && row.length > 1 && row[COL.COURIER_ID])
+    .filter((row) => row && row.length > 0 && row[COL.COURIER_ID])
     .map((row) => rowToRecord(row, hubName));
 }
 
@@ -1067,30 +1094,20 @@ export async function saveCourierRecord(
   hubName: string,
   userEmail: string
 ): Promise<{ overwritten: boolean }> {
-  await ensureSheet(RAW_SHEET(hubName), RAW_HEADER);
-  const submittedAt = new Date().toISOString();
-  const row = [
-    record.district, record.courier_id, record.courier_name, record.date,
-    record.driver_name, record.contract_type, record.vehicle_type, record.zone_id,
-    record.assigned??"", record.assigned_target??"",
-    record.assigned_progress??"", record.delivery_progress??"",
-    record.handed_over??"", record.delivered??"", record.delivered_pct??"",
-    record.delivering_count??"", record.delivering_pct??"",
-    record.failed_delivery??"", record.failed_delivery_pct??"",
-    record.stuck_at_delivering??"", record.onhold??"",
-    submittedAt, userEmail,
-  ];
+  const sheet = await ensureRawSheetReady(hubName);
+  const submittedAt = nowWIBTimestamp();
+  const row = buildRow(record, hubName, submittedAt, userEmail);
 
-  const existing = await findRows(RAW_SHEET(hubName), [
+  const existing = await findRows(sheet, [
     { columnIndex: COL.COURIER_ID, value: record.courier_id },
     { columnIndex: COL.DATE,       value: record.date },
   ]);
 
   if (existing.length > 0) {
-    await updateRow(RAW_SHEET(hubName), existing[0], row);
+    await updateRow(sheet, existing[0], row);
     return { overwritten: true };
   } else {
-    await appendRow(RAW_SHEET(hubName), row);
+    await appendRow(sheet, row);
     return { overwritten: false };
   }
 }
@@ -1134,8 +1151,8 @@ export async function checkExistingCourierRecords(
     };
   }
 
-  await ensureSheet(RAW_SHEET(hubName), RAW_HEADER);
-  const existing = await getSheetData(RAW_SHEET(hubName));
+  const sheet = await ensureRawSheetReady(hubName);
+  const existing = normalizeRawSheetRows(await getSheetData(sheet, { skipCache: true }));
 
   const targetDates = new Set(
     records.map((r) => normalizeDateKey(r.date)).filter((d) => d.length > 0)
@@ -1212,9 +1229,8 @@ export async function saveCourierRecordsBatch(
 ): Promise<{ saved: number; deletedExisting: number }> {
   if (records.length === 0) return { saved: 0, deletedExisting: 0 };
 
-  const sheet = RAW_SHEET(hubName);
-  await ensureSheet(sheet, RAW_HEADER);
-  const submittedAt = new Date().toISOString();
+  const sheet = await ensureRawSheetReady(hubName);
+  const submittedAt = nowWIBTimestamp();
 
   // Ambil tanggal unik dari records yang akan di-upload
   // (biasanya semua sama, tapi handle edge case)
@@ -1222,12 +1238,13 @@ export async function saveCourierRecordsBatch(
     records.map((r) => normalizeDateKey(r.date))
   )];
 
-  // 1. Baca existing untuk profil kurir dan cek duplikat tanggal
-  const existing = await getSheetData(sheet);
+  // 1. Baca existing terbaru (bypass cache) untuk profil kurir dan pisahkan row selain tanggal upload
+  const existing = normalizeRawSheetRows(await getSheetData(sheet, { skipCache: true }));
   const courierProfiles = new Map<string, { zone_id: string; assigned_target: number | null }>();
+  const uploadDateSet = new Set(uploadDates);
 
-  // Hitung berapa banyak row existing yang akan dihapus
   let deletedExisting = 0;
+  const keptRows: (string | number | null)[][] = [];
   for (let i = 1; i < existing.length; i++) {
     const row = existing[i];
     if (!row || !row[COL.COURIER_ID]) continue;
@@ -1239,31 +1256,19 @@ export async function saveCourierRecordsBatch(
     if (!prev) {
       courierProfiles.set(cid, { zone_id: z, assigned_target: tgt });
     } else {
-      if (z)           prev.zone_id        = z;
+      if (z)              prev.zone_id         = z;
       if (tgt && tgt > 0) prev.assigned_target = tgt;
     }
 
-    // Hitung row yang akan terhapus
-    if (row[COL.DATE]) {
-      const rowDateKey = normalizeDateKey(String(row[COL.DATE]));
-      if (uploadDates.includes(rowDateKey)) deletedExisting++;
+    const rowDateKey = row[COL.DATE] ? normalizeDateKey(String(row[COL.DATE])) : "";
+    if (rowDateKey && uploadDateSet.has(rowDateKey)) {
+      deletedExisting++;
+    } else {
+      keptRows.push(row);
     }
   }
 
-  // 2. Jika ada data lama untuk tanggal ini, hapus dulu + reset warna
-  if (deletedExisting > 0) {
-    // Hapus per tanggal (dalam format MM/DD/YYYY yang ada di sheet)
-    for (const dateKey of uploadDates) {
-      // Convert YYYY-MM-DD → cari format MM/DD/YYYY yang ada di sheet
-      const [y, m, d] = dateKey.split("-");
-      const mmddyyyy = `${m}/${d}/${y}`;
-      await deleteRowsByColumnValue(sheet, COL.DATE, mmddyyyy);
-    }
-    // Reset warna kuning lama
-    await clearRowColors(sheet);
-  }
-
-  // 3. Bangun rows baru (dengan enrichment profil kurir)
+  // 2. Bangun rows baru (dengan enrichment profil kurir)
   const toAppend: (string | number | null)[][] = [];
   for (const rawRecord of records) {
     const cid          = rawRecord.courier_id.trim();
@@ -1283,18 +1288,27 @@ export async function saveCourierRecordsBatch(
 
   if (toAppend.length === 0) return { saved: 0, deletedExisting };
 
-  // 4. Baca ulang sheet setelah delete untuk tahu posisi baris terakhir
-  const afterDelete = await getSheetData(sheet);
-  const lastRow = afterDelete.length; // baris terakhir yang ada (1-indexed)
+  // 3. Gabungkan + urutkan kronologis (lama -> baru) berdasarkan tanggal agar database selalu rapi berurutan
+  const combined = [...keptRows, ...toAppend]
+    .map((row, idx) => ({
+      row,
+      idx,
+      key: normalizeDateKey(String(row[COL.DATE] ?? "")) || "9999-99-99",
+    }))
+    .sort((a, b) => (a.key !== b.key ? a.key.localeCompare(b.key) : a.idx - b.idx))
+    .map((e) => e.row);
 
-  // 5. Append semua record baru ke bawah
-  await appendRows(sheet, toAppend);
+  await rewriteSheetRows(sheet, [RAW_HEADER, ...combined]);
+  if (existing.length > 1) {
+    await clearRowColors(sheet);
+  }
 
-  // 6. Warnai 1 baris penanda kuning — tepat di atas batch baru
-  //    Jika sheet kosong (hanya header), penanda ada di row 2
-  const markerRowIndex = lastRow + 1; // row pertama dari batch baru (1-indexed)
-  if (markerRowIndex >= 2) {
-    await colorRowYellow(sheet, markerRowIndex);
+  // 4. Warnai 1 baris penanda kuning tepat di awal batch tanggal yang baru disimpan (1-indexed)
+  const firstBatchIdx = combined.findIndex((row) =>
+    uploadDateSet.has(normalizeDateKey(String(row[COL.DATE] ?? "")))
+  );
+  if (firstBatchIdx >= 0) {
+    await colorRowYellow(sheet, firstBatchIdx + 2);
   }
 
   return { saved: toAppend.length, deletedExisting };
@@ -1307,7 +1321,6 @@ function buildRow(
   userEmail: string
 ): (string | number | null)[] {
   return [
-    record.district,
     record.courier_id,
     record.courier_name,
     record.date,
@@ -1378,7 +1391,7 @@ export async function getDailyProductivityByHubs(
 
   for (const hub of hubNames) {
     const hubKey = hub.toLowerCase().trim();
-    const rawRows = batchData.get(RAW_SHEET(hub)) || [];
+    const rawRows = normalizeRawSheetRows(batchData.get(RAW_SHEET(hub)) || []);
     const targetRows = batchData.get(TARGETS_SHEET(hub)) || [];
 
     // Bangun appealMap dari TARGETS_<HUB>
