@@ -1,6 +1,7 @@
 export const SUPER_ADMIN_EMAILS = [
   "rafi.alvian@spxexpress.com",
   "rafiagusalvian@gmail.com",
+  "raphien24@gmail.com",
 ];
 
 export const SUPER_ADMIN_EMAIL = SUPER_ADMIN_EMAILS[0];
