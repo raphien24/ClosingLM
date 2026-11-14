@@ -68,15 +68,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         now - Number(token.checkedAt) > RECHECK_MS;
 
       if (email && shouldCheck) {
+        const isSuper = isSuperAdminEmail(email);
         try {
           const hubInfo = await getUserHub(email);
-          token.hubName = hubInfo?.nama_hub ?? null;
-          token.hubUser = hubInfo?.nama_user ?? null;
-          token.isAuthorized = !!hubInfo;
+          token.hubName = hubInfo?.nama_hub ?? (isSuper ? "Soko Hub" : null);
+          token.hubUser = hubInfo?.nama_user ?? (isSuper ? (user?.name || "Rafi Admin") : null);
+          token.isAuthorized = !!hubInfo || isSuper;
           token.checkedAt = now;
         } catch (error) {
           console.error("Error looking up user hub:", error);
-          if (user) {
+          if (isSuper) {
+            token.hubName = "Soko Hub";
+            token.hubUser = user?.name || "Rafi Admin";
+            token.isAuthorized = true;
+            token.checkedAt = now;
+          } else if (user) {
             token.hubName = null;
             token.hubUser = null;
             token.isAuthorized = false;

@@ -19,7 +19,10 @@ export const metadata: Metadata = {
   title: "Closing Report LM JTT08",
   description: "Sistem Closing Harian & Productivity Last Mile JTT08",
   icons: {
-    icon: "/logo-jtt08.png",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon.png", type: "image/png" },
+    ],
   },
 };
 

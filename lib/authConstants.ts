@@ -1,7 +1,14 @@
-export const SUPER_ADMIN_EMAIL = "rafi.alvian@spxexpress.com";
+export const SUPER_ADMIN_EMAILS = [
+  "rafi.alvian@spxexpress.com",
+  "rafiagusalvian@gmail.com",
+];
+
+export const SUPER_ADMIN_EMAIL = SUPER_ADMIN_EMAILS[0];
 
 export function isSuperAdminEmail(email?: string | null): boolean {
-  return String(email ?? "").trim().toLowerCase() === SUPER_ADMIN_EMAIL;
+  if (!email) return false;
+  const normalized = String(email).trim().toLowerCase();
+  return SUPER_ADMIN_EMAILS.includes(normalized);
 }
 
 export function isValidEmail(email: string): boolean {
