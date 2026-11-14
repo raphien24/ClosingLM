@@ -8,7 +8,7 @@ export const proxy = auth((req) => {
 
   // Izinkan semua file asset statis gambar / font di public
   if (
-    pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|woff|woff2|ttf|eot)$/i)
+    pathname.match(/\.(png|jpg|jpeg|gif|webp|svg|ico|bmp|woff|woff2|ttf|eot|glb)$/i)
   ) {
     return NextResponse.next();
   }
@@ -62,6 +62,6 @@ export const proxy = auth((req) => {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|glb)$).*)",
   ],
 };

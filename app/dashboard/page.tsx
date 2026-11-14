@@ -12,7 +12,7 @@ import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { CaptainPovTransition } from "@/components/pirate/CaptainPovTransition";
+import { SunsetSailTransition } from "@/components/ocean/SunsetSailTransition";
 import {
   MaritimeWaveBackdrop,
   LighthouseBeaconIcon,
@@ -35,7 +35,7 @@ function DashboardFallback() {
 
   if (isSail) {
     return (
-      <div className="fixed inset-0 w-screen h-screen z-[999999] bg-[#020617]" />
+      <div className="fixed inset-0 w-screen h-screen z-[999999] bg-[#1b1530]" />
     );
   }
 
@@ -166,7 +166,7 @@ function DashboardContent() {
   return (
     <>
       {showSail && (
-        <CaptainPovTransition
+        <SunsetSailTransition
           userName={user?.name}
           onReadyForDashboard={handleReadyForDashboard}
           onComplete={handleSailComplete}
