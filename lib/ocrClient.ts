@@ -184,10 +184,111 @@ async function binarizeForOcr(dataUrl: string, threshold: number): Promise<strin
   return canvas.toDataURL("image/png");
 }
 
+/**
+ * Normalisasi kontras (auto-level) pada gambar grayscale:
+ * - Piksel latar terang (>= 236) diputihkan ke 255 agar bebas noise abu-abu kartu FMS
+ * - Piksel teks gelap (< 236) diregangkan kontrasnya agar tepi angka lebih tegas bagi LSTM Tesseract
+ */
+async function enhanceGrayscaleForOcr(dataUrl: string): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const canvas = document.createElement("canvas");
+  canvas.width = img.naturalWidth || img.width;
+  canvas.height = img.naturalHeight || img.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return dataUrl;
+  ctx.drawImage(img, 0, 0);
+  try {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const d = imageData.data;
+    const whiteClip = 236;
+    const blackClip = 35;
+    const span = whiteClip - blackClip;
+    for (let i = 0; i < d.length; i += 4) {
+      const g = d[i];
+      let v: number;
+      if (g >= whiteClip) {
+        v = 255;
+      } else if (g <= blackClip) {
+        v = 0;
+      } else {
+        const norm = (g - blackClip) / span;
+        v = Math.round(Math.pow(norm, 1.15) * 255);
+      }
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+    ctx.putImageData(imageData, 0, 0);
+  } catch {
+    return dataUrl;
+  }
+  return canvas.toDataURL("image/png");
+}
+
+const METRIC_WORD_RE =
+  /^\d[\d.,/%-]*$|^(?:transported|received|assigning|assigned|delivering|delivered|on-?hold|volume|total|dedicated|kurir|plus|mitra|backlog|expedite|parcel|sweeper|scanned|2wh|4wh|order|hub|status)$/i;
+
+interface TesseractPageLike {
+  confidence?: number;
+  blocks?: Array<{
+    paragraphs?: Array<{
+      lines?: Array<{
+        words?: Array<{ text?: string; confidence?: number }>;
+      }>;
+    }>;
+  }> | null;
+}
+
+/**
+ * Ekstrak confidence dari token kata & angka metrik (mengabaikan noise ikon/logo UI)
+ * sekaligus mencatat confidence tertinggi per nilai angka ke dalam tokenMap.
+ */
+function collectPageTokenConfidence(
+  data: TesseractPageLike,
+  tokenMap: Record<string, number>
+): number {
+  const pageConf = data.confidence ?? 0;
+  const relevantConfs: number[] = [];
+
+  for (const block of data.blocks || []) {
+    for (const para of block.paragraphs || []) {
+      for (const line of para.lines || []) {
+        for (const word of line.words || []) {
+          const raw = (word.text || "").trim();
+          const conf = word.confidence ?? 0;
+          if (!raw || conf <= 0) continue;
+
+          if (METRIC_WORD_RE.test(raw) && conf >= 45) {
+            relevantConfs.push(conf);
+          }
+
+          const numMatches = raw.match(/\d+(?:[.,]\d+)?/g);
+          if (numMatches) {
+            for (const nm of numMatches) {
+              const cleanInt = nm.replace(/[.,]/g, "");
+              const rounded = Math.round(conf);
+              tokenMap[nm] = Math.max(tokenMap[nm] ?? 0, rounded);
+              if (cleanInt) {
+                tokenMap[cleanInt] = Math.max(tokenMap[cleanInt] ?? 0, rounded);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (relevantConfs.length >= 3) {
+    const avgRelevant =
+      relevantConfs.reduce((sum, v) => sum + v, 0) / relevantConfs.length;
+    return Math.round(Math.max(pageConf, avgRelevant));
+  }
+  return Math.round(pageConf);
+}
+
 export interface LocalOcrResult {
   texts: string[];
   sparseTexts: string[];
   confidences: number[];
+  tokenConfidences: Record<string, number>[];
   altTexts: string[];
   extraTexts: string[][];
 }
@@ -211,6 +312,7 @@ export async function runOcrLocally(
   const texts: string[] = [];
   const sparseTexts: string[] = [];
   const confidences: number[] = [];
+  const tokenConfidences: Record<string, number>[] = [];
   const altTexts: string[] = [];
   const extraTexts: string[][] = [];
 
@@ -221,26 +323,26 @@ export async function runOcrLocally(
     // Screenshot penuh -> mode 3 (otomatis, cocok untuk dashboard/tabel).
     // Potongan kecil -> mode 6 (blok teks).
     const mainMode = isFull ? "3" : "6";
+    const tokenMap: Record<string, number> = {};
 
     await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
     // Baca 2 kali dengan binarisasi berbeda, lalu cocokkan silang
     // (meniru pendekatan script referensi agar salah baca tidak lolos diam-diam).
-    // Bacaan 1 = grayscale asli; bacaan 2 = biner ambang 200 (seperti script referensi).
-    // Ambang 225 dibuang: benchmark menunjukkan sering menghilangkan angka tipis.
+    // Bacaan 1 = grayscale yang telah di-auto-level kontrasnya; bacaan 2 = biner ambang 200 dari luminance asli.
     const bin200 = await binarizeForOcr(processed, 200);
-    const r200 = await worker.recognize(processed);
-    const r225 = await worker.recognize(bin200);
-    const c1 = r200.data.confidence ?? 0;
-    const c2 = r225.data.confidence ?? 0;
+    const enhanced = await enhanceGrayscaleForOcr(processed);
+    const r200 = await worker.recognize(enhanced, {}, { text: true, blocks: true });
+    const r225 = await worker.recognize(bin200, {}, { text: true, blocks: true });
+    const c1 = collectPageTokenConfidence(r200.data, tokenMap);
+    const c2 = collectPageTokenConfidence(r225.data, tokenMap);
     texts.push(r200.data.text);
     altTexts.push(r225.data.text);
-    confidences.push(
-      c1 && c2 ? Math.round((c1 + c2) / 2) : Math.round(c1 || c2)
-    );
+    confidences.push(Math.max(c1, c2));
 
     try {
       await worker.setParameters({ tessedit_pageseg_mode: "11" as never });
-      const sp = await worker.recognize(processed);
+      const sp = await worker.recognize(enhanced, {}, { text: true, blocks: true });
+      collectPageTokenConfidence(sp.data, tokenMap);
       sparseTexts.push(sp.data.text);
     } catch {
       sparseTexts.push("");
@@ -320,12 +422,15 @@ export async function runOcrLocally(
           for (const [sx, sy, sw, sh] of regions) {
             const cropUrl = await cropRegionForOcr(images[i], sx, sy, sw, sh);
             if (!cropUrl) continue;
-            const res = await worker.recognize(cropUrl);
+            const enhancedCrop = await enhanceGrayscaleForOcr(cropUrl);
+            const res = await worker.recognize(enhancedCrop, {}, { text: true, blocks: true });
+            collectPageTokenConfidence(res.data, tokenMap);
             if (res.data.text) crops.push(res.data.text);
             // Untuk Fleet Head Counts (kiri-bawah) & On-hold (kanan-atas), coba juga binarized 200 bila grayscale salah baca digit tipis
             if (sy >= 0.49 || sx >= 0.45) {
               const binCropUrl = await binarizeForOcr(cropUrl, 200);
-              const resBin = await worker.recognize(binCropUrl);
+              const resBin = await worker.recognize(binCropUrl, {}, { text: true, blocks: true });
+              collectPageTokenConfidence(resBin.data, tokenMap);
               if (resBin.data.text) crops.push(resBin.data.text);
             }
           }
@@ -351,7 +456,8 @@ export async function runOcrLocally(
           const cropUrl = await cropRegionForOcr(images[i], sx, sy, sw, sh);
           if (!cropUrl) continue;
           const binUrl = await binarizeForOcr(cropUrl, thr);
-          const resBin = await worker.recognize(binUrl);
+          const resBin = await worker.recognize(binUrl, {}, { text: true, blocks: true });
+          collectPageTokenConfidence(resBin.data, tokenMap);
           if (
             resBin.data.text &&
             !/Operation\s+Progress|Fleet\s+Head|Fleet\s+Productivity|Dedicated/i.test(resBin.data.text)
@@ -365,8 +471,9 @@ export async function runOcrLocally(
         await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
       }
     }
+    tokenConfidences.push(tokenMap);
     extraTexts.push(crops);
   }
 
-  return { texts, sparseTexts, confidences, altTexts, extraTexts };
+  return { texts, sparseTexts, confidences, tokenConfidences, altTexts, extraTexts };
 }

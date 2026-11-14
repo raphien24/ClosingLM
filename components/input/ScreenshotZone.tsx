@@ -11,8 +11,8 @@ interface ScreenshotZoneProps {
 }
 
 /**
- * Resize gambar di browser jika terlalu besar (maks lebar 1920px)
- * agar tidak melewati batas 4.5MB Vercel serverless payload.
+ * Optimalkan gambar di browser untuk OCR lokal (maks lebar 2560px, lossless PNG)
+ * agar tepi angka & teks kecil tetap tajam tanpa artefak kompresi JPEG.
  */
 export function compressImageFile(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -23,8 +23,8 @@ export function compressImageFile(file: File): Promise<string> {
       const img = new Image();
       img.onerror = () => resolve(dataUrl);
       img.onload = () => {
-        // Skala optimal untuk OCR: maksimum lebar 1600px
-        const MAX_W = 1600;
+        // Pertahankan resolusi asli hingga 2560px agar font tabel FMS tajam saat di-upscale
+        const MAX_W = 2560;
         const scale = img.width > MAX_W ? MAX_W / img.width : 1;
         const canvas = document.createElement("canvas");
         canvas.width = Math.round(img.width * scale);
@@ -34,9 +34,11 @@ export function compressImageFile(file: File): Promise<string> {
           resolve(dataUrl);
           return;
         }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        // Menggunakan JPEG quality 0.90: ukuran ~150-250KB (menghemat 90% bandwidth & waktu upload)
-        resolve(canvas.toDataURL("image/jpeg", 0.9));
+        // Gunakan PNG lossless karena OCR berjalan lokal di browser (bebas artefak blok JPEG)
+        resolve(canvas.toDataURL("image/png"));
       };
       img.src = dataUrl;
     };

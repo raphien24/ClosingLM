@@ -75,38 +75,46 @@ function getParcelSweeperDateError(
 }
 
 /**
- * Hitung skor keyakinan per field (0–100) dari konsensus seluruh bacaan (Pass 1, Pass 2, dan Crop zoom)
- * agar tidak tertahan <= 79% hanya karena watermark/grafik menurunkan skor rata-rata halaman Tesseract.
+ * Hitung skor keyakinan per field (0–100) dari konsensus seluruh bacaan (Pass 1, Pass 2, Sparse, dan Crop zoom)
+ * serta word-level confidence token angka dari Tesseract agar representatif terhadap akurasi teks metrik.
  */
 function computeFieldConfidenceScore(
   finalVal: unknown,
   readings: unknown[],
   baseConf: number,
-  options?: { isCropTouch?: boolean; isPass2Only?: boolean; isPass1Only?: boolean }
+  options?: {
+    tokenConf?: number;
+    isCropTouch?: boolean;
+    isPass2Only?: boolean;
+    isPass1Only?: boolean;
+  }
 ): number {
   const valid = readings.filter((v) => v != null);
   const target = String(finalVal);
   const agreeCount = valid.filter((v) => String(v) === target).length;
   const conflictCount = valid.filter((v) => String(v) !== target).length;
+  const effectiveBase = Math.min(99, Math.max(baseConf || 0, options?.tokenConf ?? 0));
 
-  if (agreeCount >= 3 && conflictCount === 0) return Math.max(baseConf, 94);
-  if (agreeCount >= 2 && conflictCount === 0) return Math.max(baseConf, 88);
-  if (agreeCount >= 2 && conflictCount > 0) return Math.max(baseConf, 84);
+  if (agreeCount >= 3 && conflictCount === 0) return Math.min(99, Math.max(effectiveBase, 96));
+  if (agreeCount >= 2 && conflictCount === 0) return Math.min(99, Math.max(effectiveBase, 94));
+  if (agreeCount >= 2 && conflictCount > 0) return Math.min(98, Math.max(effectiveBase, 91));
 
   if (conflictCount > 0) {
     // Jika nilai diubah sengaja oleh crop zoom (mis. On-hold/Linehaul/2WH) tetap aman, kecuali konflik murni Pass 1 vs Pass 2
-    return options?.isCropTouch ? 78 : Math.min(Math.max(baseConf, 50), 60);
+    return options?.isCropTouch
+      ? Math.max(Math.min(effectiveBase || 88, 92), 86)
+      : Math.min(Math.max(baseConf, 55), 68);
   }
   if (options?.isCropTouch) {
-    return Math.max(Math.min(baseConf || 80, 86), 80);
+    return Math.max(Math.min(effectiveBase || 91, 95), 90);
   }
   if (options?.isPass2Only) {
-    return Math.max(Math.min(baseConf || 76, 82), 74);
+    return Math.max(Math.min(effectiveBase || 89, 93), 86);
   }
   if (options?.isPass1Only) {
-    return Math.max(Math.min(baseConf || 80, 86), 78);
+    return Math.max(Math.min(effectiveBase || 91, 95), 90);
   }
-  return Math.max(Math.min(baseConf || 80, 86), 78);
+  return Math.max(Math.min(effectiveBase || 91, 95), 90);
 }
 
 function UnifiedInputContent() {
@@ -396,13 +404,14 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     }, 90000);
 
     try {
-      const { texts, sparseTexts, confidences, altTexts, extraTexts } = await runOcrLocally(
-        targetImages,
-        {
-          onProgress: (step) => setOcrStep(step),
-          isCancelled: () => cancelledRef.current,
-        }
-      );
+      const { texts, sparseTexts, confidences, tokenConfidences, altTexts, extraTexts } =
+        await runOcrLocally(
+          targetImages,
+          {
+            onProgress: (step) => setOcrStep(step),
+            isCancelled: () => cancelledRef.current,
+          }
+        );
 
       clearTimeout(timeoutId);
       clearInterval(timer);
@@ -559,15 +568,30 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           applyFallback("total_expedite", extractExpediteSparse(sparseText));
         }
 
-        // Hitung skor keyakinan akhir tiap field menggunakan seluruh bacaan (Pass 1, Pass 2, dan seluruh Crop)
+        const sparseText = sparseTexts[idx] || "";
+        const sparseRec = (sparseText ? parseOcrText(sparseText).row : {}) as Record<string, unknown>;
+        const tokenMap = tokenConfidences[idx] || {};
+
+        // Hitung skor keyakinan akhir tiap field menggunakan seluruh bacaan (Pass 1, Pass 2, Sparse, dan seluruh Crop)
         for (const k of Object.keys(rowRec)) {
           const val = rowRec[k];
           if (val == null) continue;
+          const spVal = sparseRec[k];
+          const includeSparse = spVal != null && String(spVal) === String(val);
+          const valStr = String(val);
+          const tokenConf =
+            tokenMap[valStr] ?? tokenMap[valStr.replace(/[.,]/g, "")];
           const score = computeFieldConfidenceScore(
             val,
-            [pass1Snapshot[k], altRec[k], ...cropRecs.map((cr) => cr[k])],
+            [
+              pass1Snapshot[k],
+              altRec[k],
+              ...(includeSparse ? [spVal] : []),
+              ...cropRecs.map((cr) => cr[k]),
+            ],
             baseConf,
             {
+              tokenConf,
               isCropTouch: cropTouchKeys.has(k),
               isPass2Only: pass2OnlyKeys.has(k),
               isPass1Only: pass1OnlyKeys.has(k),
