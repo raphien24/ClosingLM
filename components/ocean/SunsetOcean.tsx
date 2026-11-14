@@ -4,7 +4,7 @@
  * Komponen scene laut sunset realistis (three.js):
  * - SunsetSky      : langit fisik (Preetham) + awan volumetrik + environment map PBR
  * - SunsetOcean    : air reflektif dengan ombak Gerstner (bergerak 3D) + riak normal map
- * - GalleonShip    : model kapal galleon realistis (Poly Haven, CC0) yang oleng mengikuti ombak
+ * - GalleonShip    : model kapal galleon realistis (Poly Haven, CC0) + kru & kapten di kemudi
  * - SunsetLights   : pencahayaan matahari terbenam
  */
 
@@ -16,29 +16,42 @@ import { Water } from "three/examples/jsm/objects/Water.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { GERSTNER_GLSL, WAVE_TIME_SCALE, sampleWaveHeight, wavesAsVec4Array } from "./waves";
+import { ShipDeckCrew } from "./RealisticCrew";
 
 export type OceanQuality = "high" | "low";
 
-/** Arah matahari: elevasi rendah (sunset) tepat di depan kamera (arah -Z) */
-export function getSunDirection(elevationDeg = 2.6, azimuthOffset = 0.02): THREE.Vector3 {
+export interface ShipPose {
+  x: number;
+  y: number;
+  z: number;
+  pitch: number;
+  roll: number;
+}
+
+/**
+ * Arah matahari sore (sunset):
+ * - Dari kamera login (menghadap -Z): matahari berada di belakang kapal sehingga kapal & kru tampak siluet keemasan.
+ * - Dari POV Kapten (menghadap +X menuju pulau): matahari berada di samping kiri-depan sehingga pulau pasir putih & JTT08 terang terkena sinar senja.
+ */
+export function getSunDirection(elevationDeg = 4.2, azimuthOffset = -0.38): THREE.Vector3 {
   const phi = THREE.MathUtils.degToRad(90 - elevationDeg);
   const theta = Math.PI + azimuthOffset;
   return new THREE.Vector3().setFromSphericalCoords(1, phi, theta);
 }
 
-export const SUNSET_FOG_COLOR = "#b98a78";
-export const SUN_LIGHT_COLOR = "#ffb27a";
+export const SUNSET_FOG_COLOR = "#c4927a";
+export const SUN_LIGHT_COLOR = "#ffba82";
 
 function applySkyUniforms(sky: Sky, sun: THREE.Vector3, withClouds: boolean) {
   const u = sky.material.uniforms;
-  u.turbidity.value = 10;
-  u.rayleigh.value = 3.2;
-  u.mieCoefficient.value = 0.0055;
-  u.mieDirectionalG.value = 0.86;
+  u.turbidity.value = 9.2;
+  u.rayleigh.value = 2.8;
+  u.mieCoefficient.value = 0.005;
+  u.mieDirectionalG.value = 0.85;
   u.sunPosition.value.copy(sun);
   if (u.cloudCoverage) {
-    u.cloudCoverage.value = withClouds ? 0.42 : 0.0;
-    u.cloudDensity.value = 0.55;
+    u.cloudCoverage.value = withClouds ? 0.38 : 0.0;
+    u.cloudDensity.value = 0.5;
     u.cloudElevation.value = 0.62;
     u.cloudScale.value = 0.00018;
     u.cloudSpeed.value = 0.000012;
@@ -57,7 +70,6 @@ export function SunsetSky({ sun }: { sun: THREE.Vector3 }) {
     return s;
   }, [sun]);
 
-  // Environment map dari langit yang sama → kayu & layar kapal memantulkan cahaya senja secara fisik
   useEffect(() => {
     const pmrem = new THREE.PMREMGenerator(gl);
     const envScene = new THREE.Scene();
@@ -84,7 +96,6 @@ export function SunsetSky({ sun }: { sun: THREE.Vector3 }) {
   }, [sky]);
 
   useFrame(({ camera, clock }) => {
-    // Kotak langit selalu mengikuti kamera agar horizon tak pernah terpotong
     sky.position.copy(camera.position);
     if (sky.material.uniforms.time) sky.material.uniforms.time.value = clock.elapsedTime;
   });
@@ -116,7 +127,6 @@ function buildPolarGrid(rings: number, segments: number, firstStep: number, grow
     }
   }
   const indices: number[] = [];
-  // Kipas pusat
   for (let s = 0; s < segments; s++) {
     const a = 1 + s;
     const b = 1 + ((s + 1) % segments);
@@ -166,7 +176,6 @@ const WATER_VERTEX_MAIN = /* glsl */ `
     vec3 disp = vec3( 0.0 );
     for ( int i = 0; i < WAVE_COUNT; i++ ) {
       float wl = waves[i].w;
-      // Ombak kecil memudar di kejauhan agar tidak aliasing / berkedip
       float fade = 1.0 - smoothstep( wl * 14.0, wl * 45.0, dist );
       disp += gerstner( waves[i], wp.xz, fade, tangent, binormal );
     }
@@ -200,8 +209,7 @@ function patchWaterFragment(src: string): string {
   );
   out = out.replace(
     /gl_FragColor = vec4\(\s*outgoingLight,\s*alpha\s*\);/,
-    `// Puncak ombak tertembus cahaya senja (subsurface) + buih tipis di puncak
-     float crest = smoothstep( 0.55, 1.9, vWaveHeight );
+    `float crest = smoothstep( 0.55, 1.9, vWaveHeight );
      float backlit = pow( max( 0.0, dot( normalize( vec3( -sunDirection.x, 0.0, -sunDirection.z ) ), -eyeDirection ) ), 2.0 );
      outgoingLight += crestColor * crest * ( 0.05 + 0.18 * backlit );
      outgoingLight = mix( outgoingLight, vec3( 0.95, 0.82, 0.72 ) * sunColor * 0.25, smoothstep( 1.5, 2.4, vWaveHeight ) * 0.25 );
@@ -215,9 +223,11 @@ function patchWaterFragment(src: string): string {
 export function SunsetOcean({
   sun,
   quality = "high",
+  flowTimeScale = 1,
 }: {
   sun: THREE.Vector3;
   quality?: OceanQuality;
+  flowTimeScale?: number;
 }) {
   const normals = useLoader(THREE.TextureLoader, "/textures/waternormals.jpg");
 
@@ -234,7 +244,7 @@ export function SunsetOcean({
       waterNormals: normals,
       sunDirection: sun.clone(),
       sunColor: new THREE.Color("#ffc08a"),
-      waterColor: new THREE.Color("#0b2a3a"),
+      waterColor: new THREE.Color("#0b2f42"),
       distortionScale: 3.2,
       fog: true,
     });
@@ -260,9 +270,8 @@ export function SunsetOcean({
 
   useFrame(({ camera, clock }, delta) => {
     const u = (water.material as THREE.ShaderMaterial).uniforms;
-    u.time.value += delta * 0.55;
+    u.time.value += delta * 0.55 * flowTimeScale;
     u.waveTime.value = clock.elapsedTime * WAVE_TIME_SCALE;
-    // Grid laut mengikuti kamera (displacement memakai koordinat dunia → tetap mulus)
     water.position.x = camera.position.x;
     water.position.z = camera.position.z;
   });
@@ -270,7 +279,7 @@ export function SunsetOcean({
   return <primitive object={water} />;
 }
 
-// ── Kapal Galleon ─────────────────────────────────────────────
+// ── Kapal Galleon + Kru & Kapten di Kemudi ─────────────────────
 
 export const SHIP_URL_HIGH = "/models/ship-desktop.glb";
 export const SHIP_URL_LOW = "/models/ship-mobile.glb";
@@ -282,35 +291,88 @@ export function GalleonShip({
   position,
   heading,
   speed = 0,
+  travelOffset = 0,
+  inPov = false,
+  shipPoseRef,
 }: {
   quality?: OceanQuality;
   position: [number, number, number];
   /** Rotasi Y (radian). Haluan model menghadap sumbu +X lokal. */
   heading: number;
-  /** Kecepatan maju (m/detik) sepanjang arah haluan */
+  /** Kecepatan maju konstan (m/detik) */
   speed?: number;
+  /** Jarak maju tambahan yang dikendalikan dari luar (mis. saat akselerasi ke pulau) */
+  travelOffset?: number;
+  /** Mode First-Person POV Kapten */
+  inPov?: boolean;
+  /** Ref opsional agar kamera luar dapat mengikuti posisi & oleng kapal secara presisi */
+  shipPoseRef?: React.MutableRefObject<ShipPose>;
 }) {
   const gltf = useLoader(GLTFLoader, quality === "high" ? SHIP_URL_HIGH : SHIP_URL_LOW, (loader) => {
     (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
   });
 
+  const povClearUniform = useMemo(() => ({ value: 0 }), []);
+  const windTimeUniform = useMemo(() => ({ value: 0 }), []);
+  const wheelAngleRef = useRef(0);
+
   const model = useMemo(() => {
     const root = gltf.scene.clone(true);
+    root.updateMatrixWorld(true);
     root.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        for (const m of mats) {
-          const sm = m as THREE.MeshStandardMaterial;
+        const isSails = mesh.name.includes("sails");
+        const nodeMatrix = mesh.matrixWorld.clone();
+        const nodeScale = Math.max(0.001, nodeMatrix.getMaxScaleOnAxis());
+
+        if (isSails) {
+          // Hindari frustum culling saat layar digerakkan lembut oleh vertex shader
+          mesh.frustumCulled = false;
+        }
+
+        const origMats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        const clonedMats = origMats.map((m) => {
+          const sm = (m as THREE.MeshStandardMaterial).clone();
           if (sm.isMeshStandardMaterial) {
-            sm.envMapIntensity = 0.85;
+            sm.envMapIntensity = 0.9;
+
+            if (isSails) {
+              // Seluruh layar tetap 100% utuh (tanpa lubang/potongan tengah dan tanpa memotong tiang mast):
+              // Saat berlayar dalam mode POV, kelim bawah layar ditarik naik merata sejajar andang-andang atas
+              // sehingga berkibar penuh di langit atas sementara cakrawala menuju Pulau JTT08 terbuka bersih.
+              sm.onBeforeCompile = (shader) => {
+                shader.uniforms.uPovClear = povClearUniform;
+                shader.uniforms.uWindTime = windTimeUniform;
+                shader.uniforms.uNodeMatrix = { value: nodeMatrix };
+                shader.uniforms.uNodeScale = { value: nodeScale };
+                shader.vertexShader =
+                  "uniform float uPovClear;\nuniform float uWindTime;\nuniform mat4 uNodeMatrix;\nuniform float uNodeScale;\n" +
+                  shader.vertexShader.replace(
+                    "#include <begin_vertex>",
+                    `#include <begin_vertex>
+                     vec3 shipSailPos = (uNodeMatrix * vec4(position, 1.0)).xyz;
+                     float isFore = smoothstep(3.5, 6.5, shipSailPos.x);
+                     float topAnchorY = mix(23.06, 19.31, isFore);
+                     float reefScale = mix(0.75, 0.50, isFore);
+                     float targetY = topAnchorY - (topAnchorY - shipSailPos.y) * mix(1.0, reefScale, uPovClear);
+                     float deltaY = targetY - shipSailPos.y;
+                     float windFlutter = sin(uWindTime * 3.6 + shipSailPos.x * 0.45 + shipSailPos.z * 0.35) * 0.16 * (0.35 + uPovClear * 0.65);
+                     transformed.y += deltaY / uNodeScale;
+                     transformed.x += (windFlutter + uPovClear * 0.45 * (1.0 - smoothstep(14.0, 22.0, shipSailPos.y))) / uNodeScale;`
+                  );
+              };
+              sm.customProgramCacheKey = () => `ship-sails-reef-${mesh.uuid}`;
+            }
             sm.needsUpdate = true;
           }
-        }
+          return sm;
+        });
+        mesh.material = Array.isArray(mesh.material) ? clonedMats : clonedMats[0];
       }
     });
     return root;
-  }, [gltf]);
+  }, [gltf, povClearUniform, windTimeUniform]);
 
   const headingRef = useRef<THREE.Group>(null);
   const tiltRef = useRef<THREE.Group>(null);
@@ -324,14 +386,24 @@ export function GalleonShip({
     const t = clock.elapsedTime;
     travel.current += speed * delta;
 
+    // Transisi halus mengangkat layar & membersihkan tiang tengah tepat saat masuk POV
+    const targetPov = inPov ? 1.0 : 0.0;
+    povClearUniform.value += (targetPov - povClearUniform.value) * Math.min(1, delta * 5.0);
+    windTimeUniform.value = t;
+
+    // Sudut putar roda kemudi kayu (stabil agar kedua tangan kapten tetap terlihat jelas di POV)
+    wheelAngleRef.current =
+      Math.sin(t * (inPov ? 1.85 : 1.35)) * (inPov ? 0.22 : 0.34) +
+      Math.sin(t * 0.85) * (inPov ? 0.08 : 0.14);
+
+    const totalDist = travel.current + travelOffset;
     const fx = Math.cos(heading);
     const fz = -Math.sin(heading);
-    const px = position[0] + fx * travel.current;
-    const pz = position[2] + fz * travel.current;
+    const px = position[0] + fx * totalDist;
+    const pz = position[2] + fz * totalDist;
     g.position.set(px, position[1], pz);
     g.rotation.y = heading;
 
-    // Titik sampel lambung (ruang lokal → dunia): haluan, buritan, kiri, kanan
     const sample = (lx: number, lz: number) => {
       _v.set(lx, 0, lz).applyAxisAngle(THREE.Object3D.DEFAULT_UP, heading);
       return sampleWaveHeight(px + _v.x, pz + _v.z, t);
@@ -343,8 +415,8 @@ export function GalleonShip({
     const hMid = sample(3, 0);
 
     const targetY = (hBow + hStern + hPort + hStar + hMid * 2) / 6 - 0.35;
-    const targetPitch = Math.atan2(hBow - hStern, 25) * 0.7;
-    const targetRoll = -Math.atan2(hStar - hPort, 8.4) * 0.55;
+    const targetPitch = Math.atan2(hBow - hStern, 25) * 0.65;
+    const targetRoll = -Math.atan2(hStar - hPort, 8.4) * 0.5;
 
     const s = smooth.current;
     if (!s.init) {
@@ -353,8 +425,7 @@ export function GalleonShip({
       s.roll = targetRoll;
       s.init = true;
     }
-    // Inersia kapal berat: respon lambat & halus
-    const k = 1 - Math.exp(-delta * 2.2);
+    const k = 1 - Math.exp(-delta * 2.4);
     s.y += (targetY - s.y) * k;
     s.pitch += (targetPitch - s.pitch) * k;
     s.roll += (targetRoll - s.roll) * k;
@@ -362,12 +433,22 @@ export function GalleonShip({
     tilt.position.y = s.y;
     tilt.rotation.z = s.pitch;
     tilt.rotation.x = s.roll;
+
+    if (shipPoseRef) {
+      shipPoseRef.current.x = px;
+      shipPoseRef.current.y = position[1] + s.y;
+      shipPoseRef.current.z = pz;
+      shipPoseRef.current.pitch = s.pitch;
+      shipPoseRef.current.roll = s.roll;
+    }
   });
 
   return (
     <group ref={headingRef}>
       <group ref={tiltRef}>
         <primitive object={model} />
+        {/* Awak kapal & Kapten di kemudi kapal */}
+        <ShipDeckCrew inPov={inPov} wheelAngleRef={wheelAngleRef} />
       </group>
     </group>
   );
@@ -375,17 +456,17 @@ export function GalleonShip({
 
 // ── Cahaya Sunset ─────────────────────────────────────────────
 
-export function SunsetLights({ sun, intensity = 2.6 }: { sun: THREE.Vector3; intensity?: number }) {
+export function SunsetLights({ sun, intensity = 2.8 }: { sun: THREE.Vector3; intensity?: number }) {
   const pos = useMemo(() => sun.clone().multiplyScalar(500).toArray() as [number, number, number], [sun]);
   return (
     <>
-      <hemisphereLight args={["#ffcfa8", "#1b2436", 0.35]} />
+      <hemisphereLight args={["#ffe0be", "#223044", 0.78]} />
       <directionalLight position={pos} color={SUN_LIGHT_COLOR} intensity={intensity} />
     </>
   );
 }
 
 /** Kabut tipis sunset agar laut menyatu dengan horizon */
-export function SunsetFog({ density = 0.00022 }: { density?: number }) {
+export function SunsetFog({ density = 0.00018 }: { density?: number }) {
   return <fogExp2 attach="fog" args={[SUNSET_FOG_COLOR, density]} />;
 }

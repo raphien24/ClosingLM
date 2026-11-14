@@ -11,17 +11,20 @@ import {
   SunsetSky,
   getSunDirection,
 } from "./SunsetOcean";
+import { TropicalIsland } from "./TropicalIsland";
 
-/** Pose kamera awal login (dipakai juga sebagai titik awal transisi ke dashboard) */
+/** Pose kamera awal login (dipakai juga sebagai titik awal transisi zoom ke kapten) */
 export const LOGIN_CAMERA = {
-  position: new THREE.Vector3(0, 4.2, 0),
-  lookAt: new THREE.Vector3(0, 12.6, -100),
+  position: new THREE.Vector3(3.2, 7.6, 26.5),
+  lookAt: new THREE.Vector3(1.5, 5.4, 0),
 };
 
 export const LOGIN_SHIP = {
-  desktop: { position: [-17, 0, -80] as [number, number, number], heading: -2.5 },
-  mobile: { position: [-2, 0, -112] as [number, number, number], heading: -2.35 },
+  desktop: { position: [0, 0, 0] as [number, number, number], heading: 0 },
+  mobile: { position: [0, 0, 0] as [number, number, number], heading: 0 },
 };
+
+export const ISLAND_POSITION: [number, number, number] = [310, 0, -24];
 
 function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => void }) {
   const sun = useMemo(() => getSunDirection(), []);
@@ -44,15 +47,21 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
       onReady();
     }
     const t = clock.elapsedTime;
-    // Kamera seperti mengapung di perahu kecil: naik-turun sangat halus + parallax kursor
-    const tx = LOGIN_CAMERA.position.x + (isMobile ? 0 : mouse.current.x * 1.6);
-    const ty = LOGIN_CAMERA.position.y + Math.sin(t * 0.55) * 0.18 - (isMobile ? 0 : mouse.current.y * 0.5);
-    camera.position.x += (tx - camera.position.x) * 0.025;
+    const baseX = isMobile ? 1.5 : LOGIN_CAMERA.position.x;
+    const baseY = isMobile ? 6.5 : LOGIN_CAMERA.position.y;
+    const baseZ = isMobile ? 33.0 : LOGIN_CAMERA.position.z;
+
+    const tx = baseX + (isMobile ? 0 : mouse.current.x * 1.4);
+    const ty = baseY + Math.sin(t * 0.6) * 0.16 - (isMobile ? 0 : mouse.current.y * 0.45);
+    camera.position.x += (tx - camera.position.x) * 0.03;
     camera.position.y += (ty - camera.position.y) * 0.04;
-    camera.position.z = LOGIN_CAMERA.position.z;
-    look.copy(LOGIN_CAMERA.lookAt);
-    look.x += isMobile ? 0 : mouse.current.x * 3;
-    look.y += Math.sin(t * 0.4) * 0.25;
+    camera.position.z += (baseZ - camera.position.z) * 0.04;
+
+    look.set(
+      (isMobile ? 0.5 : LOGIN_CAMERA.lookAt.x) + (isMobile ? 0 : mouse.current.x * 1.8),
+      LOGIN_CAMERA.lookAt.y + Math.sin(t * 0.45) * 0.15,
+      LOGIN_CAMERA.lookAt.z
+    );
     camera.lookAt(look);
   });
 
@@ -68,8 +77,10 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
         quality={isMobile ? "low" : "high"}
         position={ship.position}
         heading={ship.heading}
-        speed={0.35}
+        speed={0}
+        inPov={false}
       />
+      <TropicalIsland position={ISLAND_POSITION} />
     </>
   );
 }
@@ -93,15 +104,15 @@ export function SunsetLoginBackground() {
         <Canvas
           camera={{
             position: LOGIN_CAMERA.position.toArray() as [number, number, number],
-            fov: isMobile ? 62 : 45,
-            near: 0.5,
+            fov: isMobile ? 58 : 44,
+            near: 0.25,
             far: 20000,
           }}
           dpr={isMobile ? [1, 1.5] : [1, 2]}
           gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 0.42;
+            gl.toneMappingExposure = 0.46;
           }}
         >
           <Suspense fallback={null}>
@@ -112,15 +123,15 @@ export function SunsetLoginBackground() {
 
       {/* Tirai senja: memudar mulus setelah scene 3D siap */}
       <div
-        className={`absolute inset-0 bg-gradient-to-b from-[#1b1530] via-[#5a2c3a] to-[#c9774a] transition-opacity duration-[1600ms] ease-out ${
+        className={`absolute inset-0 bg-gradient-to-b from-[#1b1530] via-[#5a2c3a] to-[#c9774a] transition-opacity duration-[1400ms] ease-out ${
           ready ? "opacity-0" : "opacity-100"
         }`}
       />
 
       {/* Vignette sinematik + gradasi bawah untuk keterbacaan teks */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,transparent_45%,rgba(10,6,20,0.55)_100%)]" />
-      <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#0b0814]/75 to-transparent" />
-      <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-[#0b0814]/45 to-transparent" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_45%,transparent_48%,rgba(10,6,20,0.52)_100%)]" />
+      <div className="absolute bottom-0 left-0 right-0 h-36 bg-gradient-to-t from-[#0b0814]/75 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-[#0b0814]/45 to-transparent" />
     </div>
   );
 }
