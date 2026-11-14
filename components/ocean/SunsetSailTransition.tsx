@@ -39,12 +39,16 @@ function SailScene({
   const sun = useMemo(() => getSunDirection(), []);
   const signMetrics = useMemo(() => getIslandSignMetrics(), []);
   const { gl, size } = useThree();
+  const ship = isMobile ? LOGIN_SHIP.mobile : LOGIN_SHIP.desktop;
   const elapsed = useRef(0);
   const started = useRef(false);
   const [inPov, setInPov] = useState(false);
   const [travelOffset, setTravelOffset] = useState(0);
   const shipPoseRef = useRef<ShipPose>({ x: 0, y: 0, z: 0, pitch: 0, roll: 0 });
   const look = useMemo(() => new THREE.Vector3(), []);
+  const povEyeVec = useMemo(() => new THREE.Vector3(), []);
+  const povLookVec = useMemo(() => new THREE.Vector3(), []);
+  const tiltEuler = useMemo(() => new THREE.Euler(0, 0, 0, "XYZ"), []);
 
   useFrame(({ camera, clock }, delta) => {
     if (!started.current) {
@@ -81,15 +85,26 @@ function SailScene({
 
     const sp = shipPoseRef.current;
 
-    // Posisi mata Kapten di belakang roda kemudi POV (lokal terhadap kapal)
-    const povEyeX = sp.x + (isPortrait ? -6.82 : -6.72);
-    const povEyeY = sp.y + (isPortrait ? 7.72 : 7.64) + Math.sin(t * 2.6) * 0.03;
-    const povEyeZ = sp.z + Math.sin(t * 1.9) * 0.025;
+    // Posisi mata & arah pandang Kapten mengunci tepat pada kerangka quarterdeck kapal (sp.pitch/roll + heading)
+    // sehingga roda kemudi & kedua tangan POV selalu terbingkai stabil meski kapal mengangguk diterpa ombak
+    tiltEuler.set(sp.roll, 0, sp.pitch, "XYZ");
+    povEyeVec
+      .set(isPortrait ? -6.82 : -6.74, isPortrait ? 7.72 : 7.66, 0)
+      .applyEuler(tiltEuler)
+      .addScaledVector(THREE.Object3D.DEFAULT_UP, sp.y)
+      .applyAxisAngle(THREE.Object3D.DEFAULT_UP, ship.heading);
+    const povEyeX = sp.x + povEyeVec.x;
+    const povEyeY = povEyeVec.y + Math.sin(t * 2.6) * 0.014;
+    const povEyeZ = sp.z + povEyeVec.z;
 
-    // Titik pandang dari POV Kapten: melihat roda kemudi, dek, haluan, layar berkibar di atas, dan Pulau JTT08 di depan
-    const povLookX = sp.x + 120;
-    const povLookY = sp.y + (isPortrait ? 8.8 : 9.3) + sp.pitch * 35;
-    const povLookZ = 0;
+    povLookVec
+      .set(120, isPortrait ? 1.5 : 0.5, 0)
+      .applyEuler(tiltEuler)
+      .addScaledVector(THREE.Object3D.DEFAULT_UP, sp.y)
+      .applyAxisAngle(THREE.Object3D.DEFAULT_UP, ship.heading);
+    const povLookX = sp.x + povLookVec.x;
+    const povLookY = povLookVec.y;
+    const povLookZ = sp.z + povLookVec.z;
 
     let camX: number;
     let camY: number;
@@ -123,7 +138,7 @@ function SailScene({
 
       lookX = THREE.MathUtils.lerp(captainFocusX, povLookX, easeTurn);
       lookY = THREE.MathUtils.lerp(captainFocusY, povLookY, easeTurn);
-      lookZ = 0;
+      lookZ = THREE.MathUtils.lerp(0, povLookZ, easeTurn);
     } else {
       // Di dalam POV Kapten -> lalu di akhir (p > 0.78) zoom in tepat ke pusat tulisan JTT08 di lereng bukit
       const signWorldX = ISLAND_POSITION[0] + signMetrics.centerX;
@@ -168,8 +183,6 @@ function SailScene({
     const finalGlow = clamp01((p - 0.87) / 0.13);
     gl.toneMappingExposure = 0.52 + easeInCubic(finalGlow) * 1.4;
   });
-
-  const ship = isMobile ? LOGIN_SHIP.mobile : LOGIN_SHIP.desktop;
 
   return (
     <>

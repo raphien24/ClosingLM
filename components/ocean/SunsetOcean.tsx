@@ -312,58 +312,19 @@ export function GalleonShip({
     (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
   });
 
-  const povClearUniform = useMemo(() => ({ value: 0 }), []);
-  const windTimeUniform = useMemo(() => ({ value: 0 }), []);
   const wheelAngleRef = useRef(0);
 
   const model = useMemo(() => {
     const root = gltf.scene.clone(true);
-    root.updateMatrixWorld(true);
     root.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
-        const isSails = mesh.name.includes("sails");
-        const nodeMatrix = mesh.matrixWorld.clone();
-        const nodeScale = Math.max(0.001, nodeMatrix.getMaxScaleOnAxis());
-
-        if (isSails) {
-          // Hindari frustum culling saat layar digerakkan lembut oleh vertex shader
-          mesh.frustumCulled = false;
-        }
-
+        // Biarkan seluruh layar dan tiang mast kapal 100% utuh (tidak dipotong/dikecilkan saat berlayar)
         const origMats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
         const clonedMats = origMats.map((m) => {
           const sm = (m as THREE.MeshStandardMaterial).clone();
           if (sm.isMeshStandardMaterial) {
             sm.envMapIntensity = 0.9;
-
-            if (isSails) {
-              // Seluruh layar tetap 100% utuh (tanpa lubang/potongan tengah dan tanpa memotong tiang mast):
-              // Saat berlayar dalam mode POV, kelim bawah layar ditarik naik merata sejajar andang-andang atas
-              // sehingga berkibar penuh di langit atas sementara cakrawala menuju Pulau JTT08 terbuka bersih.
-              sm.onBeforeCompile = (shader) => {
-                shader.uniforms.uPovClear = povClearUniform;
-                shader.uniforms.uWindTime = windTimeUniform;
-                shader.uniforms.uNodeMatrix = { value: nodeMatrix };
-                shader.uniforms.uNodeScale = { value: nodeScale };
-                shader.vertexShader =
-                  "uniform float uPovClear;\nuniform float uWindTime;\nuniform mat4 uNodeMatrix;\nuniform float uNodeScale;\n" +
-                  shader.vertexShader.replace(
-                    "#include <begin_vertex>",
-                    `#include <begin_vertex>
-                     vec3 shipSailPos = (uNodeMatrix * vec4(position, 1.0)).xyz;
-                     float isFore = smoothstep(3.5, 6.5, shipSailPos.x);
-                     float topAnchorY = mix(23.06, 19.31, isFore);
-                     float reefScale = mix(0.75, 0.50, isFore);
-                     float targetY = topAnchorY - (topAnchorY - shipSailPos.y) * mix(1.0, reefScale, uPovClear);
-                     float deltaY = targetY - shipSailPos.y;
-                     float windFlutter = sin(uWindTime * 3.6 + shipSailPos.x * 0.45 + shipSailPos.z * 0.35) * 0.16 * (0.35 + uPovClear * 0.65);
-                     transformed.y += deltaY / uNodeScale;
-                     transformed.x += (windFlutter + uPovClear * 0.45 * (1.0 - smoothstep(14.0, 22.0, shipSailPos.y))) / uNodeScale;`
-                  );
-              };
-              sm.customProgramCacheKey = () => `ship-sails-reef-${mesh.uuid}`;
-            }
             sm.needsUpdate = true;
           }
           return sm;
@@ -372,7 +333,7 @@ export function GalleonShip({
       }
     });
     return root;
-  }, [gltf, povClearUniform, windTimeUniform]);
+  }, [gltf]);
 
   const headingRef = useRef<THREE.Group>(null);
   const tiltRef = useRef<THREE.Group>(null);
@@ -385,11 +346,6 @@ export function GalleonShip({
     if (!g || !tilt) return;
     const t = clock.elapsedTime;
     travel.current += speed * delta;
-
-    // Transisi halus mengangkat layar & membersihkan tiang tengah tepat saat masuk POV
-    const targetPov = inPov ? 1.0 : 0.0;
-    povClearUniform.value += (targetPov - povClearUniform.value) * Math.min(1, delta * 5.0);
-    windTimeUniform.value = t;
 
     // Sudut putar roda kemudi kayu (stabil agar kedua tangan kapten tetap terlihat jelas di POV)
     wheelAngleRef.current =
@@ -433,6 +389,7 @@ export function GalleonShip({
     tilt.position.y = s.y;
     tilt.rotation.z = s.pitch;
     tilt.rotation.x = s.roll;
+    g.updateMatrixWorld(true);
 
     if (shipPoseRef) {
       shipPoseRef.current.x = px;
