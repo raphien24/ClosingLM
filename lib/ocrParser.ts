@@ -946,7 +946,9 @@ function extractExpedite(text: string): {
     const isSideBySideOcr = linehaulIdx !== -1 && (firstNewline === -1 || linehaulIdx < firstNewline);
 
     if (!isSideBySideOcr) {
-      const stopNonSide = rawBlock.search(/Linehaul|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog/i);
+      const stopNonSide = rawBlock.search(
+        /Linehaul|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog|LM\s+Hub\s+Aging|(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*(?:Hari|Days?)/i
+      );
       if (stopNonSide !== -1) {
         rawBlock = rawBlock.slice(0, stopNonSide);
       }
@@ -959,14 +961,18 @@ function extractExpedite(text: string): {
         .map((line) => {
           // 2. Ambil hanya kolom paling kiri (sebelum 8+ spasi berturut-turut yang memisahkan dengan Linehaul Trip di kanan)
           const leftCol = line.split(/\s{8,}/)[0] || "";
-          const cut = leftCol.search(/Linehaul|Loading|Memuat|Transporting|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Trip\s*ID|\bLT[0O]Q|\b\d{1,2}:\d{2}\s+\d{1,2}:\d{2}/i);
+          const cut = leftCol.search(
+            /Linehaul|Loading|Memuat|Transporting|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|LM\s+Hub\s+Aging|(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*(?:Hari|Days?)|Trip\s*ID|\bLT[0O]Q|\b\d{1,2}:\d{2}\s+\d{1,2}:\d{2}/i
+          );
           const trimmed = cut !== -1 ? leftCol.slice(0, cut) : leftCol;
           // Hapus angka Transporting Linehaul yang diawali "-" (mis. "- 1.941" atau "\ | - 10")
           return trimmed.replace(/(?:^|[ \t|\\])[-\u2013\u2014][ \t]+\d[\d.,]*\b/g, "");
         })
         .join("\n");
       // Pastikan bila kolom kanan Aging/Backlog muncul setelah kolom kiri, tetap terpotong bersih
-      const trailingStop = rawBlock.search(/Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog/i);
+      const trailingStop = rawBlock.search(
+        /Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog|LM\s+Hub\s+Aging|(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*(?:Hari|Days?)/i
+      );
       if (trailingStop !== -1) rawBlock = rawBlock.slice(0, trailingStop);
     }
 
@@ -1211,7 +1217,7 @@ export function extractExpediteSparse(text: string): number | null {
   return extractDonutSparseValue(
     text,
     /To\s+Expedite/i,
-    /Linehaul\s+Trip|Loading|Memuat|Transporting|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog|Operation\s+Progress|Fleet\s+Head|In\s+Hub\s+Status/i,
+    /Linehaul\s+Trip|Loading|Memuat|Transporting|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog|LM\s+Hub\s+Aging|(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*(?:Hari|Days?)|Operation\s+Progress|Fleet\s+Head|In\s+Hub\s+Status/i,
     999,
     "first"
   );

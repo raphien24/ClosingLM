@@ -507,19 +507,22 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
               parsed.row.kurir_plus_actual_2wh = cropParsed.row.kurir_plus_actual_2wh;
               cropTouchKeys.add("kurir_plus_actual_2wh");
             }
-            // Crop donut ter-zoom 2.5x mengisolasi sisi kiri sehingga bebas noise Linehaul Trip dan angka kecil terpotong (mis. "2" dari "20")
+            // Crop donut mengisolasi angka tengah ring (ring atas = Backlog, ring bawah = To Expedite) sehingga bebas noise Linehaul Trip / Aging To Buyer
             for (const dk of ["backlog_total", "total_expedite"] as const) {
               const curVal = parsed.row[dk];
               const cropVal = cropParsed.row[dk];
               if (cropVal == null) continue;
+              const isAuthoritativeRing =
+                (dk === "total_expedite" && cropText.startsWith("To Expedite [RING]\n")) ||
+                (dk === "backlog_total" && cropText.startsWith("Backlog [RING]\n") && !agreedMainKeys.has("backlog_total"));
               const replaceTruncated =
                 curVal != null &&
                 curVal < 10 &&
                 cropVal >= 10 &&
                 (!agreedMainKeys.has(dk) || String(cropVal).startsWith(String(curVal)));
               const replaceLinehaulPolluted =
-                dk === "total_expedite" && hasSideBySideLinehaul && cropText.startsWith("To Expedite\n");
-              if (replaceTruncated || replaceLinehaulPolluted) {
+                dk === "total_expedite" && hasSideBySideLinehaul && cropText.startsWith("To Expedite");
+              if (isAuthoritativeRing || replaceTruncated || replaceLinehaulPolluted) {
                 parsed.row[dk] = cropVal;
                 cropTouchKeys.add(dk);
               }
