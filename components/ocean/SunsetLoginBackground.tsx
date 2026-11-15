@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -49,7 +49,6 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
   const sun = useMemo(() => getSunDirection(), []);
   const mouse = useRef({ x: 0, y: 0 });
   const look = useMemo(() => new THREE.Vector3(), []);
-  const readyFired = useRef(false);
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -61,10 +60,6 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
   }, []);
 
   useFrame(({ camera, clock }) => {
-    if (!readyFired.current) {
-      readyFired.current = true;
-      onReady();
-    }
     const t = clock.elapsedTime;
     const baseX = isMobile ? 1.5 : LOGIN_CAMERA.position.x;
     const baseY = isMobile ? 6.5 : LOGIN_CAMERA.position.y;
@@ -89,10 +84,10 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
   return (
     <>
       <SunsetFog />
-      <SunsetLights sun={sun} />
+      <SunsetLights sun={sun} deckLightPosition={[-5.65, 7.53, 0.15]} />
       <SunsetSky sun={sun} />
       <SunsetOcean sun={sun} quality={isMobile ? "low" : "high"} />
-      {/* Kapal & awak dimuat bertahap di Suspense terpisah agar langit & samudra senja langsung muncul tanpa menunggu aset 3D */}
+      {/* Tampilkan kapal & kru bersama laut dalam 1 frame tanpa kedipan / pop-in */}
       <Suspense fallback={null}>
         <GalleonShip
           quality={isMobile ? "low" : "high"}
@@ -102,6 +97,8 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
           inPov={false}
           progressive
           mobileCompact={isMobile}
+          hasExternalDeckLight
+          onShipReady={onReady}
         />
       </Suspense>
     </>
@@ -112,6 +109,7 @@ export function SunsetLoginBackground() {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [ready, setReady] = useState(false);
+  const handleReady = useCallback(() => setReady(true), []);
 
   useEffect(() => {
     setMounted(true);
@@ -123,9 +121,14 @@ export function SunsetLoginBackground() {
     });
     preloadHumanModels(mobile);
 
+    // Fallback aman bila jaringan sangat lambat agar layar tidak tertahan
+    const fallbackTimer = window.setTimeout(() => setReady(true), 3000);
     const check = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      window.removeEventListener("resize", check);
+    };
   }, []);
 
   return (
@@ -153,11 +156,11 @@ export function SunsetLoginBackground() {
         >
           <color attach="background" args={["#181124"]} />
           <MobileFramerateDriver active={isMobile} />
-          <LoginScene isMobile={isMobile} onReady={() => setReady(true)} />
+          <LoginScene isMobile={isMobile} onReady={handleReady} />
         </Canvas>
       )}
 
-      {/* Transisi singkat hanya sampai frame WebGL pertama (langit & laut) selesai digambar */}
+      {/* Selubung gelap senja singkat hingga langit, laut, dan kapal siap tergambar bersama */}
       <div
         className={`absolute inset-0 bg-gradient-to-b from-[#151025] via-[#261831] to-[#1a1326] transition-opacity duration-300 ease-out ${
           ready ? "opacity-0" : "opacity-100"

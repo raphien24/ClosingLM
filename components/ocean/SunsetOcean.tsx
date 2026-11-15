@@ -429,6 +429,8 @@ export function GalleonShip({
   shipPoseRef,
   progressive = false,
   mobileCompact = false,
+  hasExternalDeckLight = false,
+  onShipReady,
 }: {
   quality?: OceanQuality;
   position: [number, number, number];
@@ -446,6 +448,10 @@ export function GalleonShip({
   progressive?: boolean;
   /** Mode HP super ringan: kurangi jumlah & detail awak manusia di dek login */
   mobileCompact?: boolean;
+  /** True bila lampu lentera kemudi sudah disediakan di luar Suspense agar jumlah lampu tidak berubah */
+  hasExternalDeckLight?: boolean;
+  /** Dipanggil setelah model kapal + kru quarterdeck siap & tergambar pada frame pertama */
+  onShipReady?: () => void;
 }) {
   const gltf = useLoader(GLTFLoader, quality === "high" ? SHIP_URL_HIGH : SHIP_URL_LOW, (loader) => {
     (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
@@ -455,7 +461,8 @@ export function GalleonShip({
   const wheelAngleRef = useRef(0);
   const shipMeshRef = useRef<THREE.Group>(null);
   const [shipReady, setShipReady] = useState(!progressive);
-  const [crewMounted, setCrewMounted] = useState(!progressive);
+  const [quarterdeckReady, setQuarterdeckReady] = useState(!progressive);
+  const shipReadyNotifiedRef = useRef(false);
 
   const model = useMemo(() => {
     const root = gltf.scene.clone(true);
@@ -482,10 +489,17 @@ export function GalleonShip({
   }, [progressive, shipReady, model, gl, camera, scene]);
 
   useEffect(() => {
-    if (!progressive || !shipReady || crewMounted) return;
-    const raf = requestAnimationFrame(() => setCrewMounted(true));
-    return () => cancelAnimationFrame(raf);
-  }, [progressive, shipReady, crewMounted]);
+    if (!shipReady || !quarterdeckReady || shipReadyNotifiedRef.current) return;
+    shipReadyNotifiedRef.current = true;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => onShipReady?.());
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+    };
+  }, [shipReady, quarterdeckReady, onShipReady]);
 
   const headingRef = useRef<THREE.Group>(null);
   const tiltRef = useRef<THREE.Group>(null);
@@ -555,22 +569,22 @@ export function GalleonShip({
   return (
     <group ref={headingRef}>
       <group ref={tiltRef}>
-        {/* Cahaya hangat lentera kompas selalu aktif agar jumlah lampu shader stabil sejak frame 0 */}
-        <pointLight position={[-5.65, 7.53, 0.15]} color="#ffcf87" intensity={2.6} distance={7.5} />
+        {!hasExternalDeckLight && (
+          <pointLight position={[-5.65, 7.53, 0.15]} color="#ffcf87" intensity={2.6} distance={7.5} />
+        )}
         <group ref={shipMeshRef} visible={shipReady}>
           <primitive object={model} />
         </group>
-        {/* Awak kapal & Kapten di kemudi kapal dimuat bertahap setelah kapal tampil */}
-        {(!progressive || crewMounted) && (
-          <Suspense fallback={null}>
-            <ShipDeckCrew
-              inPov={inPov}
-              wheelAngleRef={wheelAngleRef}
-              progressive={progressive}
-              mobileCompact={mobileCompact}
-            />
-          </Suspense>
-        )}
+        {/* Awak kapal & Kapten di kemudi dimuat paralel agar tampil bersamaan saat scene dibuka */}
+        <Suspense fallback={null}>
+          <ShipDeckCrew
+            inPov={inPov}
+            wheelAngleRef={wheelAngleRef}
+            progressive={progressive}
+            mobileCompact={mobileCompact}
+            onQuarterdeckReady={() => setQuarterdeckReady(true)}
+          />
+        </Suspense>
       </group>
     </group>
   );
@@ -578,12 +592,23 @@ export function GalleonShip({
 
 // ── Cahaya Sunset ─────────────────────────────────────────────
 
-export function SunsetLights({ sun, intensity = 2.8 }: { sun: THREE.Vector3; intensity?: number }) {
+export function SunsetLights({
+  sun,
+  intensity = 2.8,
+  deckLightPosition,
+}: {
+  sun: THREE.Vector3;
+  intensity?: number;
+  deckLightPosition?: [number, number, number];
+}) {
   const pos = useMemo(() => sun.clone().multiplyScalar(500).toArray() as [number, number, number], [sun]);
   return (
     <>
       <hemisphereLight args={["#ffe0be", "#223044", 0.78]} />
       <directionalLight position={pos} color={SUN_LIGHT_COLOR} intensity={intensity} />
+      {deckLightPosition && (
+        <pointLight position={deckLightPosition} color="#ffcf87" intensity={2.6} distance={7.5} />
+      )}
     </>
   );
 }

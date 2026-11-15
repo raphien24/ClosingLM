@@ -258,11 +258,13 @@ export function ShipDeckCrew({
   wheelAngleRef,
   progressive = false,
   mobileCompact = false,
+  onQuarterdeckReady,
 }: {
   inPov?: boolean;
   wheelAngleRef: React.MutableRefObject<number>;
   progressive?: boolean;
   mobileCompact?: boolean;
+  onQuarterdeckReady?: () => void;
 }) {
   const { gl, camera, scene } = useThree();
   const batch1Ref = useRef<THREE.Group>(null);
@@ -277,6 +279,12 @@ export function ShipDeckCrew({
       setBatch1Ready(true);
     });
   }, [progressive, batch1Ready, gl, camera, scene]);
+
+  useEffect(() => {
+    if (batch1Ready) {
+      onQuarterdeckReady?.();
+    }
+  }, [batch1Ready, onQuarterdeckReady]);
 
   useEffect(() => {
     if (!progressive || mobileCompact || !batch1Ready || batch2Mounted) return;
