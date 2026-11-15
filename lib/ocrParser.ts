@@ -428,14 +428,14 @@ function extractFleetHeadCounts(text: string): {
         // Jika kolom Fleet Productivity punya header/baris kedua (Delivered/Handed Over, Order), potong sebelum itu
         const prodCut = left.search(/D[ae][ilf][a-z]{2,7}\s*\/\s*Hand[aeo]d\s+Ov[ae]r|\b\d+\s*Order\b|\bOrder\b|\bOr[gd]er\b/i);
         if (prodCut !== -1) left = left.slice(0, prodCut);
-        // Jika header "Actual/Schedule" sejajar dengan baris "2WH/4WH/Lainnya" milik Fleet Productivity di kanan, buang bagian kanan
+        // Jika header "Actual/Schedule" sejajar dengan baris "2WH/4WH/Lainnya/Others" milik Fleet Productivity di kanan, buang bagian kanan
         if (/Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}/i.test(left)) {
-          const rightTableCut = left.search(/[ \t]+(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b/i);
+          const rightTableCut = left.search(/[ \t]+(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya|Others)\b/i);
           if (rightTableCut !== -1) left = left.slice(0, rightTableCut);
         }
-        // Jika di baris yang sama ada 2WH/4WH/Lainnya milik Fleet Productivity setelah kolom Head Counts, potong di kemunculan ke-2
+        // Jika di baris yang sama ada 2WH/4WH/Lainnya/Others milik Fleet Productivity setelah kolom Head Counts, potong di kemunculan ke-2
         const secondRowLabel = left.match(
-          /^([\s\S]*?\b(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b[\s\S]*?)[ \t]+(?=(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya)\b)/i
+          /^([\s\S]*?\b(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya|Others)\b[\s\S]*?)[ \t]+(?=(?:(?:2|Z)[809BNM]?[ \t]*W?[ \t]*H|(?:4|A)[ \t]*W?[ \t]*H|W[ \t]*H|Lainnya|Others)\b)/i
         );
         if (secondRowLabel) left = secondRowLabel[1];
         leftLines.push(left);
@@ -531,10 +531,17 @@ function extractFleetHeadCounts(text: string): {
     return n <= (colMaxHint ?? 200) ? n : null;
   };
 
+  // Normalisasi angka "1" yang terbaca I/l/| di sekitar "/" pada sel rasio Head Counts (mis. "1/I", "I/1", "1|1")
+  const normalizeRatioTokens = (s: string): string =>
+    s
+      .replace(/(^|\s)([Il|])\s*[\/|]\s*([Il|])(?=\s|$)/g, "$11/1")
+      .replace(/(^|\s)([Il|])\s*\/\s*(\d{1,3})\b/g, "$11/$3")
+      .replace(/\b(\d{1,3})\s*\/\s*([Il|])(?=\s|$)/g, "$1/1")
+      .replace(/\b(\d{1,3})\s*\|\s*(\d{1,3})\b/g, "$1/$2")
+      .replace(/(\d)\s*\/\s*(\d)/g, "$1/$2");
+
   const parseCols = (segment: string, colHints?: (number | null)[]): (number | null)[] => {
-    const normSeg = segment
-      .replace(/(\d)\s*\/\s*(\d)/g, "$1/$2")
-      .replace(/^[\s|[\]().,:;]+/, "");
+    const normSeg = normalizeRatioTokens(segment).replace(/^[\s|[\]().,:;]+/, "");
     // Ambil baris pertama yang berisi angka baris ini agar tidak menggabungkan angka lintas baris (mis. PSM 11 sparse)
     const firstLine = normSeg.split(/\n+/).map((l) => l.trim()).find(Boolean) ?? "";
     const clean = firstLine.replace(/\s+/g, " ").trim();
@@ -568,7 +575,7 @@ function extractFleetHeadCounts(text: string): {
   const ROW4_PAT = "(?:(?:^|[^A-Za-z])(?:4|A)(?:[A-Z]?[ \\t]*W[ \\t]*H|[nr][ \\t]*H)|(?:^|[^0-9A-Za-z])[aA][ \\t]*H(?=[ \\t\\r\\n\\d/|]|$))";
   const m2wh = hcNorm.match(
     new RegExp(
-      `(?:(?:2|Z)(?:[ \\t]*W[ \\t]*H|[809BNM][ \\t]*H)|(?:^|[^4Aa0-9A-Za-z])W[ \\t]*H(?=[ \\t\\r\\n\\d/|]|$))([\\s\\S]{0,600}?)(?:${ROW4_PAT}|Lainnya|Lawr[a-z]{1,4}|Dedicated\\s+${ACT_PAT}|${KP_PAT}\\s+${ACT_PAT}|${MITRA_PAT}\\s+${ACT_PAT}|$)`,
+      `(?:(?:2|Z)(?:[ \\t]*W[ \\t]*H|[809BNM][ \\t]*H)|(?:^|[^4Aa0-9A-Za-z])W[ \\t]*H(?=[ \\t\\r\\n\\d/|]|$))([\\s\\S]{0,600}?)(?:${ROW4_PAT}|Lainnya|Others|Lawr[a-z]{1,4}|Dedicated\\s+${ACT_PAT}|${KP_PAT}\\s+${ACT_PAT}|${MITRA_PAT}\\s+${ACT_PAT}|$)`,
       "i"
     )
   );
@@ -582,7 +589,7 @@ function extractFleetHeadCounts(text: string): {
     const afterColHdr = hcNorm.match(
       /(?:V[aeo][htl]?[il]?[o0]?[a-z]{0,4}\s+T[ya]p[ae]|Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}|DOSCH\w*[ \t]+AC[a-z]+)[^\n]*\r?\n[ \t]*([^\r\n]+)/i
     );
-    if (afterColHdr && !/(?:Lainnya|Lar[a-z]{2,5}|Lawr[a-z]{1,4})/i.test(afterColHdr[1])) {
+    if (afterColHdr && !/(?:Lainnya|Others|Lar[a-z]{2,5}|Lawr[a-z]{1,4})/i.test(afterColHdr[1])) {
       const rawCells = afterColHdr[1].trim().split(/\s{2,}/).filter(Boolean);
       const stripped =
         rawCells.length >= 4
@@ -598,9 +605,10 @@ function extractFleetHeadCounts(text: string): {
   }
 
   let kurir_plus_4wh: number | null = null;
+  let m4whRatioCount = 0;
   const m4wh = hcNorm.match(
     new RegExp(
-      `${ROW4_PAT}([\\s\\S]{0,600}?)(?:Lainnya|Lar[a-z]{2,5}|Lawr[a-z]{1,4}|Dedicated\\s+${ACT_PAT}|${KP_PAT}|${MITRA_PAT}|$)`,
+      `${ROW4_PAT}([\\s\\S]{0,600}?)(?:Lainnya|Others|Lar[a-z]{2,5}|Lawr[a-z]{1,4}|Dedicated\\s+${ACT_PAT}|${KP_PAT}|${MITRA_PAT}|$)`,
       "i"
     )
   );
@@ -617,10 +625,28 @@ function extractFleetHeadCounts(text: string): {
       mitraTotal !== null && result.mitra_2wh !== null
         ? Math.max(0, mitraTotal - result.mitra_2wh)
         : mitraTotal;
+    const row4Clean = normalizeRatioTokens(
+      m4wh[1].split(/\n+/).map((l) => l.trim()).find(Boolean) ?? ""
+    );
+    m4whRatioCount = [...row4Clean.matchAll(RATIO_RE)].length;
     const cols = parseCols(m4wh[1], [ded4Hint, kp4Hint, m4Hint]);
-    if (cols[0] !== undefined && cols[0] !== null) result.dedicated_4wh = cols[0];
-    if (cols[1] !== undefined && cols[1] !== null) kurir_plus_4wh       = cols[1];
-    if (cols[2] !== undefined && cols[2] !== null) result.mitra_4wh     = cols[2];
+    // Bila kolom 1 ("1/1") terlewat saat OCR sehingga tersisa 2 rasio [0/0, 4/4] milik Kurir Plus & Mitra, jangan geser 0/0 menjadi Dedicated 4WH
+    if (
+      m4whRatioCount === 2 &&
+      cols.length === 2 &&
+      cols[0] === 0 &&
+      ded4Hint !== null &&
+      ded4Hint > 0 &&
+      (m4Hint === null || cols[1] === m4Hint)
+    ) {
+      result.dedicated_4wh = ded4Hint;
+      kurir_plus_4wh       = cols[0];
+      result.mitra_4wh     = cols[1];
+    } else {
+      if (cols[0] !== undefined && cols[0] !== null) result.dedicated_4wh = cols[0];
+      if (cols[1] !== undefined && cols[1] !== null) kurir_plus_4wh       = cols[1];
+      if (cols[2] !== undefined && cols[2] !== null) result.mitra_4wh     = cols[2];
+    }
   }
 
   // 2. Fallback layout vertikal per kolom (Dedicated -> Kurir Plus -> Mitra)
@@ -704,9 +730,15 @@ function extractFleetHeadCounts(text: string): {
   }
 
   // Turunkan nilai sel 2WH/4WH yang hilang OCR dari angka total header (hanya bila total >= bagian, agar angka terpotong mis. "2" vs "13" tidak menghasilkan 0 palsu)
+  const hasPositiveOthers = /\b(?:Lainnya|Others)[ \t]+(?:[1-9]\d*\s*\/\s*\d|[1-9]\d*\b)/i.test(hcNorm);
   if (result.dedicated_2wh === null && dedicatedTotal !== null && result.dedicated_4wh !== null && dedicatedTotal >= result.dedicated_4wh) {
     result.dedicated_2wh = dedicatedTotal - result.dedicated_4wh;
-  } else if (result.dedicated_4wh === null && dedicatedTotal !== null && result.dedicated_2wh !== null && dedicatedTotal >= result.dedicated_2wh) {
+  } else if (
+    (result.dedicated_4wh === null || (result.dedicated_4wh === 0 && m4whRatioCount < 3 && !hasPositiveOthers)) &&
+    dedicatedTotal !== null &&
+    result.dedicated_2wh !== null &&
+    dedicatedTotal >= result.dedicated_2wh
+  ) {
     result.dedicated_4wh = dedicatedTotal - result.dedicated_2wh;
   }
   if (result.mitra_2wh === null && mitraTotal !== null && result.mitra_4wh !== null && mitraTotal >= result.mitra_4wh) {

@@ -507,6 +507,21 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
               parsed.row.kurir_plus_actual_2wh = cropParsed.row.kurir_plus_actual_2wh;
               cropTouchKeys.add("kurir_plus_actual_2wh");
             }
+            // Bila Fleet Head Counts pada pass 1x terbaca 0 (mis. "1/1" terlewat sehingga "0/0" bergeser kiri) dan crop 3x membaca nilai > 0, utamakan crop 3x
+            if (/(?:2|Z|4|A)\s*W\s*H/i.test(cropText) && !/Delivered\s*\/\s*Handed/i.test(cropText)) {
+              for (const fhcKey of [
+                "dedicated_actual_2wh",
+                "dedicated_actual_4wh",
+                "mitra_actual_2wh",
+                "mitra_actual_4wh",
+              ] as const) {
+                const cVal = cropParsed.row[fhcKey];
+                if (parsed.row[fhcKey] === 0 && cVal != null && cVal > 0) {
+                  parsed.row[fhcKey] = cVal;
+                  cropTouchKeys.add(fhcKey);
+                }
+              }
+            }
             // Crop donut mengisolasi angka tengah ring (ring atas = Backlog, ring bawah = To Expedite) sehingga bebas noise Linehaul Trip / Aging To Buyer
             for (const dk of ["backlog_total", "total_expedite"] as const) {
               const curVal = parsed.row[dk];
@@ -549,6 +564,19 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           ) {
             parsed.row.fleet_oh_total = altParsed.row.fleet_oh_total;
             pass2OnlyKeys.add("fleet_oh_total");
+          }
+          for (const fhcKey of [
+            "dedicated_actual_2wh",
+            "kurir_plus_actual_2wh",
+            "dedicated_actual_4wh",
+            "mitra_actual_2wh",
+            "mitra_actual_4wh",
+          ] as const) {
+            const altVal = altParsed.row[fhcKey];
+            if (parsed.row[fhcKey] === 0 && altVal != null && altVal > 0) {
+              parsed.row[fhcKey] = altVal;
+              pass2OnlyKeys.add(fhcKey);
+            }
           }
 
           const sparseText = sparseTexts[idx] || "";

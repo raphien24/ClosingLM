@@ -671,7 +671,7 @@ export async function runOcrLocally(
           })
           .join("\n");
       const fhcTexts = [stripProd(r200.data.text), stripProd(r225.data.text)];
-      const hasFhcRatios = fhcTexts.some(
+      const hasFhcRatios = fhcTexts.every(
         (t) =>
           /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){3}/i.test(t) &&
           /(?:4|A)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){3}/i.test(t)
