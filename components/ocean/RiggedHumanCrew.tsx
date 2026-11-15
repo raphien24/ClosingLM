@@ -897,10 +897,13 @@ export function RiggedCaptainPovArms({
 }) {
   const { root, bones } = useHumanRigClone("captain", true, true);
   const bodyRef = useRef<THREE.Group>(null);
+  const lastPoseTime = useRef(-999);
 
   useFrame(({ clock }) => {
     const body = bodyRef.current;
     if (!body) return;
+    if (clock.elapsedTime - lastPoseTime.current < 0.032) return;
+    lastPoseTime.current = clock.elapsedTime;
     const t = clock.elapsedTime;
 
     root.updateWorldMatrix(true, true);

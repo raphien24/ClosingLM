@@ -239,15 +239,15 @@ function CoconutPalmTree({
   scale = 1,
   leanAngle = 0.22,
   leanYaw = Math.PI,
-  phase = 0,
+  isLowSpec = false,
 }: {
   position: [number, number, number];
   scale?: number;
   leanAngle?: number;
   leanYaw?: number;
   phase?: number;
+  isLowSpec?: boolean;
 }) {
-  const crownRef = useRef<THREE.Group>(null);
   const { frondGeo, coconutGeo, trunkMat, frondMat, coconutMat } = useMemo(
     () => getSharedPalmAssets(),
     []
@@ -264,7 +264,7 @@ function CoconutPalmTree({
       new THREE.Vector3(dx * 0.75, h * 0.68, dz * 0.75),
       new THREE.Vector3(dx, h, dz),
     ]);
-    const geo = new THREE.TubeGeometry(curve, 12, 0.24, 8, false);
+    const geo = new THREE.TubeGeometry(curve, isLowSpec ? 6 : 9, 0.24, isLowSpec ? 5 : 7, false);
     // Buat batang mengecil dari pangkal ke pucuk + guratan cincin kelapa
     const posAttr = geo.attributes.position;
     const v = new THREE.Vector3();
@@ -279,41 +279,35 @@ function CoconutPalmTree({
     }
     geo.computeVertexNormals();
     return { trunkGeo: geo, crownPos: [dx, h, dz] as [number, number, number] };
-  }, [leanAngle, leanYaw]);
+  }, [leanAngle, leanYaw, isLowSpec]);
 
-  useFrame(({ clock }) => {
-    if (crownRef.current) {
-      const t = clock.elapsedTime + phase;
-      crownRef.current.rotation.z = Math.sin(t * 1.35) * 0.045;
-      crownRef.current.rotation.x = Math.cos(t * 1.05) * 0.035;
-    }
-  });
-
+  const frondCount = isLowSpec ? 6 : 9;
   const fronds = useMemo(
     () =>
-      Array.from({ length: 12 }, (_, i) => ({
-        yaw: (i / 12) * Math.PI * 2 + (i % 2) * 0.14,
+      Array.from({ length: frondCount }, (_, i) => ({
+        yaw: (i / frondCount) * Math.PI * 2 + (i % 2) * 0.14,
         pitch: i % 3 === 0 ? 0.36 : i % 3 === 1 ? 0.08 : -0.14,
         roll: ((i % 3) - 1) * 0.16,
         scale: i % 2 === 0 ? 1.05 : 0.9,
       })),
-    []
+    [frondCount]
   );
 
   return (
     <group position={position} scale={scale}>
       <mesh geometry={trunkGeo} material={trunkMat} />
-      <group ref={crownRef} position={crownPos}>
-        {/* Buah kelapa bergerombol di pangkal pelepah */}
-        {[0, 1.3, 2.6, 3.9, 5.1].map((a, idx) => (
-          <mesh
-            key={idx}
-            position={[Math.cos(a) * 0.22, -0.18, Math.sin(a) * 0.22]}
-            geometry={coconutGeo}
-            material={coconutMat}
-          />
-        ))}
-        {/* Pelepah daun kelapa penuh & berlapis */}
+      <group position={crownPos}>
+        {/* Buah kelapa hanya pada mode standar */}
+        {!isLowSpec &&
+          [0, 2.2, 4.4].map((a, idx) => (
+            <mesh
+              key={idx}
+              position={[Math.cos(a) * 0.22, -0.18, Math.sin(a) * 0.22]}
+              geometry={coconutGeo}
+              material={coconutMat}
+            />
+          ))}
+        {/* Pelepah daun kelapa */}
         {fronds.map((f, idx) => (
           <group key={idx} rotation={[f.roll, f.yaw, f.pitch]} scale={f.scale}>
             <mesh geometry={frondGeo} material={frondMat} />
@@ -473,7 +467,7 @@ export function getIslandSignMetrics() {
   };
 }
 
-function HillsideJtt08Sign() {
+function HillsideJtt08Sign({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const letters = useMemo(() => {
     const defs = createLetterShapes();
     const totalW = defs.reduce((s, d) => s + d.width, 0) + SIGN_GAP * (defs.length - 1);
@@ -483,10 +477,10 @@ function HillsideJtt08Sign() {
     return defs.map((d) => {
       const geo = new THREE.ExtrudeGeometry(d.shapes, {
         depth: 1.8,
-        bevelEnabled: true,
-        bevelThickness: 0.28,
-        bevelSize: 0.22,
-        bevelSegments: 3,
+        bevelEnabled: !isLowSpec,
+        bevelThickness: 0.24,
+        bevelSize: 0.18,
+        bevelSegments: 1,
       });
       const zStart = cursor * SIGN_SCALE;
       cursor += d.width + SIGN_GAP;
@@ -499,7 +493,7 @@ function HillsideJtt08Sign() {
           : [1.4, d.width - 1.4];
       return { geo, char: d.char, zStart, width: d.width, baseY, strutXs };
     });
-  }, []);
+  }, [isLowSpec]);
 
   const frontMat = useMemo(
     () =>
@@ -539,34 +533,39 @@ function HillsideJtt08Sign() {
     /* Diputar menghadap -X (ke arah kapal yang mendekat):
        sumbu X lokal ExtrudeGeometry mengarah ke +Z dunia */
     <group position={[SIGN_LOCAL_X, 0, 0]}>
-      {/* Lampu sorot senja tunggal menerangi permukaan huruf JTT08 & lereng bukit */}
-      <pointLight position={[-18, 32, 0]} color="#ffd9a0" intensity={38} distance={95} decay={1} />
+      {/* Lampu sorot senja tunggal menerangi permukaan huruf JTT08 (hanya pada mode normal) */}
+      {!isLowSpec && (
+        <pointLight position={[-18, 32, 0]} color="#ffd9a0" intensity={38} distance={95} decay={1} />
+      )}
 
       {letters.map((l, idx) => (
         <group key={idx} position={[0, l.baseY, l.zStart]} rotation={[0, -Math.PI / 2, 0]} scale={SIGN_SCALE}>
           <mesh geometry={l.geo} material={letterMats} />
-          {/* Tiang penyangga baja tersembunyi tepat di belakang batang huruf (seperti papan Hollywood) */}
-          {l.strutXs.map((sx, sIdx) => (
-            <mesh key={sIdx} position={[sx, 4.2, -1.3]} rotation={[0.28, 0, 0]} material={strutMat}>
-              <cylinderGeometry args={[0.14, 0.18, 12.5, 8]} />
-            </mesh>
-          ))}
+          {/* Tiang penyangga baja tersembunyi tepat di belakang batang huruf */}
+          {!isLowSpec &&
+            l.strutXs.map((sx, sIdx) => (
+              <mesh key={sIdx} position={[sx, 4.2, -1.3]} rotation={[0.28, 0, 0]} material={strutMat}>
+                <cylinderGeometry args={[0.14, 0.18, 12.5, 6]} />
+              </mesh>
+            ))}
         </group>
       ))}
     </group>
   );
 }
 
-// ── Semak Tropis Rendah di Lereng Bukit (menggantikan bulatan pohon kartun) ──
+// ── Semak Tropis Rendah di Lereng Bukit ──
 
-function JungleCanopyInstanced() {
+function JungleCanopyInstanced({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const detailTex = useMemo(() => getTerrainDetailTexture(), []);
 
   const bushes = useMemo(() => {
     const list: { pos: [number, number, number]; scale: [number, number, number]; color: THREE.Color }[] = [];
     const palette = ["#244820", "#2f5726", "#39642c", "#1d3b1a", "#446e30"];
-    for (let i = 0; i < 160; i++) {
+    const maxBushes = isLowSpec ? 16 : 42;
+    for (let i = 0; i < maxBushes * 2.5; i++) {
+      if (list.length >= maxBushes) break;
       const a = hash2(i * 1.7, 9.1) * Math.PI * 2;
       const rad = 14 + hash2(i * 3.3, 2.7) * 56;
       const lx = Math.cos(a) * rad + 6;
@@ -584,7 +583,7 @@ function JungleCanopyInstanced() {
       });
     }
     return list;
-  }, []);
+  }, [isLowSpec]);
 
   useEffect(() => {
     const inst = meshRef.current;
@@ -618,15 +617,18 @@ function JungleCanopyInstanced() {
 
 export function TropicalIsland({
   position = [340, 0, 0],
+  isLowSpec = false,
 }: {
   position?: [number, number, number];
+  isLowSpec?: boolean;
 }) {
   const surfRingRef = useRef<THREE.Mesh>(null);
   const detailTex = useMemo(() => getTerrainDetailTexture(), []);
 
   // 1. Geometri kontur pulau (pasir putih -> tebing batu -> bukit hijau tropis)
   const terrainGeo = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(190, 230, 128, 128);
+    const segs = isLowSpec ? 24 : 44;
+    const geo = new THREE.PlaneGeometry(190, 230, segs, segs);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
@@ -679,7 +681,7 @@ export function TropicalIsland({
     }
     geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     return geo;
-  }, []);
+  }, [isLowSpec]);
 
   // 2. Tekstur laguna pirus & buih ombak pantai
   const lagoonTex = useMemo(() => {
@@ -710,78 +712,58 @@ export function TropicalIsland({
       phase: number;
     }[] = [];
 
-    // Barisan pohon kelapa di sepanjang pantai pasir putih (menghadap laut -X)
-    const zCoords = [
-      -68, -60, -52, -45, -38, -32, -26, -21, -15, -9, -3,
-      4, 10, 16, 22, 28, 35, 42, 49, 57, 65,
-    ];
+    // Pilih koordinat Z strategis (jauh lebih sedikit pohon agar hemat draw calls)
+    const zCoords = isLowSpec
+      ? [-45, -28, -12, 4, 20, 36]
+      : [-55, -42, -30, -18, -6, 6, 18, 30, 44, 56];
+
     zCoords.forEach((lz, i) => {
-      // Cari lx di mana tinggi pantai berada di sekitar 1.8m .. 4.2m
-      for (let lx = -65; lx <= -5; lx += 2.5) {
+      for (let lx = -60; lx <= -10; lx += 3.5) {
         const h = getIslandHeight(lx, lz);
         if (h >= 1.6 && h <= 3.8) {
-          const jitterZ = lz + (hash2(i, 1.3) - 0.5) * 3.5;
-          const jitterX = lx + (hash2(i, 4.7) - 0.5) * 3.0;
-          const hj = getIslandHeight(jitterX, jitterZ);
-          if (hj > 1.1) {
-            items.push({
-              pos: [jitterX, hj - 0.15, jitterZ],
-              scale: 0.92 + hash2(i, 8.2) * 0.42,
-              leanAngle: 0.16 + hash2(i, 5.5) * 0.2,
-              leanYaw: Math.PI + (hash2(i, 2.9) - 0.5) * 0.85,
-              phase: i * 0.7,
-            });
-            // Tambah pohon kedua agak masuk ke daratan
-            const backX = jitterX + 5.5 + hash2(i, 6.1) * 4;
-            const backZ = jitterZ + (hash2(i, 9.4) - 0.5) * 4;
-            const hb = getIslandHeight(backX, backZ);
-            if (hb > 2.2 && hb < 12) {
-              items.push({
-                pos: [backX, hb - 0.15, backZ],
-                scale: 1.0 + hash2(i, 3.7) * 0.38,
-                leanAngle: 0.12 + hash2(i, 7.1) * 0.16,
-                leanYaw: Math.PI + (hash2(i, 4.1) - 0.5) * 1.1,
-                phase: i * 1.1 + 1.5,
-              });
-            }
-          }
+          items.push({
+            pos: [lx, h - 0.15, lz],
+            scale: 0.95 + hash2(i, 8.2) * 0.35,
+            leanAngle: 0.16 + hash2(i, 5.5) * 0.18,
+            leanYaw: Math.PI + (hash2(i, 2.9) - 0.5) * 0.85,
+            phase: i * 0.7,
+          });
           break;
         }
       }
     });
 
-    // Tambah pohon kelapa di punggung & lereng kiri/kanan bukit agar siluet bukit tampak alami & tropis
-    for (let i = 0; i < 28; i++) {
-      const side = i % 2 === 0 ? -1 : 1;
-      const lz = side * (22 + hash2(i, 12.7) * 44);
-      const lx = -12 + hash2(i, 15.1) * 46;
-      const h = getIslandHeight(lx, lz);
-      if (h >= 7.0 && h <= 34.0) {
-        items.push({
-          pos: [lx, h - 0.25, lz],
-          scale: 0.9 + hash2(i, 17.9) * 0.42,
-          leanAngle: 0.1 + hash2(i, 13.4) * 0.18,
-          leanYaw: Math.PI + (hash2(i, 8.8) - 0.5) * 2.2,
-          phase: i * 0.9,
-        });
+    if (!isLowSpec) {
+      // Tambah pohon kelapa di punggung bukit hanya untuk mode standard/tinggi
+      for (let i = 0; i < 8; i++) {
+        const side = i % 2 === 0 ? -1 : 1;
+        const lz = side * (26 + hash2(i, 12.7) * 32);
+        const lx = -4 + hash2(i, 15.1) * 32;
+        const h = getIslandHeight(lx, lz);
+        if (h >= 7.0 && h <= 28.0) {
+          items.push({
+            pos: [lx, h - 0.25, lz],
+            scale: 0.9 + hash2(i, 17.9) * 0.35,
+            leanAngle: 0.1 + hash2(i, 13.4) * 0.15,
+            leanYaw: Math.PI + (hash2(i, 8.8) - 0.5) * 1.8,
+            phase: i * 0.9,
+          });
+        }
       }
     }
 
     return items;
-  }, []);
+  }, [isLowSpec]);
 
-  // 4. Batu karang pantai di kedua ujung teluk
+  // 4. Batu karang pantai
   const rocks = useMemo(() => {
     const spots: { pos: [number, number, number]; scale: [number, number, number]; rot: number }[] = [
-      { pos: [-44, 0.8, -58], scale: [5.5, 3.2, 4.8], rot: 0.4 },
-      { pos: [-48, 0.4, -52], scale: [3.4, 2.1, 3.8], rot: 1.2 },
-      { pos: [-42, 0.9, 56], scale: [6.0, 3.5, 5.2], rot: 2.1 },
-      { pos: [-47, 0.5, 49], scale: [3.8, 2.2, 3.2], rot: 0.8 },
-      { pos: [-38, 1.1, -34], scale: [2.8, 1.6, 2.4], rot: 1.7 },
-      { pos: [-39, 1.0, 36], scale: [3.1, 1.8, 2.7], rot: 2.5 },
+      { pos: [-44, 0.8, -52], scale: [5.0, 2.8, 4.2], rot: 0.4 },
+      { pos: [-42, 0.9, 50], scale: [5.2, 3.0, 4.5], rot: 2.1 },
+      { pos: [-38, 1.0, 28], scale: [2.8, 1.5, 2.4], rot: 1.7 },
     ];
-    return spots;
-  }, []);
+    return isLowSpec ? [spots[0], spots[1]] : spots;
+  }, [isLowSpec]);
 
   useFrame(({ clock }) => {
     if (surfRingRef.current) {
@@ -793,9 +775,10 @@ export function TropicalIsland({
 
   return (
     <group position={position}>
-      {/* Pantulan hangat cahaya senja dari samudra barat menerangi teluk pasir putih, kelapa, & bukit pulau */}
-      <pointLight position={[-68, 28, -22]} color="#ffd5a3" intensity={85} distance={190} decay={1} />
-      <pointLight position={[-62, 22, 30]} color="#ffbe7d" intensity={55} distance={170} decay={1} />
+      {/* Pantulan hangat cahaya senja (hanya jika bukan low spec) */}
+      {!isLowSpec && (
+        <pointLight position={[-65, 26, 0]} color="#ffd5a3" intensity={65} distance={160} decay={1} />
+      )}
 
       {/* Laguna dangkal pirus & buih pantai */}
       <mesh
@@ -817,8 +800,6 @@ export function TropicalIsland({
         <meshStandardMaterial
           vertexColors
           map={detailTex}
-          bumpMap={detailTex}
-          bumpScale={0.18}
           roughness={0.86}
           metalness={0.02}
         />
@@ -832,7 +813,7 @@ export function TropicalIsland({
           scale={r.scale}
           rotation={[0.15, r.rot, 0.1]}
         >
-          <dodecahedronGeometry args={[1, 1]} />
+          <dodecahedronGeometry args={[1, 0]} />
           <meshStandardMaterial
             color="#584e45"
             map={detailTex}
@@ -843,7 +824,7 @@ export function TropicalIsland({
       ))}
 
       {/* Rumpun Hutan di Lereng Bukit */}
-      <JungleCanopyInstanced />
+      <JungleCanopyInstanced isLowSpec={isLowSpec} />
 
       {/* Pohon Kelapa Melambai di Sepanjang Pantai Pasir Putih */}
       {palms.map((p, idx) => (
@@ -854,11 +835,12 @@ export function TropicalIsland({
           leanAngle={p.leanAngle}
           leanYaw={p.leanYaw}
           phase={p.phase}
+          isLowSpec={isLowSpec}
         />
       ))}
 
       {/* Huruf 3D Raksasa "JTT08" di Lereng Bukit */}
-      <HillsideJtt08Sign />
+      <HillsideJtt08Sign isLowSpec={isLowSpec} />
     </group>
   );
 }

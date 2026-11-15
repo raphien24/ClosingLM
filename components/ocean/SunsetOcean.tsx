@@ -315,17 +315,17 @@ export function SunsetOcean({
     initialNormals.wrapS = initialNormals.wrapT = THREE.RepeatWrapping;
     const geo =
       quality === "high"
-        ? buildPolarGrid(105, 144, 0.85, 1.064)
-        : buildPolarGrid(44, 60, 1.4, 1.13);
+        ? buildPolarGrid(56, 72, 1.0, 1.08)
+        : buildPolarGrid(22, 32, 1.8, 1.15);
 
     const w = new Water(geo, {
-      textureWidth: quality === "high" ? 256 : 128,
-      textureHeight: quality === "high" ? 256 : 128,
+      textureWidth: quality === "high" ? 128 : 64,
+      textureHeight: quality === "high" ? 128 : 64,
       waterNormals: initialNormals,
       sunDirection: sun.clone(),
       sunColor: new THREE.Color("#ffc08a"),
       waterColor: new THREE.Color("#0b2f42"),
-      distortionScale: 3.2,
+      distortionScale: quality === "high" ? 3.2 : 2.0,
       fog: true,
     });
     const mat = w.material as THREE.ShaderMaterial;
@@ -344,10 +344,15 @@ export function SunsetOcean({
     }
 
     if (quality === "low") {
+      // Matikan render pass mirror camera di mode hemat/low quality
+      // Menghilangkan re-render seluruh scene kedua kalinya sehingga performa melonjak 2x-3x lipat
+      w.onBeforeRender = function () {};
+    } else {
+      // Pada mode high, render mirror kamera setiap 2 frame agar tetap sangat ringan & halus
       const origBeforeRender = w.onBeforeRender;
       let reflTick = 0;
       w.onBeforeRender = function (renderer, scene, cam, geometry, material, group) {
-        if (reflTick++ % 3 !== 0) return;
+        if (reflTick++ % 2 !== 0) return;
         origBeforeRender.call(this, renderer, scene, cam, geometry, material, group);
       };
     }

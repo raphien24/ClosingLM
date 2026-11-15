@@ -16,11 +16,10 @@ import {
 } from "./SunsetOcean";
 import { ISLAND_POSITION, LOGIN_CAMERA, LOGIN_SHIP } from "./SunsetLoginBackground";
 import { TropicalIsland, getIslandSignMetrics } from "./TropicalIsland";
+import { isLowSpecActive } from "@/lib/hardwareDetection";
 
-/** Total durasi animasi transisi setelah login (~8 detik sesuai konfirmasi) */
-const SAIL_DURATION = 8.0;
 /** Batas waktu aman apabila pemuatan aset sangat lambat */
-const MAX_WAIT_MS = 12000;
+const MAX_WAIT_MS = 6000;
 
 const easeInOutCubic = (x: number) =>
   x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
@@ -50,13 +49,16 @@ function SailScene({
   const povLookVec = useMemo(() => new THREE.Vector3(), []);
   const tiltEuler = useMemo(() => new THREE.Euler(0, 0, 0, "XYZ"), []);
 
+  // Durasi transisi lebih gesit pada low-spec agar pengguna tidak tertahan
+  const sailDuration = isMobile ? 4.2 : 6.2;
+
   useFrame(({ camera, clock }, delta) => {
     if (!started.current) {
       started.current = true;
       onStart();
     }
-    elapsed.current += Math.min(delta, 1 / 24);
-    const p = clamp01(elapsed.current / SAIL_DURATION);
+    elapsed.current += Math.min(delta, 1 / 20);
+    const p = clamp01(elapsed.current / sailDuration);
     onProgress(p);
 
     const t = clock.elapsedTime;
@@ -202,10 +204,26 @@ function SailScene({
         travelOffset={travelOffset}
         inPov={inPov}
         shipPoseRef={shipPoseRef}
+        mobileCompact={isMobile}
       />
-      <TropicalIsland position={ISLAND_POSITION} />
+      <TropicalIsland position={ISLAND_POSITION} isLowSpec={isMobile} />
     </>
   );
+}
+
+function TransitionFramerateDriver({ active }: { active: boolean }) {
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    if (!active) return;
+    invalidate();
+    const id = window.setInterval(() => {
+      if (!document.hidden) invalidate();
+    }, 33);
+    return () => window.clearInterval(id);
+  }, [active, invalidate]);
+
+  return null;
 }
 
 export function SunsetSailTransition({
@@ -228,7 +246,7 @@ export function SunsetSailTransition({
 
   useEffect(() => {
     setMounted(true);
-    setIsMobile(window.innerWidth < 768);
+    setIsMobile(isLowSpecActive());
     const original = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -284,20 +302,22 @@ export function SunsetSailTransition({
     >
       <Canvas
         className="w-full h-full block"
+        frameloop={isMobile ? "demand" : "always"}
         camera={{
           position: LOGIN_CAMERA.position.toArray() as [number, number, number],
-          fov: isMobile ? 60 : 44,
-          near: 0.2,
-          far: 20000,
+          fov: isMobile ? 58 : 44,
+          near: 0.28,
+          far: 16000,
         }}
-        dpr={isMobile ? [1, 1.25] : [1, 1.5]}
-        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+        dpr={isMobile ? 1 : [1, 1.25]}
+        gl={{ antialias: !isMobile, alpha: false, powerPreference: isMobile ? "default" : "high-performance" }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 0.48;
           gl.debug.checkShaderErrors = false;
         }}
       >
+        <TransitionFramerateDriver active={isMobile} />
         <Suspense fallback={null}>
           <SailScene
             isMobile={isMobile}
@@ -335,10 +355,11 @@ export function SunsetSailTransition({
       />
 
       {/* Tombol Lewati */}
-      <div className="absolute top-4 right-4 sm:top-5 sm:right-5 z-20">
+      <div className="absolute top-4 right-4 sm:top-5 sm:right-5 z-30 pointer-events-auto">
         <button
           onClick={finish}
-          className="flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-black/35 hover:bg-black/55 border border-white/25 text-amber-50 text-xs font-semibold backdrop-blur-md transition-all cursor-pointer group shadow-lg"
+          className="flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-xl bg-black/60 hover:bg-black/80 border border-white/30 text-amber-50 text-xs font-bold transition-all cursor-pointer group shadow-lg"
+          title="Lewati animasi langsung menuju Dashboard"
         >
           <span>Lewati</span>
           <FastForward className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
@@ -351,7 +372,7 @@ export function SunsetSailTransition({
           sceneStarted && progress < 0.88 ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2"
         }`}
       >
-        <div className="rounded-2xl border border-white/20 bg-[#1b1022]/45 backdrop-blur-xl px-4 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.75)]">
+        <div className="rounded-2xl border border-white/20 bg-[#1b1022]/85 px-4 py-3 shadow-[0_20px_50px_-20px_rgba(0,0,0,0.75)]">
           <div className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-200/95">
             <Compass className="h-3.5 w-3.5 animate-spin" style={{ animationDuration: "8s" }} />
             <span>{stageLabel}</span>

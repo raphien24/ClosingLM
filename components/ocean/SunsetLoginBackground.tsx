@@ -16,6 +16,7 @@ import {
   getSunDirection,
 } from "./SunsetOcean";
 import { preloadHumanModels } from "./RiggedHumanCrew";
+import { isLowSpecActive, subscribePerformanceMode } from "@/lib/hardwareDetection";
 
 /** Pose kamera awal login (dipakai juga sebagai titik awal transisi zoom ke kapten) */
 export const LOGIN_CAMERA = {
@@ -107,25 +108,31 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
 
 export function SunsetLoginBackground() {
   const [mounted, setMounted] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isLowSpec, setIsLowSpec] = useState(false);
   const [ready, setReady] = useState(false);
   const handleReady = useCallback(() => setReady(true), []);
 
   useEffect(() => {
     setMounted(true);
-    const mobile = window.innerWidth < 768;
-    setIsMobile(mobile);
+    const low = isLowSpecActive();
+    setIsLowSpec(low);
+
+    const unsub = subscribePerformanceMode((mode) => {
+      setIsLowSpec(mode === "light");
+    });
+
     // Mulai preload model kapal aktif & awak secara paralel sejak awal agar tidak antre beruntun
-    useLoader.preload(GLTFLoader, mobile ? SHIP_URL_LOW : SHIP_URL_HIGH, (loader) => {
+    useLoader.preload(GLTFLoader, low ? SHIP_URL_LOW : SHIP_URL_HIGH, (loader) => {
       (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
     });
-    preloadHumanModels(mobile);
+    preloadHumanModels(low);
 
     // Fallback aman bila jaringan sangat lambat agar layar tidak tertahan
-    const fallbackTimer = window.setTimeout(() => setReady(true), 3000);
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const fallbackTimer = window.setTimeout(() => setReady(true), 2500);
+    const check = () => setIsLowSpec(isLowSpecActive());
     window.addEventListener("resize", check);
     return () => {
+      unsub();
       window.clearTimeout(fallbackTimer);
       window.removeEventListener("resize", check);
     };
@@ -135,18 +142,18 @@ export function SunsetLoginBackground() {
     <div className="fixed inset-0 overflow-hidden pointer-events-none select-none bg-[#120d1d]">
       {mounted && (
         <Canvas
-          frameloop={isMobile ? "demand" : "always"}
+          frameloop={isLowSpec ? "demand" : "always"}
           camera={{
             position: LOGIN_CAMERA.position.toArray() as [number, number, number],
-            fov: isMobile ? 58 : 44,
-            near: 0.25,
-            far: 20000,
+            fov: isLowSpec ? 56 : 44,
+            near: 0.28,
+            far: 16000,
           }}
-          dpr={isMobile ? 1 : [1, 1.5]}
+          dpr={isLowSpec ? 1 : [1, 1.25]}
           gl={{
-            antialias: !isMobile,
+            antialias: !isLowSpec,
             alpha: false,
-            powerPreference: isMobile ? "default" : "high-performance",
+            powerPreference: isLowSpec ? "default" : "high-performance",
           }}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
@@ -155,8 +162,8 @@ export function SunsetLoginBackground() {
           }}
         >
           <color attach="background" args={["#181124"]} />
-          <MobileFramerateDriver active={isMobile} />
-          <LoginScene isMobile={isMobile} onReady={handleReady} />
+          <MobileFramerateDriver active={isLowSpec} />
+          <LoginScene isMobile={isLowSpec} onReady={handleReady} />
         </Canvas>
       )}
 
