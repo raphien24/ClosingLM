@@ -1,17 +1,21 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import {
   GalleonShip,
+  SHIP_URL_HIGH,
+  SHIP_URL_LOW,
   SunsetFog,
   SunsetLights,
   SunsetOcean,
   SunsetSky,
   getSunDirection,
 } from "./SunsetOcean";
-import { TropicalIsland } from "./TropicalIsland";
+import { preloadHumanModels } from "./RiggedHumanCrew";
 
 /** Pose kamera awal login (dipakai juga sebagai titik awal transisi zoom ke kapten) */
 export const LOGIN_CAMERA = {
@@ -73,14 +77,17 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
       <SunsetLights sun={sun} />
       <SunsetSky sun={sun} />
       <SunsetOcean sun={sun} quality={isMobile ? "low" : "high"} />
-      <GalleonShip
-        quality={isMobile ? "low" : "high"}
-        position={ship.position}
-        heading={ship.heading}
-        speed={0}
-        inPov={false}
-      />
-      <TropicalIsland position={ISLAND_POSITION} />
+      {/* Kapal & awak dimuat bertahap di Suspense terpisah agar langit & samudra senja langsung muncul tanpa menunggu aset 3D */}
+      <Suspense fallback={null}>
+        <GalleonShip
+          quality={isMobile ? "low" : "high"}
+          position={ship.position}
+          heading={ship.heading}
+          speed={0}
+          inPov={false}
+          progressive
+        />
+      </Suspense>
     </>
   );
 }
@@ -92,14 +99,21 @@ export function SunsetLoginBackground() {
 
   useEffect(() => {
     setMounted(true);
+    const mobile = window.innerWidth < 768;
+    setIsMobile(mobile);
+    // Mulai preload model kapal aktif & awak secara paralel sejak awal agar tidak antre beruntun
+    useLoader.preload(GLTFLoader, mobile ? SHIP_URL_LOW : SHIP_URL_HIGH, (loader) => {
+      (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
+    });
+    preloadHumanModels();
+
     const check = () => setIsMobile(window.innerWidth < 768);
-    check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
 
   return (
-    <div className="fixed inset-0 overflow-hidden pointer-events-none select-none bg-gradient-to-b from-[#1b1530] via-[#7a3b3a] to-[#e08a4f]">
+    <div className="fixed inset-0 overflow-hidden pointer-events-none select-none bg-[#120d1d]">
       {mounted && (
         <Canvas
           camera={{
@@ -108,22 +122,22 @@ export function SunsetLoginBackground() {
             near: 0.25,
             far: 20000,
           }}
-          dpr={isMobile ? [1, 1.5] : [1, 2]}
+          dpr={isMobile ? [1, 1.25] : [1, 1.5]}
           gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 0.46;
+            gl.debug.checkShaderErrors = false;
           }}
         >
-          <Suspense fallback={null}>
-            <LoginScene isMobile={isMobile} onReady={() => setReady(true)} />
-          </Suspense>
+          <color attach="background" args={["#181124"]} />
+          <LoginScene isMobile={isMobile} onReady={() => setReady(true)} />
         </Canvas>
       )}
 
-      {/* Tirai senja: memudar mulus setelah scene 3D siap */}
+      {/* Transisi singkat hanya sampai frame WebGL pertama (langit & laut) selesai digambar */}
       <div
-        className={`absolute inset-0 bg-gradient-to-b from-[#1b1530] via-[#5a2c3a] to-[#c9774a] transition-opacity duration-[1400ms] ease-out ${
+        className={`absolute inset-0 bg-gradient-to-b from-[#151025] via-[#261831] to-[#1a1326] transition-opacity duration-300 ease-out ${
           ready ? "opacity-0" : "opacity-100"
         }`}
       />

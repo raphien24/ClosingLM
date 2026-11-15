@@ -185,6 +185,55 @@ function getTerrainDetailTexture(): THREE.CanvasTexture | null {
 
 // ── Komponen Pohon Kelapa Realistis (CoconutPalmTree) ──────────
 
+interface SharedPalmAssets {
+  frondGeo: THREE.BufferGeometry;
+  coconutGeo: THREE.SphereGeometry;
+  trunkMat: THREE.MeshStandardMaterial;
+  frondMat: THREE.MeshStandardMaterial;
+  coconutMat: THREE.MeshStandardMaterial;
+}
+
+let _sharedPalmAssets: SharedPalmAssets | null = null;
+
+function getSharedPalmAssets(): SharedPalmAssets {
+  if (_sharedPalmAssets) return _sharedPalmAssets;
+
+  const frondGeo = new THREE.PlaneGeometry(5.2, 2.35, 10, 4);
+  frondGeo.rotateX(-Math.PI / 2);
+  frondGeo.translate(2.55, 0, 0);
+  const pos = frondGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const u = Math.max(0, x / 5.2);
+    const archY = Math.sin(u * Math.PI * 0.78) * 0.72 - u * u * 1.45;
+    const vFold = -Math.abs(z) * 0.28;
+    pos.setY(i, pos.getY(i) + archY + vFold);
+  }
+  frondGeo.computeVertexNormals();
+
+  const coconutGeo = new THREE.SphereGeometry(0.14, 8, 8);
+  const trunkMat = new THREE.MeshStandardMaterial({
+    color: "#6b533e",
+    roughness: 0.88,
+    metalness: 0.02,
+  });
+  const frondMat = new THREE.MeshStandardMaterial({
+    map: getPalmFrondTexture(),
+    alphaTest: 0.35,
+    side: THREE.DoubleSide,
+    roughness: 0.6,
+    metalness: 0.04,
+  });
+  const coconutMat = new THREE.MeshStandardMaterial({
+    color: "#4a3219",
+    roughness: 0.65,
+  });
+
+  _sharedPalmAssets = { frondGeo, coconutGeo, trunkMat, frondMat, coconutMat };
+  return _sharedPalmAssets;
+}
+
 function CoconutPalmTree({
   position,
   scale = 1,
@@ -199,7 +248,10 @@ function CoconutPalmTree({
   phase?: number;
 }) {
   const crownRef = useRef<THREE.Group>(null);
-  const frondTex = useMemo(() => getPalmFrondTexture(), []);
+  const { frondGeo, coconutGeo, trunkMat, frondMat, coconutMat } = useMemo(
+    () => getSharedPalmAssets(),
+    []
+  );
 
   // Batang kelapa melengkung dengan cincin ruas kulit kayu
   const { trunkGeo, crownPos } = useMemo(() => {
@@ -212,7 +264,7 @@ function CoconutPalmTree({
       new THREE.Vector3(dx * 0.75, h * 0.68, dz * 0.75),
       new THREE.Vector3(dx, h, dz),
     ]);
-    const geo = new THREE.TubeGeometry(curve, 16, 0.24, 10, false);
+    const geo = new THREE.TubeGeometry(curve, 12, 0.24, 8, false);
     // Buat batang mengecil dari pangkal ke pucuk + guratan cincin kelapa
     const posAttr = geo.attributes.position;
     const v = new THREE.Vector3();
@@ -228,57 +280,6 @@ function CoconutPalmTree({
     geo.computeVertexNormals();
     return { trunkGeo: geo, crownPos: [dx, h, dz] as [number, number, number] };
   }, [leanAngle, leanYaw]);
-
-  // Lembaran pelepah daun kelapa melengkung penuh 3D (tanpa alphaMap yang membuang daun gelap)
-  const frondGeo = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(5.2, 2.35, 12, 4);
-    geo.rotateX(-Math.PI / 2); // Letakkan bidang di X-Z horizontal lebih dulu agar deformasi Y & V-fold akurat
-    geo.translate(2.55, 0, 0); // Pangkal pelepah di (0,0,0)
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const z = pos.getZ(i);
-      const u = Math.max(0, x / 5.2);
-      // Melengkung naik di pangkal lalu menjuntai turun elegan di ujung
-      const archY = Math.sin(u * Math.PI * 0.78) * 0.72 - u * u * 1.45;
-      // Lipatan huruf V di sepanjang anak daun agar rimbun terlihat dari sudut samping
-      const vFold = -Math.abs(z) * 0.28;
-      pos.setY(i, pos.getY(i) + archY + vFold);
-    }
-    geo.computeVertexNormals();
-    return geo;
-  }, []);
-
-  const trunkMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#6b533e",
-        roughness: 0.88,
-        metalness: 0.02,
-      }),
-    []
-  );
-
-  const frondMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        map: frondTex,
-        alphaTest: 0.35,
-        side: THREE.DoubleSide,
-        roughness: 0.6,
-        metalness: 0.04,
-      }),
-    [frondTex]
-  );
-
-  const coconutMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#4a3219",
-        roughness: 0.65,
-      }),
-    []
-  );
 
   useFrame(({ clock }) => {
     if (crownRef.current) {
@@ -308,10 +309,9 @@ function CoconutPalmTree({
           <mesh
             key={idx}
             position={[Math.cos(a) * 0.22, -0.18, Math.sin(a) * 0.22]}
+            geometry={coconutGeo}
             material={coconutMat}
-          >
-            <sphereGeometry args={[0.14, 10, 10]} />
-          </mesh>
+          />
         ))}
         {/* Pelepah daun kelapa penuh & berlapis */}
         {fronds.map((f, idx) => (
@@ -539,10 +539,8 @@ function HillsideJtt08Sign() {
     /* Diputar menghadap -X (ke arah kapal yang mendekat):
        sumbu X lokal ExtrudeGeometry mengarah ke +Z dunia */
     <group position={[SIGN_LOCAL_X, 0, 0]}>
-      {/* Lampu sorot senja menerangi permukaan huruf JTT08 & lereng bukit */}
-      <pointLight position={[-18, 34, 0]} color="#ffe0ad" intensity={22} distance={85} decay={1} />
-      <pointLight position={[-16, 30, -18]} color="#ffcf8c" intensity={14} distance={65} decay={1} />
-      <pointLight position={[-16, 30, 18]} color="#ffcf8c" intensity={14} distance={65} decay={1} />
+      {/* Lampu sorot senja tunggal menerangi permukaan huruf JTT08 & lereng bukit */}
+      <pointLight position={[-18, 32, 0]} color="#ffd9a0" intensity={38} distance={95} decay={1} />
 
       {letters.map((l, idx) => (
         <group key={idx} position={[0, l.baseY, l.zStart]} rotation={[0, -Math.PI / 2, 0]} scale={SIGN_SCALE}>

@@ -79,6 +79,31 @@ function configureLoader(loader: THREE.Loader) {
   (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
 }
 
+/** Preload seluruh model awak manusia secara paralel (dipanggil tanpa memblokir render langit & laut awal) */
+export function preloadHumanModels() {
+  (Object.values(MODEL_URLS) as string[]).forEach((url) => {
+    useLoader.preload(GLTFLoader, url, configureLoader);
+  });
+}
+
+const _sharedDeckMaterials = new WeakMap<THREE.Material, THREE.Material>();
+const _sharedArmsMaterials = new WeakMap<THREE.Material, THREE.Material>();
+
+function getSharedHumanMaterial(mat: THREE.Material, armsOnly: boolean): THREE.Material {
+  const cache = armsOnly ? _sharedArmsMaterials : _sharedDeckMaterials;
+  const cached = cache.get(mat);
+  if (cached) return cached;
+
+  const sm = (mat as THREE.MeshStandardMaterial).clone();
+  if (sm.isMeshStandardMaterial) {
+    sm.envMapIntensity = armsOnly ? 0.72 : 0.85;
+    sm.roughness = Math.max(sm.roughness ?? 0.68, armsOnly ? 0.72 : 0.65);
+    sm.metalness = Math.min(sm.metalness ?? 0.05, 0.08);
+  }
+  cache.set(mat, sm);
+  return sm;
+}
+
 /** Menyaring segitiga SkinnedMesh agar hanya menyisakan lengan bawah, manset & tangan (tanpa badan/torso/kepala) */
 function filterArmOnlyGeometry(skinned: THREE.SkinnedMesh) {
   const geo = skinned.geometry;
@@ -147,27 +172,30 @@ function useHumanRigClone(variant: HumanModelVariant, hideHead = false, armsOnly
           mesh.visible = false;
           return;
         }
+        // Sembunyikan gigi & kelenjar mata bagian dalam (~15.7k segitiga tak terlihat per karakter)
+        if (/^h_(Teeth|.*gland)/i.test(mesh.name)) {
+          mesh.visible = false;
+          return;
+        }
         if (armsOnly && (mesh as THREE.SkinnedMesh).isSkinnedMesh) {
           filterArmOnlyGeometry(mesh as THREE.SkinnedMesh);
         }
 
         // Cegah bounding sphere T-pose lama memangkas mesh saat tangan diturunkan / digerakkan
         mesh.frustumCulled = false;
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
+
+        // Hapus morph targets yang tidak digunakan agar Three.js tidak mengalokasi DataArrayTexture CPU/GPU & shader morph
+        if (mesh.geometry?.morphAttributes && Object.keys(mesh.geometry.morphAttributes).length > 0) {
+          mesh.geometry.morphAttributes = {};
+        }
+        mesh.morphTargetInfluences = undefined;
+        mesh.morphTargetDictionary = undefined;
 
         const orig = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        const cloned = orig.map((mat) => {
-          const sm = (mat as THREE.MeshStandardMaterial).clone();
-          if (sm.isMeshStandardMaterial) {
-            sm.envMapIntensity = armsOnly ? 0.72 : 0.85;
-            sm.roughness = Math.max(sm.roughness ?? 0.68, armsOnly ? 0.72 : 0.65);
-            sm.metalness = Math.min(sm.metalness ?? 0.05, 0.08);
-            sm.needsUpdate = true;
-          }
-          return sm;
-        });
-        mesh.material = Array.isArray(mesh.material) ? cloned : cloned[0];
+        const shared = orig.map((mat) => getSharedHumanMaterial(mat, armsOnly));
+        mesh.material = Array.isArray(mesh.material) ? shared : shared[0];
       }
     });
 
@@ -434,28 +462,49 @@ function poseLegForward(
   applyBoneCharDelta(foot, bones, rootInvQ, footPitch, 0, 0);
 }
 
+let _propMats: {
+  hatCrown: THREE.MeshStandardMaterial;
+  hatBrim: THREE.MeshStandardMaterial;
+  gold: THREE.MeshStandardMaterial;
+  spyBrass1: THREE.MeshStandardMaterial;
+  spyBrass2: THREE.MeshStandardMaterial;
+  spyWood: THREE.MeshStandardMaterial;
+  rope: THREE.MeshStandardMaterial;
+} | null = null;
+
+function getSharedPropMats() {
+  if (_propMats) return _propMats;
+  _propMats = {
+    hatCrown: new THREE.MeshStandardMaterial({ color: "#141d2e", roughness: 0.85 }),
+    hatBrim: new THREE.MeshStandardMaterial({ color: "#182238", roughness: 0.82 }),
+    gold: new THREE.MeshStandardMaterial({ color: "#d4af37", metalness: 0.78, roughness: 0.28 }),
+    spyBrass1: new THREE.MeshStandardMaterial({ color: "#c99b32", metalness: 0.85, roughness: 0.24 }),
+    spyBrass2: new THREE.MeshStandardMaterial({ color: "#dbb044", metalness: 0.88, roughness: 0.22 }),
+    spyWood: new THREE.MeshStandardMaterial({ color: "#704a26", roughness: 0.62 }),
+    rope: new THREE.MeshStandardMaterial({ color: "#9c7e54", roughness: 0.94 }),
+  };
+  return _propMats;
+}
+
 /** Membuat Topi Tricorn Kapten Angkatan Laut Abad 17 */
 function CaptainTricornHat() {
+  const mats = useMemo(() => getSharedPropMats(), []);
   return (
     <group position={[0, 0, 0]} rotation={[-0.06, 0, 0]}>
       {/* Mahkota topi beludru navy gelap */}
-      <mesh position={[0, 0.045, 0]}>
+      <mesh position={[0, 0.045, 0]} material={mats.hatCrown}>
         <cylinderGeometry args={[0.098, 0.11, 0.09, 18]} />
-        <meshStandardMaterial color="#141d2e" roughness={0.85} />
       </mesh>
       {/* Tepi topi lebar segi tiga (tricorn) dengan pinggiran emas */}
-      <mesh position={[0, 0.014, 0]} scale={[1.22, 0.16, 1.26]}>
+      <mesh position={[0, 0.014, 0]} scale={[1.22, 0.16, 1.26]} material={mats.hatBrim}>
         <cylinderGeometry args={[0.178, 0.168, 0.08, 3]} />
-        <meshStandardMaterial color="#182238" roughness={0.82} />
       </mesh>
-      <mesh position={[0, 0.021, 0]} scale={[1.23, 0.1, 1.27]}>
+      <mesh position={[0, 0.021, 0]} scale={[1.23, 0.1, 1.27]} material={mats.gold}>
         <cylinderGeometry args={[0.181, 0.174, 0.06, 3]} />
-        <meshStandardMaterial color="#d4af37" metalness={0.78} roughness={0.28} />
       </mesh>
       {/* Lencana kokarde emas di sisi depan */}
-      <mesh position={[0, 0.048, 0.106]} rotation={[Math.PI / 2, 0, 0]}>
+      <mesh position={[0, 0.048, 0.106]} rotation={[Math.PI / 2, 0, 0]} material={mats.gold}>
         <cylinderGeometry args={[0.024, 0.024, 0.012, 12]} />
-        <meshStandardMaterial color="#e0b842" metalness={0.82} roughness={0.25} />
       </mesh>
     </group>
   );
@@ -463,19 +512,17 @@ function CaptainTricornHat() {
 
 /** Teropong Kuningan Klasik untuk Awak Pengintai */
 function BrassSpyglassMesh() {
+  const mats = useMemo(() => getSharedPropMats(), []);
   return (
     <group rotation={[Math.PI / 2, 0, 0]}>
-      <mesh position={[0, 0.08, 0]}>
+      <mesh position={[0, 0.08, 0]} material={mats.spyBrass1}>
         <cylinderGeometry args={[0.026, 0.032, 0.19, 14]} />
-        <meshStandardMaterial color="#c99b32" metalness={0.85} roughness={0.24} />
       </mesh>
-      <mesh position={[0, 0.21, 0]}>
+      <mesh position={[0, 0.21, 0]} material={mats.spyBrass2}>
         <cylinderGeometry args={[0.021, 0.025, 0.14, 14]} />
-        <meshStandardMaterial color="#dbb044" metalness={0.88} roughness={0.22} />
       </mesh>
-      <mesh position={[0, 0.29, 0]}>
+      <mesh position={[0, 0.29, 0]} material={mats.spyWood}>
         <cylinderGeometry args={[0.017, 0.02, 0.05, 14]} />
-        <meshStandardMaterial color="#704a26" roughness={0.62} />
       </mesh>
     </group>
   );
@@ -483,10 +530,10 @@ function BrassSpyglassMesh() {
 
 /** Tali Tambang Layar untuk Awak Penarik Tali */
 function VerticalRiggingRope() {
+  const mats = useMemo(() => getSharedPropMats(), []);
   return (
-    <mesh position={[0.3, 1.85, 0.04]} rotation={[0, 0, 0.06]}>
+    <mesh position={[0.3, 1.85, 0.04]} rotation={[0, 0, 0.06]} material={mats.rope}>
       <cylinderGeometry args={[0.016, 0.016, 3.6, 8]} />
-      <meshStandardMaterial color="#9c7e54" roughness={0.94} />
     </mesh>
   );
 }
@@ -902,4 +949,38 @@ export function RiggedCaptainPovArms({
       <primitive object={root} />
     </group>
   );
+}
+
+/** Mengompilasi shader sub-grup 3D secara asinkron (KHR_parallel_shader_compile) sebelum ditampilkan */
+export function precompileObjectAsync(
+  gl: THREE.WebGLRenderer,
+  object: THREE.Object3D | null,
+  camera: THREE.Camera,
+  scene: THREE.Scene,
+  onReady: () => void
+): () => void {
+  if (!object) {
+    onReady();
+    return () => {};
+  }
+  let cancelled = false;
+  let innerRaf = 0;
+  const raf = requestAnimationFrame(() => {
+    if (cancelled) return;
+    gl.compileAsync(object, camera, scene)
+      .then(() => {
+        if (cancelled) return;
+        innerRaf = requestAnimationFrame(() => {
+          if (!cancelled) onReady();
+        });
+      })
+      .catch(() => {
+        if (!cancelled) onReady();
+      });
+  });
+  return () => {
+    cancelled = true;
+    cancelAnimationFrame(raf);
+    if (innerRaf) cancelAnimationFrame(innerRaf);
+  };
 }

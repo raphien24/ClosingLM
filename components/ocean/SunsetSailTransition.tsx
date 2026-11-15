@@ -290,11 +290,12 @@ export function SunsetSailTransition({
           near: 0.2,
           far: 20000,
         }}
-        dpr={isMobile ? [1, 1.5] : [1, 2]}
+        dpr={isMobile ? [1, 1.25] : [1, 1.5]}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 0.48;
+          gl.debug.checkShaderErrors = false;
         }}
       >
         <Suspense fallback={null}>

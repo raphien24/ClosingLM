@@ -8,7 +8,7 @@
  * - SunsetLights   : pencahayaan matahari terbenam
  */
 
-import { useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useLoader, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
@@ -17,6 +17,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { GERSTNER_GLSL, WAVE_TIME_SCALE, sampleWaveHeight, wavesAsVec4Array } from "./waves";
 import { ShipDeckCrew } from "./RealisticCrew";
+import { precompileObjectAsync } from "./RiggedHumanCrew";
 
 export type OceanQuality = "high" | "low";
 
@@ -60,6 +61,48 @@ function applySkyUniforms(sky: Sky, sun: THREE.Vector3, withClouds: boolean) {
 
 // ── Langit Sunset ─────────────────────────────────────────────
 
+let _cachedSunsetEnvRT: THREE.WebGLRenderTarget | null = null;
+
+function createSunsetEquirectDataTexture(): THREE.DataTexture {
+  const w = 32;
+  const h = 16;
+  const data = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    const v = y / (h - 1); // 0 = bawah (laut gelap), 1 = atas (langit zenith)
+    let r = 24;
+    let g = 20;
+    let b = 42;
+    if (v < 0.45) {
+      const k = v / 0.45;
+      r = 22 + k * 60;
+      g = 32 + k * 46;
+      b = 54 + k * 28;
+    } else if (v < 0.56) {
+      const k = (v - 0.45) / 0.11;
+      r = 82 + k * 173;
+      g = 78 + k * 102;
+      b = 82 + k * 34;
+    } else {
+      const k = (v - 0.56) / 0.44;
+      r = 255 - k * 226;
+      g = 180 - k * 158;
+      b = 116 - k * 68;
+    }
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      data[i] = Math.round(r);
+      data[i + 1] = Math.round(g);
+      data[i + 2] = Math.round(b);
+      data[i + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, w, h, THREE.RGBAFormat);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 export function SunsetSky({ sun }: { sun: THREE.Vector3 }) {
   const { gl, scene } = useThree();
 
@@ -71,22 +114,25 @@ export function SunsetSky({ sun }: { sun: THREE.Vector3 }) {
   }, [sun]);
 
   useEffect(() => {
+    // Environment map gradien senja ringan (<5ms) langsung siap di frame 0 agar material kapal & kru tidak dikompilasi dua kali
     const pmrem = new THREE.PMREMGenerator(gl);
-    const envScene = new THREE.Scene();
-    const envSky = new Sky();
-    envSky.scale.setScalar(50);
-    applySkyUniforms(envSky, sun, false);
-    envScene.add(envSky);
-    const rt = pmrem.fromScene(envScene, 0.02, 0.1, 200);
+    const eqTex = createSunsetEquirectDataTexture();
+    const rt = pmrem.fromEquirectangular(eqTex);
+    _cachedSunsetEnvRT = rt;
     scene.environment = rt.texture;
+    eqTex.dispose();
+    pmrem.dispose();
+
     return () => {
-      scene.environment = null;
+      if (scene.environment === rt.texture) {
+        scene.environment = null;
+      }
+      if (_cachedSunsetEnvRT === rt) {
+        _cachedSunsetEnvRT = null;
+      }
       rt.dispose();
-      pmrem.dispose();
-      envSky.geometry.dispose();
-      envSky.material.dispose();
     };
-  }, [gl, scene, sun]);
+  }, [gl, scene]);
 
   useEffect(() => {
     return () => {
@@ -220,6 +266,34 @@ function patchWaterFragment(src: string): string {
 
 // ── Laut ──────────────────────────────────────────────────────
 
+let _fallbackWaterNormals: THREE.DataTexture | null = null;
+let _loadedWaterNormals: THREE.Texture | null = null;
+
+function getFallbackWaterNormals(): THREE.DataTexture {
+  if (_fallbackWaterNormals) return _fallbackWaterNormals;
+  const size = 64;
+  const data = new Uint8Array(size * size * 4);
+  const tau = Math.PI * 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = (x / size) * tau;
+      const v = (y / size) * tau;
+      const nx = Math.sin(u * 2 + Math.cos(v * 2)) * 26 + Math.cos(u * 5 - v * 3) * 14;
+      const ny = Math.cos(v * 2 + Math.sin(u * 3)) * 26 + Math.sin(u * 3 + v * 5) * 14;
+      const i = (y * size + x) * 4;
+      data[i] = Math.max(0, Math.min(255, Math.round(128 + nx)));
+      data[i + 1] = Math.max(0, Math.min(255, Math.round(128 + ny)));
+      data[i + 2] = 250;
+      data[i + 3] = 255;
+    }
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.needsUpdate = true;
+  _fallbackWaterNormals = tex;
+  return tex;
+}
+
 export function SunsetOcean({
   sun,
   quality = "high",
@@ -229,19 +303,19 @@ export function SunsetOcean({
   quality?: OceanQuality;
   flowTimeScale?: number;
 }) {
-  const normals = useLoader(THREE.TextureLoader, "/textures/waternormals.jpg");
+  const initialNormals = useMemo(() => _loadedWaterNormals ?? getFallbackWaterNormals(), []);
 
   const water = useMemo(() => {
-    normals.wrapS = normals.wrapT = THREE.RepeatWrapping;
+    initialNormals.wrapS = initialNormals.wrapT = THREE.RepeatWrapping;
     const geo =
       quality === "high"
-        ? buildPolarGrid(185, 256, 0.55, 1.035)
-        : buildPolarGrid(120, 144, 0.9, 1.05);
+        ? buildPolarGrid(105, 144, 0.85, 1.064)
+        : buildPolarGrid(72, 96, 1.2, 1.09);
 
     const w = new Water(geo, {
-      textureWidth: quality === "high" ? 512 : 256,
-      textureHeight: quality === "high" ? 512 : 256,
-      waterNormals: normals,
+      textureWidth: quality === "high" ? 256 : 192,
+      textureHeight: quality === "high" ? 256 : 192,
+      waterNormals: initialNormals,
       sunDirection: sun.clone(),
       sunColor: new THREE.Color("#ffc08a"),
       waterColor: new THREE.Color("#0b2f42"),
@@ -259,7 +333,31 @@ export function SunsetOcean({
     w.rotation.x = -Math.PI / 2;
     w.frustumCulled = false;
     return w;
-  }, [normals, quality, sun]);
+  }, [initialNormals, quality, sun]);
+
+  useEffect(() => {
+    if (_loadedWaterNormals) {
+      const mat = water.material as THREE.ShaderMaterial;
+      if (mat.uniforms.normalSampler) {
+        mat.uniforms.normalSampler.value = _loadedWaterNormals;
+      }
+      return;
+    }
+    let cancelled = false;
+    new THREE.TextureLoader().load("/textures/waternormals.jpg", (tex) => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      _loadedWaterNormals = tex;
+      if (!cancelled) {
+        const mat = water.material as THREE.ShaderMaterial;
+        if (mat.uniforms.normalSampler) {
+          mat.uniforms.normalSampler.value = tex;
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [water]);
 
   useEffect(() => {
     return () => {
@@ -286,6 +384,19 @@ export const SHIP_URL_LOW = "/models/ship-mobile.glb";
 
 const _v = new THREE.Vector3();
 
+const _shipMatCache = new WeakMap<THREE.Material, THREE.Material>();
+
+function getSharedShipMaterial(mat: THREE.Material): THREE.Material {
+  const cached = _shipMatCache.get(mat);
+  if (cached) return cached;
+  const sm = mat as THREE.MeshStandardMaterial;
+  if (sm.isMeshStandardMaterial) {
+    sm.envMapIntensity = 0.9;
+  }
+  _shipMatCache.set(mat, mat);
+  return mat;
+}
+
 export function GalleonShip({
   quality = "high",
   position,
@@ -294,6 +405,7 @@ export function GalleonShip({
   travelOffset = 0,
   inPov = false,
   shipPoseRef,
+  progressive = false,
 }: {
   quality?: OceanQuality;
   position: [number, number, number];
@@ -307,12 +419,18 @@ export function GalleonShip({
   inPov?: boolean;
   /** Ref opsional agar kamera luar dapat mengikuti posisi & oleng kapal secara presisi */
   shipPoseRef?: React.MutableRefObject<ShipPose>;
+  /** Kompilasi shader asinkron & tampilkan dek bertahap agar animasi ombak tidak macet saat login */
+  progressive?: boolean;
 }) {
   const gltf = useLoader(GLTFLoader, quality === "high" ? SHIP_URL_HIGH : SHIP_URL_LOW, (loader) => {
     (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
   });
 
+  const { gl, camera, scene } = useThree();
   const wheelAngleRef = useRef(0);
+  const shipMeshRef = useRef<THREE.Group>(null);
+  const [shipReady, setShipReady] = useState(!progressive);
+  const [crewMounted, setCrewMounted] = useState(!progressive);
 
   const model = useMemo(() => {
     const root = gltf.scene.clone(true);
@@ -320,20 +438,29 @@ export function GalleonShip({
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) {
         // Biarkan seluruh layar dan tiang mast kapal 100% utuh (tidak dipotong/dikecilkan saat berlayar)
+        mesh.frustumCulled = false;
+        mesh.castShadow = false;
+        mesh.receiveShadow = false;
         const origMats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        const clonedMats = origMats.map((m) => {
-          const sm = (m as THREE.MeshStandardMaterial).clone();
-          if (sm.isMeshStandardMaterial) {
-            sm.envMapIntensity = 0.9;
-            sm.needsUpdate = true;
-          }
-          return sm;
-        });
-        mesh.material = Array.isArray(mesh.material) ? clonedMats : clonedMats[0];
+        const sharedMats = origMats.map(getSharedShipMaterial);
+        mesh.material = Array.isArray(mesh.material) ? sharedMats : sharedMats[0];
       }
     });
     return root;
   }, [gltf]);
+
+  useEffect(() => {
+    if (!progressive || shipReady) return;
+    return precompileObjectAsync(gl, shipMeshRef.current, camera, scene, () => {
+      setShipReady(true);
+    });
+  }, [progressive, shipReady, model, gl, camera, scene]);
+
+  useEffect(() => {
+    if (!progressive || !shipReady || crewMounted) return;
+    const raf = requestAnimationFrame(() => setCrewMounted(true));
+    return () => cancelAnimationFrame(raf);
+  }, [progressive, shipReady, crewMounted]);
 
   const headingRef = useRef<THREE.Group>(null);
   const tiltRef = useRef<THREE.Group>(null);
@@ -403,9 +530,17 @@ export function GalleonShip({
   return (
     <group ref={headingRef}>
       <group ref={tiltRef}>
-        <primitive object={model} />
-        {/* Awak kapal & Kapten di kemudi kapal */}
-        <ShipDeckCrew inPov={inPov} wheelAngleRef={wheelAngleRef} />
+        {/* Cahaya hangat lentera kompas selalu aktif agar jumlah lampu shader stabil sejak frame 0 */}
+        <pointLight position={[-5.65, 7.53, 0.15]} color="#ffcf87" intensity={2.6} distance={7.5} />
+        <group ref={shipMeshRef} visible={shipReady}>
+          <primitive object={model} />
+        </group>
+        {/* Awak kapal & Kapten di kemudi kapal dimuat bertahap setelah kapal tampil */}
+        {(!progressive || crewMounted) && (
+          <Suspense fallback={null}>
+            <ShipDeckCrew inPov={inPov} wheelAngleRef={wheelAngleRef} progressive={progressive} />
+          </Suspense>
+        )}
       </group>
     </group>
   );

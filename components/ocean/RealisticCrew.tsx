@@ -6,10 +6,10 @@
  * disertai roda kemudi kayu mahoni dan aksesoris navigasi klasik di bawah cahaya PBR senja.
  */
 
-import { useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { RiggedCaptainPovArms, RiggedHumanFigure } from "./RiggedHumanCrew";
+import { precompileObjectAsync, RiggedCaptainPovArms, RiggedHumanFigure } from "./RiggedHumanCrew";
 
 // ── Tekstur Kayu Prosedural untuk Kemudi (Dibuat sekali di klien) ──
 
@@ -215,8 +215,6 @@ export function ShipHelmStand({
       <mesh position={[0.46, 1.14, 0]} material={brassMat}>
         <sphereGeometry args={[0.12, 16, 16]} />
       </mesh>
-      {/* Cahaya hangat lentera kompas */}
-      <pointLight position={[0.42, 1.25, 0]} color="#ffcf87" intensity={1.8} distance={4.5} />
     </group>
   );
 }
@@ -242,8 +240,6 @@ export function CaptainPovHelmRig({
     <group>
       {/* Roda kemudi mahoni POV di depan kamera Kapten */}
       <group position={[-5.92, 7.14, 0]} rotation={[0, -Math.PI / 2, 0]}>
-        {/* Cahaya senja lembut dari arah depan-atas menerangi kulit tangan & lingkar kayu kemudi POV */}
-        <pointLight position={[0, 0.72, 0.55]} color="#ffd59e" intensity={1.05} distance={4.5} />
         <group ref={wheelRef}>
           <ShipWheelRing radius={gripRadius} spokes={10} handleLength={0.1} />
         </group>
@@ -260,52 +256,85 @@ export function CaptainPovHelmRig({
 export function ShipDeckCrew({
   inPov = false,
   wheelAngleRef,
+  progressive = false,
 }: {
   inPov?: boolean;
   wheelAngleRef: React.MutableRefObject<number>;
+  progressive?: boolean;
 }) {
+  const { gl, camera, scene } = useThree();
+  const batch1Ref = useRef<THREE.Group>(null);
+  const batch2Ref = useRef<THREE.Group>(null);
+  const [batch1Ready, setBatch1Ready] = useState(!progressive);
+  const [batch2Mounted, setBatch2Mounted] = useState(!progressive);
+  const [batch2Ready, setBatch2Ready] = useState(!progressive);
+
+  useEffect(() => {
+    if (!progressive || batch1Ready) return;
+    return precompileObjectAsync(gl, batch1Ref.current, camera, scene, () => {
+      setBatch1Ready(true);
+    });
+  }, [progressive, batch1Ready, gl, camera, scene]);
+
+  useEffect(() => {
+    if (!progressive || !batch1Ready || batch2Mounted) return;
+    const raf = requestAnimationFrame(() => setBatch2Mounted(true));
+    return () => cancelAnimationFrame(raf);
+  }, [progressive, batch1Ready, batch2Mounted]);
+
+  useEffect(() => {
+    if (!progressive || !batch2Mounted || batch2Ready) return;
+    return precompileObjectAsync(gl, batch2Ref.current, camera, scene, () => {
+      setBatch2Ready(true);
+    });
+  }, [progressive, batch2Mounted, batch2Ready, gl, camera, scene]);
+
   return (
     <group>
-      {/* 1. Stand Roda Kemudi & Kompas di Quarterdeck (x = -6.0, y = 6.08) */}
-      <group position={[-6.0, 6.08, 0]}>
-        <ShipHelmStand wheelAngleRef={wheelAngleRef} hideWheel={inPov} />
-      </group>
-
-      {/* 2. Kapten di belakang Roda Kemudi (x = -6.58, y = 6.08) — berganti ke Tangan POV saat inPov */}
-      {!inPov ? (
-        <group position={[-6.58, 6.08, 0]} scale={1.06}>
-          <pointLight position={[-0.35, 1.55, 0.95]} color="#ffcf88" intensity={2.4} distance={5.5} />
-          <RiggedHumanFigure role="captain" variant="captain" wheelAngleRef={wheelAngleRef} />
+      <group ref={batch1Ref} visible={batch1Ready}>
+        {/* 1. Stand Roda Kemudi & Kompas di Quarterdeck (x = -6.0, y = 6.08) */}
+        <group position={[-6.0, 6.08, 0]}>
+          <ShipHelmStand wheelAngleRef={wheelAngleRef} hideWheel={inPov} />
         </group>
-      ) : (
-        <CaptainPovHelmRig wheelAngleRef={wheelAngleRef} />
+
+        {/* 2. Kapten di belakang Roda Kemudi (x = -6.58, y = 6.08) — berganti ke Tangan POV saat inPov */}
+        {!inPov ? (
+          <group position={[-6.58, 6.08, 0]} scale={1.06}>
+            <RiggedHumanFigure role="captain" variant="captain" wheelAngleRef={wheelAngleRef} />
+          </group>
+        ) : (
+          <CaptainPovHelmRig wheelAngleRef={wheelAngleRef} />
+        )}
+
+        {/* 3. Mualim / Perwira Navigasi di Lower Quarterdeck (x = -3.1, y = 5.06) */}
+        <group position={[-3.1, 5.06, -1.25]} scale={1.02}>
+          <RiggedHumanFigure role="officer" variant="sailor1" phaseOffset={1.1} />
+        </group>
+      </group>
+
+      {batch2Mounted && (
+        <group ref={batch2Ref} visible={batch2Ready}>
+          {/* 4. Awak Kapal Penarik Tali Layar Kiri (x = 1.6, y = 2.95, z = -1.65) */}
+          <group position={[1.6, 2.95, -1.65]} rotation={[0, -0.35, 0]} scale={1.0}>
+            <RiggedHumanFigure role="haul" variant="sailor2" phaseOffset={0.4} showRope />
+          </group>
+
+          {/* 5. Awak Kapal Patroli Berjalan di Dek Utama (x = 3.6, y = 3.05, z = 0.85) */}
+          <group position={[3.6, 3.05, 0.85]} scale={1.0}>
+            <RiggedHumanFigure role="walk" variant="sailor3" walkRange={3.4} phaseOffset={2.0} />
+          </group>
+
+          {/* 6. Awak Kapal Penarik Tali Layar Kanan (x = 5.2, y = 3.38, z = 1.6) */}
+          <group position={[5.2, 3.38, 1.6]} rotation={[0, 0.4, 0]} scale={1.0}>
+            <RiggedHumanFigure role="haul" variant="sailor1" phaseOffset={3.2} showRope />
+          </group>
+
+          {/* 7. Awak Pengintai (Lookout) dengan Teropong di Forecastle Haluan (x = 9.4, y = 4.95) */}
+          <group position={[9.4, 4.95, -0.75]} scale={1.02}>
+            <RiggedHumanFigure role="lookout" variant="sailor2" phaseOffset={1.7} />
+          </group>
+        </group>
       )}
-
-      {/* 3. Mualim / Perwira Navigasi di Lower Quarterdeck (x = -3.1, y = 5.06) */}
-      <group position={[-3.1, 5.06, -1.25]} scale={1.02}>
-        <pointLight position={[0.25, 1.5, 0.85]} color="#ffd499" intensity={1.4} distance={4.2} />
-        <RiggedHumanFigure role="officer" variant="sailor1" phaseOffset={1.1} />
-      </group>
-
-      {/* 4. Awak Kapal Penarik Tali Layar Kiri (x = 1.6, y = 2.95, z = -1.65) */}
-      <group position={[1.6, 2.95, -1.65]} rotation={[0, -0.35, 0]} scale={1.0}>
-        <RiggedHumanFigure role="haul" variant="sailor2" phaseOffset={0.4} showRope />
-      </group>
-
-      {/* 5. Awak Kapal Patroli Berjalan di Dek Utama (x = 3.6, y = 3.05, z = 0.85) */}
-      <group position={[3.6, 3.05, 0.85]} scale={1.0}>
-        <RiggedHumanFigure role="walk" variant="sailor3" walkRange={3.4} phaseOffset={2.0} />
-      </group>
-
-      {/* 6. Awak Kapal Penarik Tali Layar Kanan (x = 5.2, y = 3.38, z = 1.6) */}
-      <group position={[5.2, 3.38, 1.6]} rotation={[0, 0.4, 0]} scale={1.0}>
-        <RiggedHumanFigure role="haul" variant="sailor1" phaseOffset={3.2} showRope />
-      </group>
-
-      {/* 7. Awak Pengintai (Lookout) dengan Teropong di Forecastle Haluan (x = 9.4, y = 4.95) */}
-      <group position={[9.4, 4.95, -0.75]} scale={1.02}>
-        <RiggedHumanFigure role="lookout" variant="sailor2" phaseOffset={1.7} />
-      </group>
     </group>
   );
 }
