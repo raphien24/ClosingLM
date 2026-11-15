@@ -787,9 +787,9 @@ function extractFleetHeadCounts(text: string): {
 /** Bersihkan tanggal, baris "Updated:...", jam, persentase, dan label hari agar angka tengah donut terisolasi bersih. */
 function cleanDonutNoiseText(raw: string): string {
   return raw
-    .replace(/^[^\n]*\b(?:Up[cd]at[a-z]{1,4}|Upt[a-z]{2,6}|[a-z]?date[a-z]{1,4})\b[^\n]*/gim, "")
+    .replace(/^[^\n]*\b(?:U[po][cd]at[a-z]{1,5}|Upt[a-z]{2,6}|[a-z]?date[a-z]{1,4})\b[^\n]*/gim, "")
     .replace(
-      /\b\d{1,2}[ \t]+(?:Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Agu|Sep|Oct|Okt|N[o0][vw]|M[o0]v|Dec|Des)[A-Za-z]*(?:[ \t]+\d{1,4}(?:[:.]\d{2})?)?/gi,
+      /\b\d{1,2}[ \t]+(?:Jan|Feb|Mar|Apr|May|Mei|Jun|Jul|Aug|Agu|Sep|Oct|Okt|N[o0][vwy]|M[o0]v|Dec|Des)[A-Za-z]*(?:[ \t]+\d{1,4}(?:[:.]\d{2})?)?/gi,
       ""
     )
     .replace(/\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/g, "")
@@ -840,13 +840,13 @@ function extractBacklog(text: string): {
   let to_buyer = 0, to_seller = 0, to_transfer = 0;
   let foundAgingRows = 0;
 
-  // Format 1: per baris mengandung ">3 Hari 12 0 3", "3 Hari 24 0 1", "1-2 Hari 339 3 6"
+  // Format 1: per baris mengandung ">3 Hari 12 0 3" / ">3 Days 18 0 0", "3 Hari 24 0 1", "1-2 Hari 339 3 6"
   // Format 2 (multi-baris saat copy tabel): label ">3 Hari" di satu baris, 3 angka di baris-baris berikutnya
   // Catatan: gunakan lookahead tanpa \b di depan ">" karena ">" bukan word character!
-  const agingRowRegex = /(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*Hari\b([\s\S]{0,120}?)(?=(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*Hari\b|To\s+Expedite|$)/gi;
+  const agingRowRegex = /(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*(?:Hari|Days?)\b([\s\S]{0,120}?)(?=(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*(?:Hari|Days?)\b|Aging|To\s+Buyer|To\s+Expedite|$)/gi;
   for (const m of blockText.matchAll(agingRowRegex)) {
     const rowContent = m[1];
-    // Ambil maks 3 angka pertama setelah label "* Hari"
+    // Ambil maks 3 angka pertama setelah label "* Hari" / "* Days"
     const nums = allNumbers(rowContent);
     if (nums.length >= 3) {
       to_buyer    += nums[0];
@@ -869,9 +869,9 @@ function extractBacklog(text: string): {
   const donutLines = /^\s*\d[\d.,]*\s*$/.test(rawDonutLines[0] ?? "") ? rawDonutLines : rawDonutLines.slice(1);
   const leftPieces: string[] = [];
   for (const line of donutLines) {
-    // Ambil hanya bagian kiri baris (sebelum 10+ spasi berturut-turut atau kata Aging/Hari)
+    // Ambil hanya bagian kiri baris (sebelum 10+ spasi berturut-turut atau kata Aging/Hari/Days)
     const splitWide = line.split(/\s{8,}/)[0] || "";
-    const cut = splitWide.search(/Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*Hari/i);
+    const cut = splitWide.search(/Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|(?:>\s*3|\b3|\b1\s*[-–~]\s*2)\s*(?:Hari|Days?)/i);
     leftPieces.push(cut !== -1 ? splitWide.slice(0, cut) : splitWide);
   }
   const leftOnly = leftPieces.join("\n");
@@ -939,15 +939,18 @@ function extractExpedite(text: string): {
     let rawBlock = expMatch[1];
 
     // Jika teks berasal dari Ctrl+A / Ctrl+C, "Linehaul Trip" muncul sebagai blok berurutan setelah "Super Expedite".
-    // Potong segala sesuatu mulai dari "Linehaul" agar angka Order Linehaul (20, 1.648, 2.300) tidak pernah terbaca!
+    // Potong segala sesuatu mulai dari "Linehaul" atau tabel Backlog ("Aging", "To Buyer", dll.) yang kadang terbaca setelah kolom kiri!
     const linehaulIdx = rawBlock.search(/Linehaul/i);
     // Cek apakah ini multi-column OCR (di mana "To Expedite" dan "Linehaul Trip" berada di baris pertama yang sama)
     const firstNewline = rawBlock.indexOf("\n");
     const isSideBySideOcr = linehaulIdx !== -1 && (firstNewline === -1 || linehaulIdx < firstNewline);
 
-    if (!isSideBySideOcr && linehaulIdx !== -1) {
-      rawBlock = rawBlock.slice(0, linehaulIdx);
-    } else if (isSideBySideOcr) {
+    if (!isSideBySideOcr) {
+      const stopNonSide = rawBlock.search(/Linehaul|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog/i);
+      if (stopNonSide !== -1) {
+        rawBlock = rawBlock.slice(0, stopNonSide);
+      }
+    } else {
       // Pada OCR berdampingan:
       // 1. Baris pertama adalah sisa baris judul ("To Expedite ... | Total | Hub | Fleet | Linehaul Trip"), buang baris pertama
       const lines = rawBlock.split(/\r?\n/);
@@ -956,12 +959,15 @@ function extractExpedite(text: string): {
         .map((line) => {
           // 2. Ambil hanya kolom paling kiri (sebelum 8+ spasi berturut-turut yang memisahkan dengan Linehaul Trip di kanan)
           const leftCol = line.split(/\s{8,}/)[0] || "";
-          const cut = leftCol.search(/Linehaul|Memuat|Transporting|Trip\s*ID|\bLT[0O]Q|\b\d{1,2}:\d{2}\s+\d{1,2}:\d{2}/i);
+          const cut = leftCol.search(/Linehaul|Loading|Memuat|Transporting|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Trip\s*ID|\bLT[0O]Q|\b\d{1,2}:\d{2}\s+\d{1,2}:\d{2}/i);
           const trimmed = cut !== -1 ? leftCol.slice(0, cut) : leftCol;
           // Hapus angka Transporting Linehaul yang diawali "-" (mis. "- 1.941" atau "\ | - 10")
           return trimmed.replace(/(?:^|[ \t|\\])[-\u2013\u2014][ \t]+\d[\d.,]*\b/g, "");
         })
         .join("\n");
+      // Pastikan bila kolom kanan Aging/Backlog muncul setelah kolom kiri, tetap terpotong bersih
+      const trailingStop = rawBlock.search(/Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog/i);
+      if (trailingStop !== -1) rawBlock = rawBlock.slice(0, trailingStop);
     }
 
     // Bersihkan semua noise: "Updated: 7 Nov 18:48", tanggal, jam, tahun, persentase, dan token alfanumerik
@@ -1162,7 +1168,8 @@ function extractDonutSparseValue(
   text: string,
   headingRegex: RegExp,
   stopRegex: RegExp,
-  maxVal: number
+  maxVal: number,
+  pickMode: "max" | "first" = "max"
 ): number | null {
   if (isParcelSweeperPage(text)) return null;
   const m = text.match(headingRegex);
@@ -1177,7 +1184,8 @@ function extractDonutSparseValue(
   const standalone = [...clean.matchAll(/^\s*(\d{1,3}(?:[.,]\d{3})+|\d{1,5})\s*$/gm)]
     .map((mm) => parseNumber(mm[1]))
     .filter((n): n is number => n !== null && Number.isInteger(n) && n >= 1 && n <= maxVal && isValidDonutForPcts(n, block));
-  return standalone.length ? Math.max(...standalone) : null;
+  if (standalone.length === 0) return null;
+  return pickMode === "first" ? standalone[0] : Math.max(...standalone);
 }
 
 /**
@@ -1189,20 +1197,22 @@ export function extractBacklogSparse(text: string): number | null {
     text,
     /Backlog/i,
     /(?:[1Il|]\s+)?To\s+Expedite|Operation\s+Progress|Linehaul\s+Trip|Fleet\s+Head|In\s+Hub\s+Status/i,
-    99999
+    99999,
+    "max"
   );
 }
 
 /**
  * Ekstrak angka To Expedite dari teks OCR sparse (PSM 11).
- * Angka di tengah donut (mis. "63") muncul sebagai baris tersendiri.
- * Nilai donut kecil (<= 999); ID trip & angka tabel lebih besar/diabaikan.
+ * Angka di tengah donut (mis. "11", "63") muncul sebagai baris tersendiri tepat di bawah judul.
+ * Gunakan "first" dan hentikan sebelum Aging/Backlog/Linehaul agar angka tabel lain (mis. 18) tidak ikut terbaca.
  */
 export function extractExpediteSparse(text: string): number | null {
   return extractDonutSparseValue(
     text,
     /To\s+Expedite/i,
-    /Linehaul\s+Trip|Operation\s+Progress|Fleet\s+Head|In\s+Hub\s+Status/i,
-    999
+    /Linehaul\s+Trip|Loading|Memuat|Transporting|Aging|To\s+Buyer|To\s+Seller|To\s+Transfer|Backlog|Operation\s+Progress|Fleet\s+Head|In\s+Hub\s+Status/i,
+    999,
+    "first"
   );
 }

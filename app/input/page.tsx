@@ -459,7 +459,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           }
         }
         if (!isPs) {
-          const hasSideBySideLinehaul = /Linehaul|Transporting|\bLT[0O]Q/i.test(`${rawText}\n${altRawText}`);
+          const hasSideBySideLinehaul = /Linehaul|Transporting|Loading|Aging|To\s+Buyer|\bLT[0O]Q/i.test(`${rawText}\n${altRawText}`);
           const applyFallback = (fk: keyof ClosingData, val: number | null | undefined) => {
             if (val == null || parsed.row[fk] != null) return;
             (parsed.row as Record<string, unknown>)[fk] = val;

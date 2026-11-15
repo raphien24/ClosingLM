@@ -136,18 +136,19 @@ async function cropRegionForOcr(
   sxFrac: number,
   syFrac: number,
   swFrac: number,
-  shFrac: number
+  shFrac: number,
+  stripColorRing = false
 ): Promise<string | null> {
   const img = await loadImage(dataUrl);
   const w = img.naturalWidth || img.width;
   const h = img.naturalHeight || img.height;
-  if (w < 400 || h < 200) return null;
+  if (stripColorRing ? w < 120 || h < 60 : w < 400 || h < 200) return null;
 
   const sx = Math.round(w * sxFrac);
   const sy = Math.round(h * syFrac);
   const sw = Math.min(w - sx, Math.round(w * swFrac));
   const sh = Math.min(h - sy, Math.round(h * shFrac));
-  if (sw < 50 || sh < 30) return null;
+  if (stripColorRing ? sw < 40 || sh < 25 : sw < 50 || sh < 30) return null;
   const tw = Math.min(2800, sw * 3);
   const th = Math.max(1, Math.round((sh * tw) / sw));
 
@@ -158,7 +159,31 @@ async function cropRegionForOcr(
   if (!ctx) return null;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, sx, sy, sw, sh, 0, 0, tw, th);
-  applyGrayscale(ctx, tw, th);
+  if (stripColorRing) {
+    try {
+      const imageData = ctx.getImageData(0, 0, tw, th);
+      const d = imageData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const r = d[i];
+        const g = d[i + 1];
+        const b = d[i + 2];
+        const max = Math.max(r, g, b);
+        const sat = max - Math.min(r, g, b);
+        // Piksel berwarna (cincin donut oranye/kuning/biru/merah/hijau/ungu) diputihkan agar angka netral di tengah terbaca jernih
+        if (sat > 24 && (max > 155 || sat > 45)) {
+          d[i] = d[i + 1] = d[i + 2] = 255;
+        } else {
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          d[i] = d[i + 1] = d[i + 2] = lum;
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+    } catch {
+      applyGrayscale(ctx, tw, th);
+    }
+  } else {
+    applyGrayscale(ctx, tw, th);
+  }
   return canvas.toDataURL("image/png");
 }
 
@@ -365,10 +390,11 @@ export async function runOcrLocally(
     const hasBacklogWord = /Backlog/i.test(combinedMain);
     const hasExpediteWord = /To\s*Expedit/i.test(combinedMain);
     const isBacklogExp =
-      isFull &&
       !isParcelSweeper &&
-      ((hasBacklogWord && /To\s*Expedit|Linehaul|Aging/i.test(combinedMain)) ||
-        (hasExpediteWord && !hasOpBody));
+      !hasOpBody &&
+      ((isFull &&
+        ((hasBacklogWord && /To\s*Expedit|Linehaul|Aging/i.test(combinedMain)) || hasExpediteWord)) ||
+        (!isFull && (hasBacklogWord || hasExpediteWord)));
 
     const crops: string[] = [];
     if (isOpProgress) {
@@ -444,25 +470,47 @@ export async function runOcrLocally(
     if (isBacklogExp) {
       try {
         await worker.setParameters({ tessedit_pageseg_mode: "11" as never });
-        // Threshold berbeda sesuai warna donut: Backlog biru/oranye bersih di 180, To Expedite kuning/merah bersih di 200
+        // Isolasi warna cincin donut (biru/oranye/kuning/merah/hijau/abu-abu) agar angka di tengah terbaca jernih tanpa tertutup ring
         const donutRegions: [string, number, number, number, number, number][] = [];
-        if (hasBacklogWord) {
-          donutRegions.push(["Backlog", 0.02, 0.12, 0.28, 0.38, 180]);
-          donutRegions.push(["To Expedite", 0.02, 0.56, 0.28, 0.38, 200]);
+        if (isFull) {
+          if (hasBacklogWord) {
+            donutRegions.push(["Backlog", 0.01, 0.05, 0.32, 0.43, 195]);
+            donutRegions.push(["To Expedite", 0.01, 0.52, 0.32, 0.46, 195]);
+          } else {
+            donutRegions.push(["To Expedite", 0.01, 0.08, 0.34, 0.85, 195]);
+          }
         } else {
-          donutRegions.push(["To Expedite", 0.02, 0.10, 0.32, 0.80, 200]);
+          const hasRightSidePanel = /Aging|To\s+Buyer|Linehaul|Transporting/i.test(combinedMain);
+          const cropW = hasRightSidePanel ? 0.52 : 1;
+          if (hasBacklogWord && hasExpediteWord) {
+            donutRegions.push(["Backlog", 0, 0, cropW, 0.5, 195]);
+            donutRegions.push(["To Expedite", 0, 0.5, cropW, 0.5, 195]);
+          } else if (hasBacklogWord) {
+            donutRegions.push(["Backlog", 0, 0, cropW, 1, 195]);
+          } else {
+            donutRegions.push(["To Expedite", 0, 0, cropW, 1, 195]);
+          }
         }
+        const badCropRe =
+          /Operation\s+Progress|Fleet\s+Head|Fleet\s+Productivity|Dedicated|Aging|To\s+Buyer|Linehaul/i;
         for (const [prefix, sx, sy, sw, sh, thr] of donutRegions) {
-          const cropUrl = await cropRegionForOcr(images[i], sx, sy, sw, sh);
+          const cropUrl = await cropRegionForOcr(images[i], sx, sy, sw, sh, true);
           if (!cropUrl) continue;
           const binUrl = await binarizeForOcr(cropUrl, thr);
           const resBin = await worker.recognize(binUrl, {}, { text: true, blocks: true });
           collectPageTokenConfidence(resBin.data, tokenMap);
-          if (
-            resBin.data.text &&
-            !/Operation\s+Progress|Fleet\s+Head|Fleet\s+Productivity|Dedicated/i.test(resBin.data.text)
-          ) {
-            crops.push(`${prefix}\n${resBin.data.text}`);
+          let bestText = resBin.data.text || "";
+          // Jika hasil binerisasi belum menangkap angka bulat non-persen di tengah donut, coba enhance grayscale pada crop yang sudah bebas ring warna
+          if (!/(?:^|[\s\n])\d[\d.]*(?![\d,%])/.test(bestText)) {
+            const enhUrl = await enhanceGrayscaleForOcr(cropUrl);
+            const resEnh = await worker.recognize(enhUrl, {}, { text: true, blocks: true });
+            collectPageTokenConfidence(resEnh.data, tokenMap);
+            if (/(?:^|[\s\n])\d[\d.]*(?![\d,%])/.test(resEnh.data.text || "")) {
+              bestText = resEnh.data.text;
+            }
+          }
+          if (bestText && !badCropRe.test(bestText)) {
+            crops.push(`${prefix}\n${bestText}`);
           }
         }
       } catch {
