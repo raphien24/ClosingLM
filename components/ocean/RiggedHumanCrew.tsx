@@ -17,6 +17,13 @@ const MODEL_URLS: Record<HumanModelVariant, string> = {
   sailor3: "/models/human-sailor-3.glb",
 };
 
+const MOBILE_MODEL_URLS: Record<HumanModelVariant, string> = {
+  captain: "/models/human-captain-mobile.glb",
+  sailor1: "/models/human-sailor-1-mobile.glb",
+  sailor2: "/models/human-sailor-1-mobile.glb",
+  sailor3: "/models/human-sailor-1-mobile.glb",
+};
+
 interface RigBones {
   hips: THREE.Object3D | null;
   spine: THREE.Object3D | null;
@@ -79,9 +86,12 @@ function configureLoader(loader: THREE.Loader) {
   (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
 }
 
-/** Preload seluruh model awak manusia secara paralel (dipanggil tanpa memblokir render langit & laut awal) */
-export function preloadHumanModels() {
-  (Object.values(MODEL_URLS) as string[]).forEach((url) => {
+/** Preload model awak manusia secara paralel (hanya varian ringan saat mode mobile) */
+export function preloadHumanModels(mobileOnly = false) {
+  const urls = mobileOnly
+    ? [MOBILE_MODEL_URLS.captain, MOBILE_MODEL_URLS.sailor1]
+    : (Object.values(MODEL_URLS) as string[]);
+  urls.forEach((url) => {
     useLoader.preload(GLTFLoader, url, configureLoader);
   });
 }
@@ -155,8 +165,14 @@ function filterArmOnlyGeometry(skinned: THREE.SkinnedMesh) {
 }
 
 /** Mengkloning GLTF human dengan aman via SkeletonUtils + menyetel material kulit & kain */
-function useHumanRigClone(variant: HumanModelVariant, hideHead = false, armsOnly = false) {
-  const gltf = useLoader(GLTFLoader, MODEL_URLS[variant], configureLoader);
+function useHumanRigClone(
+  variant: HumanModelVariant,
+  hideHead = false,
+  armsOnly = false,
+  mobileQuality = false
+) {
+  const modelUrl = mobileQuality ? MOBILE_MODEL_URLS[variant] : MODEL_URLS[variant];
+  const gltf = useLoader(GLTFLoader, modelUrl, configureLoader);
 
   return useMemo(() => {
     const root = cloneSkinned(gltf.scene) as THREE.Object3D;
@@ -185,6 +201,8 @@ function useHumanRigClone(variant: HumanModelVariant, hideHead = false, armsOnly
         mesh.frustumCulled = false;
         mesh.castShadow = false;
         mesh.receiveShadow = false;
+        // Pisahkan ke layer 1 agar mirrorCamera refleksi air tidak ikut me-render ulang SkinnedMesh manusia
+        mesh.layers.set(1);
 
         // Hapus morph targets yang tidak digunakan agar Three.js tidak mengalokasi DataArrayTexture CPU/GPU & shader morph
         if (mesh.geometry?.morphAttributes && Object.keys(mesh.geometry.morphAttributes).length > 0) {
@@ -557,6 +575,7 @@ export function RiggedHumanFigure({
   walkRange = 2.6,
   showRope = false,
   wheelAngleRef,
+  mobileQuality = false,
 }: {
   role: CrewRole;
   variant: HumanModelVariant;
@@ -564,15 +583,19 @@ export function RiggedHumanFigure({
   walkRange?: number;
   showRope?: boolean;
   wheelAngleRef?: React.MutableRefObject<number>;
+  mobileQuality?: boolean;
 }) {
-  const { root, bones } = useHumanRigClone(variant, false);
+  const { root, bones } = useHumanRigClone(variant, false, false, mobileQuality);
   const rootWrapRef = useRef<THREE.Group>(null);
   const hatWrapRef = useRef<THREE.Group>(null);
   const spyglassWrapRef = useRef<THREE.Group>(null);
+  const lastPoseTime = useRef(-999);
 
   useFrame(({ clock }) => {
     const wrap = rootWrapRef.current;
     if (!wrap) return;
+    if (mobileQuality && clock.elapsedTime - lastPoseTime.current < 0.045) return;
+    lastPoseTime.current = clock.elapsedTime;
     const t = clock.elapsedTime + phaseOffset;
 
     // 1. Tentukan parameter pose tubuh sesuai peran (harus diterapkan ke panggul/punggung lebih dulu)

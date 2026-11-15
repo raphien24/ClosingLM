@@ -303,18 +303,24 @@ export function SunsetOcean({
   quality?: OceanQuality;
   flowTimeScale?: number;
 }) {
+  const { camera } = useThree();
   const initialNormals = useMemo(() => _loadedWaterNormals ?? getFallbackWaterNormals(), []);
+
+  useEffect(() => {
+    // Layer 1 dipakai untuk awak manusia agar terlihat di kamera utama tetapi dilewati mirrorCamera refleksi air
+    camera.layers.enable(1);
+  }, [camera]);
 
   const water = useMemo(() => {
     initialNormals.wrapS = initialNormals.wrapT = THREE.RepeatWrapping;
     const geo =
       quality === "high"
         ? buildPolarGrid(105, 144, 0.85, 1.064)
-        : buildPolarGrid(72, 96, 1.2, 1.09);
+        : buildPolarGrid(44, 60, 1.4, 1.13);
 
     const w = new Water(geo, {
-      textureWidth: quality === "high" ? 256 : 192,
-      textureHeight: quality === "high" ? 256 : 192,
+      textureWidth: quality === "high" ? 256 : 128,
+      textureHeight: quality === "high" ? 256 : 128,
       waterNormals: initialNormals,
       sunDirection: sun.clone(),
       sunColor: new THREE.Color("#ffc08a"),
@@ -330,6 +336,22 @@ export function SunsetOcean({
     mat.vertexShader = WATER_VERTEX_MAIN;
     mat.fragmentShader = patchWaterFragment(mat.fragmentShader);
     mat.needsUpdate = true;
+
+    const mirrorTex = mat.uniforms.mirrorSampler?.value as THREE.Texture | undefined;
+    if (mirrorTex && quality === "low") {
+      mirrorTex.generateMipmaps = false;
+      mirrorTex.minFilter = THREE.LinearFilter;
+    }
+
+    if (quality === "low") {
+      const origBeforeRender = w.onBeforeRender;
+      let reflTick = 0;
+      w.onBeforeRender = function (renderer, scene, cam, geometry, material, group) {
+        if (reflTick++ % 3 !== 0) return;
+        origBeforeRender.call(this, renderer, scene, cam, geometry, material, group);
+      };
+    }
+
     w.rotation.x = -Math.PI / 2;
     w.frustumCulled = false;
     return w;
@@ -406,6 +428,7 @@ export function GalleonShip({
   inPov = false,
   shipPoseRef,
   progressive = false,
+  mobileCompact = false,
 }: {
   quality?: OceanQuality;
   position: [number, number, number];
@@ -421,6 +444,8 @@ export function GalleonShip({
   shipPoseRef?: React.MutableRefObject<ShipPose>;
   /** Kompilasi shader asinkron & tampilkan dek bertahap agar animasi ombak tidak macet saat login */
   progressive?: boolean;
+  /** Mode HP super ringan: kurangi jumlah & detail awak manusia di dek login */
+  mobileCompact?: boolean;
 }) {
   const gltf = useLoader(GLTFLoader, quality === "high" ? SHIP_URL_HIGH : SHIP_URL_LOW, (loader) => {
     (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
@@ -538,7 +563,12 @@ export function GalleonShip({
         {/* Awak kapal & Kapten di kemudi kapal dimuat bertahap setelah kapal tampil */}
         {(!progressive || crewMounted) && (
           <Suspense fallback={null}>
-            <ShipDeckCrew inPov={inPov} wheelAngleRef={wheelAngleRef} progressive={progressive} />
+            <ShipDeckCrew
+              inPov={inPov}
+              wheelAngleRef={wheelAngleRef}
+              progressive={progressive}
+              mobileCompact={mobileCompact}
+            />
           </Suspense>
         )}
       </group>

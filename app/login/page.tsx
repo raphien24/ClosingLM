@@ -27,7 +27,7 @@ export default function LoginPage() {
       {/* Top Header / Branding Bar */}
       <header className="relative z-10 w-full px-4 sm:px-8 py-5 flex items-center justify-between pointer-events-none">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/25 backdrop-blur-md shadow-lg flex items-center justify-center">
+          <div className="w-9 h-9 rounded-xl bg-white/15 md:bg-white/10 border border-white/25 md:backdrop-blur-md shadow-lg flex items-center justify-center">
             <Anchor className="h-5 w-5 text-amber-200" />
           </div>
           <div>
@@ -80,10 +80,10 @@ export default function LoginPage() {
 
         {/* Right Side: Glass Login Box */}
         <div className="w-full sm:w-[420px] max-w-md lg:ml-auto">
-          <div className="relative overflow-hidden bg-[#1a0f1f]/35 backdrop-blur-2xl rounded-3xl shadow-[0_30px_80px_-20px_rgba(20,5,15,0.75)] border border-white/20 p-6 sm:p-8 text-white transition-all duration-300">
+          <div className="relative overflow-hidden bg-[#160d1c]/82 md:bg-[#1a0f1f]/35 md:backdrop-blur-2xl rounded-3xl shadow-[0_30px_80px_-20px_rgba(20,5,15,0.75)] border border-white/20 p-6 sm:p-8 text-white transition-all duration-300">
             {/* Kilau kaca tipis */}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-            <div className="pointer-events-none absolute -top-24 -right-24 h-48 w-48 rounded-full bg-[#ffb27a]/20 blur-3xl" />
+            <div className="pointer-events-none hidden md:block absolute -top-24 -right-24 h-48 w-48 rounded-full bg-[#ffb27a]/20 blur-3xl" />
 
             {/* Logo */}
             <div className="relative flex flex-col items-center mb-6">

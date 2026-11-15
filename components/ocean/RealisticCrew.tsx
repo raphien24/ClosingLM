@@ -257,10 +257,12 @@ export function ShipDeckCrew({
   inPov = false,
   wheelAngleRef,
   progressive = false,
+  mobileCompact = false,
 }: {
   inPov?: boolean;
   wheelAngleRef: React.MutableRefObject<number>;
   progressive?: boolean;
+  mobileCompact?: boolean;
 }) {
   const { gl, camera, scene } = useThree();
   const batch1Ref = useRef<THREE.Group>(null);
@@ -277,17 +279,17 @@ export function ShipDeckCrew({
   }, [progressive, batch1Ready, gl, camera, scene]);
 
   useEffect(() => {
-    if (!progressive || !batch1Ready || batch2Mounted) return;
+    if (!progressive || mobileCompact || !batch1Ready || batch2Mounted) return;
     const raf = requestAnimationFrame(() => setBatch2Mounted(true));
     return () => cancelAnimationFrame(raf);
-  }, [progressive, batch1Ready, batch2Mounted]);
+  }, [progressive, mobileCompact, batch1Ready, batch2Mounted]);
 
   useEffect(() => {
-    if (!progressive || !batch2Mounted || batch2Ready) return;
+    if (!progressive || mobileCompact || !batch2Mounted || batch2Ready) return;
     return precompileObjectAsync(gl, batch2Ref.current, camera, scene, () => {
       setBatch2Ready(true);
     });
-  }, [progressive, batch2Mounted, batch2Ready, gl, camera, scene]);
+  }, [progressive, mobileCompact, batch2Mounted, batch2Ready, gl, camera, scene]);
 
   return (
     <group>
@@ -300,7 +302,12 @@ export function ShipDeckCrew({
         {/* 2. Kapten di belakang Roda Kemudi (x = -6.58, y = 6.08) — berganti ke Tangan POV saat inPov */}
         {!inPov ? (
           <group position={[-6.58, 6.08, 0]} scale={1.06}>
-            <RiggedHumanFigure role="captain" variant="captain" wheelAngleRef={wheelAngleRef} />
+            <RiggedHumanFigure
+              role="captain"
+              variant="captain"
+              wheelAngleRef={wheelAngleRef}
+              mobileQuality={mobileCompact}
+            />
           </group>
         ) : (
           <CaptainPovHelmRig wheelAngleRef={wheelAngleRef} />
@@ -308,11 +315,28 @@ export function ShipDeckCrew({
 
         {/* 3. Mualim / Perwira Navigasi di Lower Quarterdeck (x = -3.1, y = 5.06) */}
         <group position={[-3.1, 5.06, -1.25]} scale={1.02}>
-          <RiggedHumanFigure role="officer" variant="sailor1" phaseOffset={1.1} />
+          <RiggedHumanFigure
+            role="officer"
+            variant="sailor1"
+            phaseOffset={1.1}
+            mobileQuality={mobileCompact}
+          />
         </group>
+
+        {/* Pada mode HP ringan, tampilkan juga pengintai haluan memakai aset sailor1-mobile tanpa memuat GLB tambahan */}
+        {mobileCompact && (
+          <group position={[9.4, 4.95, -0.75]} scale={1.02}>
+            <RiggedHumanFigure
+              role="lookout"
+              variant="sailor1"
+              phaseOffset={1.7}
+              mobileQuality
+            />
+          </group>
+        )}
       </group>
 
-      {batch2Mounted && (
+      {!mobileCompact && batch2Mounted && (
         <group ref={batch2Ref} visible={batch2Ready}>
           {/* 4. Awak Kapal Penarik Tali Layar Kiri (x = 1.6, y = 2.95, z = -1.65) */}
           <group position={[1.6, 2.95, -1.65]} rotation={[0, -0.35, 0]} scale={1.0}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame, useLoader } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
@@ -29,6 +29,21 @@ export const LOGIN_SHIP = {
 };
 
 export const ISLAND_POSITION: [number, number, number] = [310, 0, -24];
+
+function MobileFramerateDriver({ active }: { active: boolean }) {
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => {
+    if (!active) return;
+    invalidate();
+    const id = window.setInterval(() => {
+      if (!document.hidden) invalidate();
+    }, 38);
+    return () => window.clearInterval(id);
+  }, [active, invalidate]);
+
+  return null;
+}
 
 function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => void }) {
   const sun = useMemo(() => getSunDirection(), []);
@@ -86,6 +101,7 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
           speed={0}
           inPov={false}
           progressive
+          mobileCompact={isMobile}
         />
       </Suspense>
     </>
@@ -105,7 +121,7 @@ export function SunsetLoginBackground() {
     useLoader.preload(GLTFLoader, mobile ? SHIP_URL_LOW : SHIP_URL_HIGH, (loader) => {
       (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
     });
-    preloadHumanModels();
+    preloadHumanModels(mobile);
 
     const check = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", check);
@@ -116,14 +132,19 @@ export function SunsetLoginBackground() {
     <div className="fixed inset-0 overflow-hidden pointer-events-none select-none bg-[#120d1d]">
       {mounted && (
         <Canvas
+          frameloop={isMobile ? "demand" : "always"}
           camera={{
             position: LOGIN_CAMERA.position.toArray() as [number, number, number],
             fov: isMobile ? 58 : 44,
             near: 0.25,
             far: 20000,
           }}
-          dpr={isMobile ? [1, 1.25] : [1, 1.5]}
-          gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+          dpr={isMobile ? 1 : [1, 1.5]}
+          gl={{
+            antialias: !isMobile,
+            alpha: false,
+            powerPreference: isMobile ? "default" : "high-performance",
+          }}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 0.46;
@@ -131,6 +152,7 @@ export function SunsetLoginBackground() {
           }}
         >
           <color attach="background" args={["#181124"]} />
+          <MobileFramerateDriver active={isMobile} />
           <LoginScene isMobile={isMobile} onReady={() => setReady(true)} />
         </Canvas>
       )}
