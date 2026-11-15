@@ -403,9 +403,10 @@ function extractFleetHeadCounts(text: string): {
     mitra_4wh:      null as number | null,
   };
 
-  // Isolasi section Fleet Head Counts (tangani kasus berdampingan dengan Fleet Productivity & typo OCR "Fleot"/"Float")
+  // Isolasi section Fleet Head Counts (tangani kasus berdampingan dengan Fleet Productivity & typo OCR "Fleot"/"Productlvity")
   const FHC_HEADING_RE = /F[il1][aeo]{1,3}[rt]\s+H[aeo]{2,3}[ad]\s+C[o0][au][nr][tl]s?/i;
-  const PROD_STOP_RE = /(?:\b\d\s+)?F[il1][aeo]{1,3}[rt]\s+P[a-z]{0,3}[o0]du[ce]tiv[a-z]{2,6}|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand[aeo]d|Keuangan|Ringkasan/i;
+  const PROD_STOP_RE =
+    /(?:\b\d\s+)?F[il1][aeo]{1,3}[rt]\s+P[a-z0-9]{0,3}[o0]du[ce]t[il1v]{1,3}[il1a-z]{1,6}|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand[aeo]d|\b\d+\s*Orders?\b|Keuangan|Ringkasan/i;
   let hcSource = "";
   const hcHeading = text.match(FHC_HEADING_RE);
   if (hcHeading && hcHeading.index !== undefined) {
@@ -417,7 +418,9 @@ function extractFleetHeadCounts(text: string): {
       stopMatch &&
       stopMatch.index !== undefined &&
       afterStart.slice(0, stopMatch.index).trim().length < 8;
-    const isSideBySide = /F[il1][aeo]{1,3}[rt]\s+P[a-z]{0,3}[o0]du[ce]tiv[a-z]{2,6}/i.test(firstLine) || !!hasImmediateStop;
+    const isSideBySide =
+      /F[il1][aeo]{1,3}[rt]\s+P[a-z0-9]{0,3}[o0]du[ce]t[il1v]{1,3}[il1a-z]{1,6}/i.test(firstLine) ||
+      !!hasImmediateStop;
 
     if (isSideBySide) {
       const lines = afterStart.split(/\r?\n/).filter((l) => l.trim().length > 0).slice(0, 55);
@@ -425,8 +428,8 @@ function extractFleetHeadCounts(text: string): {
       for (const line of lines) {
         if (/^(?:Keuangan|Ringkasan|Backlog|To\s+Expedite)\b/i.test(line.trim())) break;
         let left = line;
-        // Jika kolom Fleet Productivity punya header/baris kedua (Delivered/Handed Over, Order), potong sebelum itu
-        const prodCut = left.search(/D[ae][ilf][a-z]{2,7}\s*\/\s*Hand[aeo]d\s+Ov[ae]r|\b\d+\s*Order\b|\bOrder\b|\bOr[gd]er\b/i);
+        // Jika kolom Fleet Productivity punya header/baris kedua (Delivered/Handed Over, Orders), potong sebelum itu
+        const prodCut = left.search(/D[ae][ilf][a-z]{2,7}\s*\/\s*Hand[aeo]d(?:\s+Ov[ae]r)?|\b\d+\s*Orders?\b|\bOrders?\b|\bOr[gd]ers?\b/i);
         if (prodCut !== -1) left = left.slice(0, prodCut);
         // Jika header "Actual/Schedule" sejajar dengan baris "2WH/4WH/Lainnya/Others" milik Fleet Productivity di kanan, buang bagian kanan
         if (/Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}/i.test(left)) {
@@ -447,10 +450,10 @@ function extractFleetHeadCounts(text: string): {
         : afterStart.slice(0, 1800);
     }
   } else {
-    // Fallback jika header "Fleet Head Counts" terpotong OCR, tapi label "Actual/Schedule" atau Dedicated+KurirPlus terbaca
+    // Fallback jika header "Fleet Head Counts" terpotong OCR, tapi label "Actual/Schedule" atau Dedicated+KurirPlus terbaca (bukan Fleet Productivity!)
     const actualMatch =
       text.match(/Act[a-z]{1,4}\s*\/?\s*Sc[a-z]{2,8}/i) ??
-      (!/\b(?:F[il1][aeo]{1,3}[rt]\s+P[a-z]{0,3}[o0]du|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand|\d+\s*Order\b)/i.test(text)
+      (!/\b(?:F[il1][aeo]{1,3}[rt]\s+P[a-z0-9]{0,3}[o0]du|D[ae][ilf][a-z]{2,7}\s*\/\s*Hand|\b\d*\s*Orders?\b)/i.test(text)
         ? text.match(/Dedicated[\s\S]{0,60}?K[au]r[a-z]{0,4}\s+P[a-z]{1,4}\b/i)
         : null);
     if (!actualMatch || actualMatch.index === undefined) return result;

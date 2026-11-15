@@ -489,12 +489,32 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           const hasMain2whRatios = /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){2,}/i.test(
             `${rawText}\n${altRawText}`
           );
+          let hasFhcLeftCrop = false;
           for (const cropText of extraTexts[idx] || []) {
             if (!cropText) continue;
+            const isFhcLeft = cropText.startsWith("__FHC_LEFT__\n");
             const cropParsed = parseOcrText(cropText);
             cropRecs.push(cropParsed.row as Record<string, unknown>);
             for (const ek of extraKeys) {
               applyFallback(ek, cropParsed.row[ek] as number | null | undefined);
+            }
+            // Crop terisolasi kartu kiri Fleet Head Counts bebas dari Fleet Productivity kanan -> otoritatif menimpa angka order kanan (mis. 308/216/39)
+            if (isFhcLeft && !/Delivered\s*\/\s*Handed|\b\d+\s*Orders?\b/i.test(cropText)) {
+              for (const fhcKey of [
+                "dedicated_actual_2wh",
+                "kurir_plus_actual_2wh",
+                "dedicated_actual_4wh",
+                "mitra_actual_2wh",
+                "mitra_actual_4wh",
+              ] as const) {
+                const cVal = cropParsed.row[fhcKey];
+                if (cVal == null) continue;
+                if (!hasFhcLeftCrop || (parsed.row[fhcKey] === 0 && cVal > 0)) {
+                  parsed.row[fhcKey] = cVal;
+                  cropTouchKeys.add(fhcKey);
+                }
+              }
+              hasFhcLeftCrop = true;
             }
             // Bila crop 3x membaca rasio 2WH eksplisit sementara full-page hanya menurunkan dari total header (atau terbaca 0), utamakan crop
             if (

@@ -428,6 +428,55 @@ async function extractDonutHoleImages(
   return result;
 }
 
+/**
+ * Deteksi batas kiri area konten (melewati sidebar navigasi gelap SPX jika screenshot full-layar)
+ * dan titik tengah antara panel kiri (In Hub / Fleet Head Counts) & panel kanan (Fleet status / Fleet Productivity).
+ */
+async function detectDashboardContentBounds(
+  dataUrl: string
+): Promise<{ contentLeft: number; contentMid: number }> {
+  try {
+    const img = await loadImage(dataUrl);
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    if (w < 400 || h < 200) return { contentLeft: 0, contentMid: 0.5 };
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return { contentLeft: 0, contentMid: 0.5 };
+    ctx.drawImage(img, 0, 0);
+    const d = ctx.getImageData(0, 0, w, h).data;
+
+    const maxScanX = Math.round(w * 0.30);
+    const yStart = Math.round(h * 0.25);
+    const yEnd = Math.round(h * 0.75);
+    const yStep = Math.max(4, Math.round(h / 60));
+
+    let darkEnd = 0;
+    for (let x = 0; x < maxScanX; x++) {
+      let sum = 0;
+      let n = 0;
+      for (let y = yStart; y < yEnd; y += yStep) {
+        const idx = (y * w + x) * 4;
+        sum += 0.299 * d[idx] + 0.587 * d[idx + 1] + 0.114 * d[idx + 2];
+        n++;
+      }
+      const avg = n > 0 ? sum / n : 255;
+      if (x < 20 && avg >= 100) break; // tidak ada sidebar gelap
+      if (avg < 100) darkEnd = x;
+      else if (darkEnd > 0 && avg > 180) break;
+    }
+
+    const contentLeft = darkEnd > 40 ? Math.min(0.32, (darkEnd + 2) / w) : 0;
+    const contentMid = contentLeft + (1 - contentLeft) * 0.5;
+    return { contentLeft, contentMid };
+  } catch {
+    return { contentLeft: 0, contentMid: 0.5 };
+  }
+}
+
 /** Binarisasi (hitam-putih) dengan ambang tertentu untuk cross-check dua bacaan. */
 async function binarizeForOcr(dataUrl: string, threshold: number): Promise<string> {
   const img = await loadImage(dataUrl);
@@ -660,13 +709,13 @@ export async function runOcrLocally(
         /\bR[eo][ce][aeiu]{1,3}[tv]?[ea]?d\b[^\n]*\d/i.test(combinedMain) &&
         /\bA[sS][a-z]{2,5}[gn]g\b[^\n]*\d/i.test(combinedMain) &&
         /\bA[sm]{1,2}[a-z]{1,4}n[aeo]?d\b[^\n]*\d/i.test(combinedMain);
-      // Pastikan rasio Fleet Productivity ("Delivered / Handed Over", "Order") tidak memicu skip crop Fleet Head Counts
+      // Pastikan rasio Fleet Productivity ("Delivered / Handed Over", "Orders") tidak memicu skip crop Fleet Head Counts
       const stripProd = (txt: string) =>
         txt
-          .replace(/(?:\b\d\s+)?F[il1][aeo]{1,3}[rt]\s+P[a-z]{0,3}[o0]du[ce]tiv[\s\S]*/i, "")
+          .replace(/(?:\b\d\s+)?F[il1][aeo]{1,3}[rt]\s+P[a-z0-9]{0,3}[o0]du[ce]t[il1v]{1,3}[il1a-z]{1,6}[\s\S]*/i, "")
           .split(/\r?\n/)
           .map((l) => {
-            const cut = l.search(/Delivered\s*\/\s*Handed|\b\d+\s*Order\b/i);
+            const cut = l.search(/Delivered\s*\/\s*Handed|\b\d+\s*Orders?\b/i);
             return cut !== -1 ? l.slice(0, cut) : l;
           })
           .join("\n");
@@ -678,27 +727,44 @@ export async function runOcrLocally(
       );
       const isDashFhc = /-\s*\/\s*-|Attendance\s+Rate\s*[-~]\s*%/i.test(fhcTexts.join("\n"));
 
-      const regions: [number, number, number, number][] = [];
-      if (!hasOnHoldNums) regions.push([0.46, 0.22, 0.54, 0.40]);
-      if (!hasInHubAll) regions.push([0.0, 0.22, 0.50, 0.34]);
-      if (!hasFhcRatios && !isDashFhc) regions.push([0.0, 0.50, 0.50, 0.50]);
+      const { contentLeft, contentMid } = await detectDashboardContentBounds(images[i]);
+      const leftCardW = Math.max(0.25, contentMid - contentLeft - 0.008);
+      const rightCardX = Math.max(0.45, contentMid - 0.02);
+      const regions: { tag?: string; rect: [number, number, number, number]; binAlso: boolean }[] = [];
+      if (!hasOnHoldNums) {
+        regions.push({ rect: [rightCardX, 0.20, 1 - rightCardX, 0.42], binAlso: true });
+      }
+      if (!hasInHubAll) {
+        regions.push({ rect: [contentLeft, 0.20, leftCardW, 0.36], binAlso: false });
+      }
+      // Selalu isolasi kartu kiri Fleet Head Counts (di kiri sidebar->contentMid) bila rasio belum lengkap atau Fleet Productivity ikut tampil di kanan
+      const hasRightProductivity =
+        /F[il1][aeo]{1,3}[rt]\s+P[a-z0-9]{0,3}[o0]du|Orders?\b|Delivered\s*\/\s*Handed/i.test(combinedMain);
+      if (!isDashFhc && (!hasFhcRatios || hasRightProductivity)) {
+        regions.push({
+          tag: "__FHC_LEFT__",
+          rect: [contentLeft, 0.48, leftCardW, 0.52],
+          binAlso: true,
+        });
+      }
 
       if (regions.length > 0) {
         try {
           await worker.setParameters({ tessedit_pageseg_mode: "6" as never });
-          for (const [sx, sy, sw, sh] of regions) {
+          for (const { tag, rect: [sx, sy, sw, sh], binAlso } of regions) {
             const cropUrl = await cropRegionForOcr(images[i], sx, sy, sw, sh);
             if (!cropUrl) continue;
+            const prefix = tag ? `${tag}\n` : "";
             const enhancedCrop = await enhanceGrayscaleForOcr(cropUrl);
             const res = await worker.recognize(enhancedCrop, {}, { text: true, blocks: true });
             collectPageTokenConfidence(res.data, tokenMap);
-            if (res.data.text) crops.push(res.data.text);
+            if (res.data.text) crops.push(`${prefix}${res.data.text}`);
             // Untuk Fleet Head Counts (kiri-bawah) & On-hold (kanan-atas), coba juga binarized 200 bila grayscale salah baca digit tipis
-            if (sy >= 0.49 || sx >= 0.45) {
+            if (binAlso) {
               const binCropUrl = await binarizeForOcr(cropUrl, 200);
               const resBin = await worker.recognize(binCropUrl, {}, { text: true, blocks: true });
               collectPageTokenConfidence(resBin.data, tokenMap);
-              if (resBin.data.text) crops.push(resBin.data.text);
+              if (resBin.data.text) crops.push(`${prefix}${resBin.data.text}`);
             }
           }
         } catch {
