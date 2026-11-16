@@ -144,7 +144,7 @@ export function LighthouseBeaconIcon() {
   return (
     <div
       aria-hidden="true"
-      className="relative w-11 h-11 rounded-xl bg-white/10 border border-cyan-300/35 backdrop-blur-xs flex items-center justify-center flex-shrink-0 shadow-inner overflow-hidden"
+      className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-[#0c2238] via-[#123452] to-[#164560] border border-amber-400/50 flex items-center justify-center flex-shrink-0 shadow-md overflow-hidden"
     >
       <svg viewBox="0 0 32 32" className="relative w-8 h-8" fill="none">
         {/* Sorot lampu menara suar */}
@@ -252,6 +252,133 @@ export function MaritimeTargetCompassIcon() {
           d="M0,4 Q5,0 10,4 T20,4 T30,4 T40,4 L40,8 L0,8 Z"
           fill="currentColor"
         />
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Latar peta navigasi kapten (Captain's Logbook): garis koordinat laut halus & mawar kompas berputar pelan
+ * untuk membedakan Hero dari ombak Navbar.
+ */
+export function NauticalChartBackdrop({ className = "" }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`pointer-events-none absolute inset-0 overflow-hidden select-none ${className}`}
+    >
+      {/* Grid koordinat tipis, pudar di sisi kiri agar teks Hero tetap bersih & tajam */}
+      <div
+        className="absolute inset-0 opacity-[0.055] dark:opacity-[0.08] [mask-image:linear-gradient(to_right,transparent_0%,rgba(0,0,0,0.35)_32%,black_68%)]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right, #0f4c5c 1px, transparent 1px), linear-gradient(to bottom, #0f4c5c 1px, transparent 1px)",
+          backgroundSize: "40px 40px",
+        }}
+      />
+
+      {/* Skala penggaris peta & koordinat maritim di tepi bawah-tengah */}
+      <div className="hidden md:flex items-center gap-2 absolute bottom-1.5 left-[44%] text-[9px] font-mono tracking-widest text-teal-900/35 dark:text-cyan-200/30">
+        <span>07°09&apos;S · 112°04&apos;E</span>
+        <span className="inline-block w-10 h-px bg-current opacity-60" />
+        <span>JTT08 CHART</span>
+      </div>
+
+      {/* Peta kepulauan, kontur pantai, rute kapal beranimasi & waypoint (terkonsentrasi di tengah-kanan) */}
+      <svg
+        viewBox="0 0 760 120"
+        preserveAspectRatio="xMaxYMid slice"
+        className="absolute inset-y-0 right-0 w-full md:w-[76%] h-full [mask-image:linear-gradient(to_right,transparent_0%,rgba(0,0,0,0.3)_22%,black_48%)]"
+        fill="none"
+      >
+        {/* Siluet pulau & garis pantai utama */}
+        <path
+          d="M150,120 C175,92 212,84 248,92 C278,98 302,82 328,88 C355,95 372,110 388,120 Z"
+          className="fill-teal-700/[0.08] dark:fill-cyan-300/[0.08] stroke-teal-800/25 dark:stroke-cyan-300/25"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M188,120 C205,104 232,100 256,105 C280,110 302,101 322,120"
+          className="stroke-teal-800/18 dark:stroke-cyan-300/18"
+          strokeWidth="0.9"
+          strokeDasharray="3 3"
+        />
+
+        {/* Pulau kedua / semenanjung kanan */}
+        <path
+          d="M445,0 C465,24 498,32 536,24 C568,18 602,38 634,26 C664,15 692,28 716,0 Z"
+          className="fill-teal-700/[0.08] dark:fill-cyan-300/[0.08] stroke-teal-800/25 dark:stroke-cyan-300/25"
+          strokeWidth="1.2"
+        />
+        <path
+          d="M480,0 C498,16 524,20 552,14 C578,8 606,22 632,12"
+          className="stroke-teal-800/18 dark:stroke-cyan-300/18"
+          strokeWidth="0.9"
+          strokeDasharray="3 3"
+        />
+
+        {/* Gugusan pulau kecil & gosong karang */}
+        <path
+          d="M525,84 C542,72 574,70 594,82 C612,92 608,108 584,110 C558,112 518,98 525,84 Z"
+          className="fill-amber-700/[0.08] dark:fill-amber-300/[0.08] stroke-amber-800/25 dark:stroke-amber-300/25"
+          strokeWidth="1.1"
+        />
+        <ellipse
+          cx="412"
+          cy="44"
+          rx="26"
+          ry="11"
+          transform="rotate(-12 412 44)"
+          className="fill-teal-700/[0.07] dark:fill-cyan-300/[0.08] stroke-teal-800/22 dark:stroke-cyan-300/22"
+          strokeWidth="1"
+        />
+
+        {/* Garis kedalaman laut / kontur batimetri */}
+        <path
+          d="M110,64 C210,48 295,66 375,58 C455,50 545,62 670,44"
+          className="stroke-teal-800/15 dark:stroke-cyan-300/15"
+          strokeWidth="0.8"
+          strokeDasharray="2 4"
+        />
+
+        {/* Rute pelayaran aktif melintasi selat (animasi garis bergerak halus) */}
+        <path
+          d="M175,78 Q295,30 412,62 T622,52"
+          className="stroke-amber-700/35 dark:stroke-amber-300/35 animate-route-dash"
+          strokeWidth="1.5"
+          strokeDasharray="6 5"
+          strokeLinecap="round"
+        />
+
+        {/* Titik pelabuhan / waypoint navigasi */}
+        <g className="text-amber-700 dark:text-amber-300">
+          <circle cx="175" cy="78" r="6" fill="currentColor" opacity="0.16" />
+          <circle cx="175" cy="78" r="2.6" fill="currentColor" opacity="0.7" />
+
+          <circle cx="412" cy="62" r="7" fill="currentColor" opacity="0.16" className="animate-pulse" />
+          <circle cx="412" cy="62" r="3" fill="currentColor" opacity="0.78" />
+
+          <circle cx="622" cy="52" r="6" fill="currentColor" opacity="0.18" />
+          <circle cx="622" cy="52" r="2.6" fill="currentColor" opacity="0.75" />
+        </g>
+      </svg>
+
+      {/* Mawar kompas navigasi berputar sangat pelan di pojok kanan */}
+      <svg
+        viewBox="0 0 160 160"
+        className="animate-helm-spin absolute -right-5 -top-9 w-40 h-40 text-amber-800/[0.17] dark:text-amber-300/[0.16]"
+        fill="none"
+        stroke="currentColor"
+      >
+        <circle cx="80" cy="80" r="64" strokeWidth="1.2" strokeDasharray="4 4" />
+        <circle cx="80" cy="80" r="46" strokeWidth="1" />
+        <circle cx="80" cy="80" r="10" strokeWidth="1.2" />
+        <line x1="80" y1="6" x2="80" y2="154" strokeWidth="1" />
+        <line x1="6" y1="80" x2="154" y2="80" strokeWidth="1" />
+        <line x1="28" y1="28" x2="132" y2="132" strokeWidth="0.9" />
+        <line x1="132" y1="28" x2="28" y2="132" strokeWidth="0.9" />
+        <polygon points="80,14 86,70 80,62 74,70" fill="currentColor" stroke="none" />
+        <polygon points="80,146 86,90 80,98 74,90" fill="currentColor" stroke="none" opacity="0.55" />
       </svg>
     </div>
   );

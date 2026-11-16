@@ -690,6 +690,16 @@ html.dark .hover-lift:hover {
   transform-origin: center center;
 }
 
+@keyframes routeDash {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+.animate-route-dash {
+  animation: routeDash 2.6s linear infinite;
+}
+
 @keyframes beaconSweep {
   0%, 100% {
     opacity: 0.35;

@@ -14,7 +14,7 @@ import toast from "react-hot-toast";
 import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { SunsetSailTransition } from "@/components/ocean/SunsetSailTransition";
 import {
-  MaritimeWaveBackdrop,
+  NauticalChartBackdrop,
   LighthouseBeaconIcon,
   SailorCompassIcon,
 } from "@/components/productivity/MaritimeAnimations";
@@ -177,30 +177,30 @@ function DashboardContent() {
       {dashboardReady && (
         <div className="min-h-screen bg-[#e7eef4] dark:bg-transparent">
           <div className="w-full px-2 sm:px-4 py-4 space-y-4 animate-page-enter">
-            {/* Page Header — Harbor Lighthouse Command */}
-            <div className="relative overflow-hidden bg-gradient-to-r from-[#0a1d33] via-[#0e3454] to-[#0f4c5c] dark:from-slate-900 dark:via-[#0d2847] dark:to-[#0f3548] border border-cyan-900/35 dark:border-slate-700/70 text-white rounded-2xl px-5 py-4 shadow-lg">
-              <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-cyan-400/70 via-amber-300/70 to-cyan-400/70" />
-              <MaritimeWaveBackdrop />
+            {/* Page Header — Captain's Logbook Command */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-[#fffdf9] via-[#f8fafd] to-[#eef4f9] dark:from-[#121d2f] dark:via-[#142338] dark:to-[#10293a] border border-slate-200/90 dark:border-slate-700/80 border-l-4 border-l-amber-600 dark:border-l-amber-400 text-slate-900 dark:text-white rounded-2xl px-5 py-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)]">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-500/75 via-amber-300/60 to-transparent" />
+              <NauticalChartBackdrop />
 
               <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3.5">
                   <LighthouseBeaconIcon />
                   <div>
-                    <h1 className="text-xl font-extrabold tracking-tight text-white">
+                    <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                       Welcome Back Sailor
                       {displayName && (
                         <>
                           {" "}
-                          <span className="text-amber-200">{displayName}</span>
+                          <span className="text-amber-700 dark:text-amber-300">{displayName}</span>
                         </>
                       )}
                     </h1>
-                    <p className="text-xs text-cyan-100/90 mt-0.5 flex items-center gap-2 flex-wrap">
-                      <span className="inline-flex items-center gap-1.5 text-emerald-300 font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap font-medium">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                         Live Monitoring
                       </span>
-                      <span className="text-cyan-300/50">•</span>
+                      <span className="text-slate-300 dark:text-slate-600">•</span>
                       <span>
                         {isToday
                           ? "Hari ini — " + formatDate(selectedDate)
@@ -211,12 +211,12 @@ function DashboardContent() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/15 backdrop-blur-xs text-cyan-100 text-xs font-semibold rounded-full">
-                    <SailorCompassIcon className="h-3.5 w-3.5 text-amber-300" />
+                  <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50/90 dark:bg-slate-800/80 border border-amber-300/70 dark:border-amber-400/35 backdrop-blur-xs text-slate-800 dark:text-amber-100 text-xs font-semibold rounded-full shadow-2xs">
+                    <SailorCompassIcon className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
                     Harbor Control • JTT08
                   </span>
                   {!isToday && (
-                    <span className="px-3 py-1 bg-amber-400/20 border border-amber-300/40 text-amber-200 text-xs font-semibold rounded-full">
+                    <span className="px-3 py-1 bg-amber-100/90 dark:bg-amber-400/20 border border-amber-300 dark:border-amber-300/40 text-amber-800 dark:text-amber-200 text-xs font-semibold rounded-full">
                       Mode History
                     </span>
                   )}
