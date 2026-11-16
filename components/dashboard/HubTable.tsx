@@ -7,7 +7,11 @@ import { parseTimestamp } from "@/lib/dateUtils";
 import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-interface HubTableProps { data: ClosingData[]; isLoading?: boolean; }
+interface HubTableProps {
+  data: ClosingData[];
+  isLoading?: boolean;
+  onSelectHub?: (row: ClosingData) => void;
+}
 type SortKey = keyof ClosingData;
 type SortDir = "asc" | "desc" | null;
 
@@ -181,7 +185,7 @@ function DeliveryBadge({ delivered, transported, hasData }: {
   return <Badge variant="red">{label}</Badge>;
 }
 
-export function HubTable({ data, isLoading }: HubTableProps) {
+export function HubTable({ data, isLoading, onSelectHub }: HubTableProps) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
 
@@ -324,7 +328,12 @@ export function HubTable({ data, isLoading }: HubTableProps) {
             const manualCount = manualSet.size;
 
             return (
-              <tr key={i} className={`${rowCls} transition-colors`}>
+              <tr
+                key={i}
+                onClick={() => onSelectHub?.(row)}
+                title={onSelectHub ? `Klik untuk melihat detail closing ${row.nama_hub}` : undefined}
+                className={`${rowCls} transition-colors ${onSelectHub ? "cursor-pointer" : ""}`}
+              >
                 {/* Nama Hub — sticky */}
                 <td
                   className={`px-2 py-1.5 sticky left-0 z-10 font-semibold text-gray-900 whitespace-nowrap truncate max-w-[9rem] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] ${stickyBg}`}

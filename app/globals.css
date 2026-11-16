@@ -782,7 +782,8 @@ html.dark .hover-lift:hover {
   .animate-pennant-wave,
   .animate-sonar-sweep,
   .animate-chrono-spin,
-  .animate-tide-shimmer {
+  .animate-tide-shimmer,
+  .animate-route-dash {
     animation: none;
   }
 }

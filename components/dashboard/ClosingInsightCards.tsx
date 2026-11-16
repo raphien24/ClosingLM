@@ -14,6 +14,7 @@ import {
 interface Props {
   data: ClosingData[];
   isLoading?: boolean;
+  onSelectHub?: (row: ClosingData) => void;
 }
 
 const REQUIRED_CLOSING_KEYS: (keyof ClosingData)[] = [
@@ -36,7 +37,7 @@ const REQUIRED_CLOSING_KEYS: (keyof ClosingData)[] = [
   "parcel_sweeper_scanned_pct",
 ];
 
-export function ClosingInsightCards({ data, isLoading }: Props) {
+export function ClosingInsightCards({ data, isLoading, onSelectHub }: Props) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
@@ -62,6 +63,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
     .map((row) => {
       if (!row.submitted_at) {
         return {
+          row,
           nama_hub: row.nama_hub,
           emptyCount: REQUIRED_CLOSING_KEYS.length,
           isNotSubmitted: true,
@@ -71,6 +73,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
         (k) => row[k] === null || row[k] === undefined
       );
       return {
+        row,
         nama_hub: row.nama_hub,
         emptyCount: emptyCols.length,
         isNotSubmitted: false,
@@ -91,6 +94,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
       const backlog = r.backlog_total ?? 0;
       const pct = totalVol > 0 ? (backlog / totalVol) * 100 : 0;
       return {
+        row: r,
         nama_hub: r.nama_hub,
         backlog,
         totalVol,
@@ -108,6 +112,7 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
       const expedite = r.total_expedite ?? 0;
       const pct = totalVol > 0 ? (expedite / totalVol) * 100 : 0;
       return {
+        row: r,
         nama_hub: r.nama_hub,
         expedite,
         totalVol,
@@ -158,7 +163,11 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
             incompleteHubs.map((h) => (
               <div
                 key={h.nama_hub}
-                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-rose-50/70 border border-rose-100 text-xs"
+                onClick={() => onSelectHub?.(h.row)}
+                title={onSelectHub ? `Klik untuk melihat detail closing ${h.nama_hub}` : undefined}
+                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-rose-50/70 border border-rose-100 text-xs transition-all ${
+                  onSelectHub ? "cursor-pointer hover:brightness-95" : ""
+                }`}
               >
                 <span className="font-semibold text-slate-800 truncate">
                   {h.nama_hub}
@@ -211,7 +220,11 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
             unclearedDelivering.map((r) => (
               <div
                 key={r.nama_hub}
-                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-amber-50/70 border border-amber-100 text-xs"
+                onClick={() => onSelectHub?.(r)}
+                title={onSelectHub ? `Klik untuk melihat detail closing ${r.nama_hub}` : undefined}
+                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-amber-50/70 border border-amber-100 text-xs transition-all ${
+                  onSelectHub ? "cursor-pointer hover:brightness-95" : ""
+                }`}
               >
                 <span className="font-semibold text-slate-800 truncate">
                   {r.nama_hub}
@@ -253,7 +266,11 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
             top5Backlog.map((item, idx) => (
               <div
                 key={item.nama_hub}
-                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs"
+                onClick={() => onSelectHub?.(item.row)}
+                title={onSelectHub ? `Klik untuk melihat detail closing ${item.nama_hub}` : undefined}
+                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs transition-all ${
+                  onSelectHub ? "cursor-pointer hover:brightness-95" : ""
+                }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span
@@ -313,7 +330,11 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
             top5Expedite.map((item, idx) => (
               <div
                 key={item.nama_hub}
-                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs"
+                onClick={() => onSelectHub?.(item.row)}
+                title={onSelectHub ? `Klik untuk melihat detail closing ${item.nama_hub}` : undefined}
+                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 border border-slate-100 text-xs transition-all ${
+                  onSelectHub ? "cursor-pointer hover:brightness-95" : ""
+                }`}
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <span
@@ -382,7 +403,11 @@ export function ClosingInsightCards({ data, isLoading }: Props) {
             onholdHubs.map((r) => (
               <div
                 key={r.nama_hub}
-                className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-purple-50/70 border border-purple-100 text-xs"
+                onClick={() => onSelectHub?.(r)}
+                title={onSelectHub ? `Klik untuk melihat detail closing ${r.nama_hub}` : undefined}
+                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-purple-50/70 border border-purple-100 text-xs transition-all ${
+                  onSelectHub ? "cursor-pointer hover:brightness-95" : ""
+                }`}
               >
                 <span className="font-semibold text-slate-800 truncate">
                   {r.nama_hub}

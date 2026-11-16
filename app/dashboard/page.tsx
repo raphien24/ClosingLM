@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { KpiCards } from "@/components/dashboard/KpiCards";
 import { ClosingInsightCards } from "@/components/dashboard/ClosingInsightCards";
 import { HubTable } from "@/components/dashboard/HubTable";
+import { HubClosingDetailModal } from "@/components/dashboard/HubClosingDetailModal";
 import { FilterBar } from "@/components/dashboard/FilterBar";
 import { ClosingData, KpiSummary } from "@/types/closing";
 import { todayWIB } from "@/lib/dateUtils";
@@ -81,6 +82,7 @@ function DashboardContent() {
   const [allHubs, setAllHubs] = useState<string[]>([]);
   const [kpi, setKpi] = useState<KpiSummary>(defaultKpi);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedHubDetail, setSelectedHubDetail] = useState<ClosingData | null>(null);
 
   // Animasi 3D POV Kapten hanya berjalan saat sudah BENAR-BENAR BERHASIL LOGIN (?sail=1)
   // dan belum pernah diputar pada sesi ini
@@ -228,7 +230,11 @@ function DashboardContent() {
             <KpiCards kpi={kpi} isLoading={isLoading} />
 
             {/* 5 Operational Insight Cards */}
-            <ClosingInsightCards data={closingData} isLoading={isLoading} />
+            <ClosingInsightCards
+              data={closingData}
+              isLoading={isLoading}
+              onSelectHub={setSelectedHubDetail}
+            />
 
             {/* Filter Bar */}
             <FilterBar
@@ -243,8 +249,17 @@ function DashboardContent() {
             />
 
             {/* Hub Table */}
-            <HubTable data={closingData} isLoading={isLoading} />
+            <HubTable
+              data={closingData}
+              isLoading={isLoading}
+              onSelectHub={setSelectedHubDetail}
+            />
           </div>
+
+          <HubClosingDetailModal
+            row={selectedHubDetail}
+            onClose={() => setSelectedHubDetail(null)}
+          />
         </div>
       )}
     </>
