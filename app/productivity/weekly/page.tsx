@@ -7,7 +7,7 @@ import { ProductivityKpiCards } from "@/components/productivity/ProductivityKpiC
 import { CourierTable } from "@/components/productivity/CourierTable";
 import { GracePeriodToggle } from "@/components/productivity/GracePeriodToggle";
 import {
-  MaritimeWaveBackdrop,
+  NauticalChartBackdrop,
   SailorHelmVesselIcon,
 } from "@/components/productivity/MaritimeAnimations";
 import { useAuth } from "@/hooks/useAuth";
@@ -115,18 +115,18 @@ function DashboardWeeklyContent() {
   return (
     <div className="min-h-screen bg-[#e8eef5] dark:bg-transparent">
       <div className="w-full px-3 sm:px-6 py-4 space-y-4">
-        {/* Maritime Navy Command Header Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0b1f3a] via-[#102d56] to-[#15457a] dark:from-slate-900 dark:via-[#0f2447] dark:to-[#132c57] border border-sky-900/30 dark:border-slate-700/80 text-white px-5 py-4 shadow-lg">
-          {/* Top thin maritime gold highlight */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-400/70 via-sky-300/60 to-amber-400/70" />
-          <MaritimeWaveBackdrop />
+        {/* Maritime Captain's Logbook — Weekly Voyage Banner */}
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#fffdf9] via-[#f5f9fd] to-[#eaf2fa] dark:from-[#121d2f] dark:via-[#12243d] dark:to-[#132d4c] border border-slate-200/90 dark:border-slate-700/80 border-l-4 border-l-sky-600 dark:border-l-sky-400 text-slate-900 dark:text-white px-5 py-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)]">
+          {/* Top thin maritime sky-amber horizon highlight */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-sky-500/75 via-amber-400/60 to-transparent" />
+          <NauticalChartBackdrop variant="weekly" />
 
           <div className="relative z-10 flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3.5">
               <SailorHelmVesselIcon />
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <h1 className="text-xl font-extrabold tracking-tight text-white">
+                  <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                     Dashboard Weekly Productivity
                   </h1>
                   <GracePeriodToggle
@@ -137,31 +137,31 @@ function DashboardWeeklyContent() {
                     excludedCount={kpi?.excludedNewCount}
                   />
                 </div>
-                <p className="text-xs sm:text-sm text-sky-100/85 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1.5 flex-wrap font-medium">
                   <span>Hub:</span>
-                  <span className="font-bold text-amber-300">{hubName}</span>
-                  <span className="text-sky-300/60">•</span>
-                  <span className="text-sky-200/80">Weekly Fleet Command &amp; Courier Tracking</span>
+                  <span className="font-bold text-amber-700 dark:text-amber-300">{hubName}</span>
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                  <span className="text-slate-500 dark:text-slate-300">Weekly Fleet Command &amp; Courier Tracking</span>
                 </p>
               </div>
             </div>
 
             {/* Week navigator */}
-            <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl px-2.5 py-1.5 shadow-sm">
+            <div className="flex items-center gap-1.5 bg-white/90 dark:bg-slate-800/80 backdrop-blur-xs border border-slate-200/90 dark:border-slate-600/70 rounded-xl px-2.5 py-1.5 shadow-2xs">
               <button
                 onClick={prevWeek}
-                className="p-1.5 hover:bg-white/15 rounded-lg transition-colors text-white cursor-pointer"
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-700 dark:text-white cursor-pointer"
                 aria-label="Minggu sebelumnya"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-sm font-semibold text-white min-w-[165px] text-center">
+              <span className="text-sm font-semibold text-slate-800 dark:text-white min-w-[165px] text-center">
                 {formatWeekLabel(weekStart)}
               </span>
               <button
                 onClick={nextWeek}
                 disabled={isCurrentWeek}
-                className="p-1.5 hover:bg-white/15 rounded-lg transition-colors text-white disabled:opacity-35 cursor-pointer disabled:cursor-not-allowed"
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors text-slate-700 dark:text-white disabled:opacity-35 cursor-pointer disabled:cursor-not-allowed"
                 aria-label="Minggu berikutnya"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -169,7 +169,7 @@ function DashboardWeeklyContent() {
               {!isCurrentWeek && (
                 <button
                   onClick={() => setWeekStart(getMonday(new Date()))}
-                  className="text-xs font-semibold text-amber-300 hover:text-amber-200 hover:underline ml-1 pr-1 cursor-pointer"
+                  className="text-xs font-semibold text-amber-700 dark:text-amber-300 hover:underline ml-1 pr-1 cursor-pointer"
                 >
                   Minggu ini
                 </button>

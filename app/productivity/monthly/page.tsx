@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 import { GracePeriodToggle } from "@/components/productivity/GracePeriodToggle";
 import {
   MaritimeWaveBackdrop,
+  NauticalChartBackdrop,
   SailorHelmVesselIcon,
   SailorCompassIcon,
 } from "@/components/productivity/MaritimeAnimations";
@@ -286,53 +287,55 @@ export default function DashboardMonthlyPage() {
 
   return (
     <div className="min-h-screen bg-[#e8eef5] dark:bg-transparent pb-12">
-      {/* Top Maritime Navy Header Banner */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-[#0b1f3a] via-[#102d56] to-[#15457a] dark:from-slate-900 dark:via-[#0f2447] dark:to-[#132c57] border-b border-sky-900/30 dark:border-slate-700/80 text-white shadow-lg">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-400/70 via-sky-300/60 to-amber-400/70" />
-        <MaritimeWaveBackdrop />
+      {/* Top Captain's Monthly Archive Banner */}
+      <div className="w-full px-3 sm:px-6 pt-4">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#fffdf9] via-[#f4faf8] to-[#e9f4f0] dark:from-[#121d2f] dark:via-[#11252c] dark:to-[#0f2c2a] border border-slate-200/90 dark:border-slate-700/80 border-l-4 border-l-emerald-600 dark:border-l-emerald-400 text-slate-900 dark:text-white shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)]">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-emerald-500/75 via-amber-400/60 to-transparent" />
+          <NauticalChartBackdrop variant="monthly" />
 
-        <div className="relative z-10 w-full px-4 sm:px-6 py-5 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <SailorHelmVesselIcon />
-            <div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white">
-                  Monthly Productivity Dashboard
-                </h1>
-                <GracePeriodToggle
-                  hasL15D={Boolean(data?.hasL15D)}
-                  dataDaysCount={data?.dataDaysCount ?? 0}
-                  enabled={excludeNew}
-                  onToggle={handleToggleExcludeNew}
-                  excludedCount={data?.excludedNewCount}
-                />
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-2.5 text-xs text-sky-100/90 dark:text-slate-300">
-                <span>Monthly Aggregated Performance Metrics</span>
-                <span className="text-sky-300/50">•</span>
-                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-300">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  Live Synced
-                </span>
-                <span className="text-sky-300/50">•</span>
-                <span className="px-2.5 py-0.5 rounded-md bg-white/10 border border-white/15 dark:bg-slate-800/80 dark:border-slate-600/60 text-white font-medium">
-                  Last Update: {data?.lastUpdate || "-"}
-                </span>
-                {hubName && (
-                  <>
-                    <span className="text-sky-300/50">•</span>
-                    <span className="px-2.5 py-0.5 rounded-md bg-white/10 border border-white/15 dark:bg-slate-800/80 dark:border-slate-600/60 text-amber-300 font-bold">
-                      Hub: {hubName}
-                    </span>
-                  </>
-                )}
+          <div className="relative z-10 w-full px-5 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <SailorHelmVesselIcon />
+              <div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                    Monthly Productivity Dashboard
+                  </h1>
+                  <GracePeriodToggle
+                    hasL15D={Boolean(data?.hasL15D)}
+                    dataDaysCount={data?.dataDaysCount ?? 0}
+                    enabled={excludeNew}
+                    onToggle={handleToggleExcludeNew}
+                    excludedCount={data?.excludedNewCount}
+                  />
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2.5 text-xs text-slate-600 dark:text-slate-300 font-medium">
+                  <span>Monthly Aggregated Performance Metrics</span>
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
+                    Live Synced
+                  </span>
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                  <span className="px-2.5 py-0.5 rounded-md bg-slate-100/90 border border-slate-200 dark:bg-slate-800/80 dark:border-slate-600/60 text-slate-700 dark:text-white font-medium">
+                    Last Update: {data?.lastUpdate || "-"}
+                  </span>
+                  {hubName && (
+                    <>
+                      <span className="text-slate-300 dark:text-slate-600">•</span>
+                      <span className="px-2.5 py-0.5 rounded-md bg-amber-50 border border-amber-200 dark:bg-slate-800/80 dark:border-slate-600/60 text-amber-700 dark:text-amber-300 font-bold">
+                        Hub: {hubName}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="w-full px-3 sm:px-6 pt-6 space-y-6">
+      <div className="w-full px-3 sm:px-6 pt-5 space-y-6">
         {/* Banner Notifikasi jika ada minggu yang Target Hari Senin-nya tidak ditemukan */}
         {data?.missingTargetWeeks && data.missingTargetWeeks.length > 0 && (
           <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3 shadow-sm">

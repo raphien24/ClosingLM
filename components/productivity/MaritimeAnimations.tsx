@@ -66,7 +66,7 @@ export function SailorHelmVesselIcon() {
   return (
     <div
       aria-hidden="true"
-      className="relative w-11 h-11 rounded-xl bg-white/10 border border-amber-300/40 backdrop-blur-xs flex items-center justify-center flex-shrink-0 shadow-inner overflow-hidden"
+      className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-[#0c2238] via-[#123452] to-[#164560] border border-amber-400/50 flex items-center justify-center flex-shrink-0 shadow-md overflow-hidden"
     >
       {/* Kemudi kapal halus berputar lambat di latar belakang */}
       <svg
@@ -185,7 +185,7 @@ export function CargoLogbookIcon() {
   return (
     <div
       aria-hidden="true"
-      className="relative w-11 h-11 rounded-xl bg-white/10 border border-amber-300/40 backdrop-blur-xs flex items-center justify-center flex-shrink-0 shadow-inner overflow-hidden"
+      className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-[#0c2238] via-[#123452] to-[#164560] border border-amber-400/50 flex items-center justify-center flex-shrink-0 shadow-md overflow-hidden"
     >
       <svg viewBox="0 0 32 32" className="relative w-7 h-7" fill="none">
         {/* Tiang & Bendera Sinyal Kapal Berkibar */}
@@ -221,7 +221,7 @@ export function MaritimeTargetCompassIcon() {
   return (
     <div
       aria-hidden="true"
-      className="relative w-11 h-11 rounded-xl bg-white/10 border border-amber-300/45 backdrop-blur-xs flex items-center justify-center flex-shrink-0 shadow-inner overflow-hidden"
+      className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-[#0c2238] via-[#123452] to-[#164560] border border-amber-400/50 flex items-center justify-center flex-shrink-0 shadow-md overflow-hidden"
     >
       <svg viewBox="0 0 32 32" className="relative w-8 h-8" fill="none">
         {/* Ring luar & dalam kalibrasi */}
@@ -261,7 +261,30 @@ export function MaritimeTargetCompassIcon() {
  * Latar peta navigasi kapten (Captain's Logbook): garis koordinat laut halus & mawar kompas berputar pelan
  * untuk membedakan Hero dari ombak Navbar.
  */
-export function NauticalChartBackdrop({ className = "" }: { className?: string }) {
+export type NauticalBackdropVariant =
+  | "dashboard"
+  | "input"
+  | "weekly"
+  | "monthly"
+  | "targets";
+
+const BACKDROP_CHART_LABELS: Record<NauticalBackdropVariant, string[]> = {
+  dashboard: ["07°09'S · 112°04'E", "JTT08 CHART"],
+  input: ["PIER 08 · LOGBOOK", "CARGO MANIFEST"],
+  weekly: ["SEN – MIN · ROUTE", "7-DAY VOYAGE"],
+  monthly: ["4-WEEK HORIZON", "MONTHLY ARCHIVE"],
+  targets: ["BEARING 045° · SONAR", "TARGET CALIBRATION"],
+};
+
+export function NauticalChartBackdrop({
+  className = "",
+  variant = "dashboard",
+}: {
+  className?: string;
+  variant?: NauticalBackdropVariant;
+}) {
+  const [coordLeft, coordRight] = BACKDROP_CHART_LABELS[variant];
+
   return (
     <div
       aria-hidden="true"
@@ -279,9 +302,9 @@ export function NauticalChartBackdrop({ className = "" }: { className?: string }
 
       {/* Skala penggaris peta & koordinat maritim di tepi bawah-tengah */}
       <div className="hidden md:flex items-center gap-2 absolute bottom-1.5 left-[44%] text-[9px] font-mono tracking-widest text-teal-900/35 dark:text-cyan-200/30">
-        <span>07°09&apos;S · 112°04&apos;E</span>
+        <span>{coordLeft}</span>
         <span className="inline-block w-10 h-px bg-current opacity-60" />
-        <span>JTT08 CHART</span>
+        <span>{coordRight}</span>
       </div>
 
       {/* Peta kepulauan, kontur pantai, rute kapal beranimasi & waypoint (terkonsentrasi di tengah-kanan) */}
@@ -291,76 +314,188 @@ export function NauticalChartBackdrop({ className = "" }: { className?: string }
         className="absolute inset-y-0 right-0 w-full md:w-[76%] h-full [mask-image:linear-gradient(to_right,transparent_0%,rgba(0,0,0,0.3)_22%,black_48%)]"
         fill="none"
       >
-        {/* Siluet pulau & garis pantai utama */}
-        <path
-          d="M150,120 C175,92 212,84 248,92 C278,98 302,82 328,88 C355,95 372,110 388,120 Z"
-          className="fill-teal-700/[0.08] dark:fill-cyan-300/[0.08] stroke-teal-800/25 dark:stroke-cyan-300/25"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M188,120 C205,104 232,100 256,105 C280,110 302,101 322,120"
-          className="stroke-teal-800/18 dark:stroke-cyan-300/18"
-          strokeWidth="0.9"
-          strokeDasharray="3 3"
-        />
+        {variant === "dashboard" && (
+          <>
+            <path
+              d="M150,120 C175,92 212,84 248,92 C278,98 302,82 328,88 C355,95 372,110 388,120 Z"
+              className="fill-teal-700/[0.08] dark:fill-cyan-300/[0.08] stroke-teal-800/25 dark:stroke-cyan-300/25"
+              strokeWidth="1.2"
+            />
+            <path
+              d="M188,120 C205,104 232,100 256,105 C280,110 302,101 322,120"
+              className="stroke-teal-800/18 dark:stroke-cyan-300/18"
+              strokeWidth="0.9"
+              strokeDasharray="3 3"
+            />
+            <path
+              d="M445,0 C465,24 498,32 536,24 C568,18 602,38 634,26 C664,15 692,28 716,0 Z"
+              className="fill-teal-700/[0.08] dark:fill-cyan-300/[0.08] stroke-teal-800/25 dark:stroke-cyan-300/25"
+              strokeWidth="1.2"
+            />
+            <path
+              d="M480,0 C498,16 524,20 552,14 C578,8 606,22 632,12"
+              className="stroke-teal-800/18 dark:stroke-cyan-300/18"
+              strokeWidth="0.9"
+              strokeDasharray="3 3"
+            />
+            <path
+              d="M525,84 C542,72 574,70 594,82 C612,92 608,108 584,110 C558,112 518,98 525,84 Z"
+              className="fill-amber-700/[0.08] dark:fill-amber-300/[0.08] stroke-amber-800/25 dark:stroke-amber-300/25"
+              strokeWidth="1.1"
+            />
+            <ellipse
+              cx="412"
+              cy="44"
+              rx="26"
+              ry="11"
+              transform="rotate(-12 412 44)"
+              className="fill-teal-700/[0.07] dark:fill-cyan-300/[0.08] stroke-teal-800/22 dark:stroke-cyan-300/22"
+              strokeWidth="1"
+            />
+            <path
+              d="M110,64 C210,48 295,66 375,58 C455,50 545,62 670,44"
+              className="stroke-teal-800/15 dark:stroke-cyan-300/15"
+              strokeWidth="0.8"
+              strokeDasharray="2 4"
+            />
+            <path
+              d="M175,78 Q295,30 412,62 T622,52"
+              className="stroke-amber-700/35 dark:stroke-amber-300/35 animate-route-dash"
+              strokeWidth="1.5"
+              strokeDasharray="6 5"
+              strokeLinecap="round"
+            />
+            <g className="text-amber-700 dark:text-amber-300">
+              <circle cx="175" cy="78" r="6" fill="currentColor" opacity="0.16" />
+              <circle cx="175" cy="78" r="2.6" fill="currentColor" opacity="0.7" />
+              <circle cx="412" cy="62" r="7" fill="currentColor" opacity="0.16" className="animate-pulse" />
+              <circle cx="412" cy="62" r="3" fill="currentColor" opacity="0.78" />
+              <circle cx="622" cy="52" r="6" fill="currentColor" opacity="0.18" />
+              <circle cx="622" cy="52" r="2.6" fill="currentColor" opacity="0.75" />
+            </g>
+          </>
+        )}
 
-        {/* Pulau kedua / semenanjung kanan */}
-        <path
-          d="M445,0 C465,24 498,32 536,24 C568,18 602,38 634,26 C664,15 692,28 716,0 Z"
-          className="fill-teal-700/[0.08] dark:fill-cyan-300/[0.08] stroke-teal-800/25 dark:stroke-cyan-300/25"
-          strokeWidth="1.2"
-        />
-        <path
-          d="M480,0 C498,16 524,20 552,14 C578,8 606,22 632,12"
-          className="stroke-teal-800/18 dark:stroke-cyan-300/18"
-          strokeWidth="0.9"
-          strokeDasharray="3 3"
-        />
+        {variant === "input" && (
+          <>
+            {/* Siluet dermaga & teluk pelabuhan bongkar-muat */}
+            <path
+              d="M200,120 L225,86 L310,86 L332,68 L415,68 L438,94 L535,94 L560,120 Z"
+              className="fill-rose-700/[0.06] dark:fill-rose-300/[0.07] stroke-rose-800/22 dark:stroke-rose-300/22"
+              strokeWidth="1.2"
+            />
+            <path
+              d="M475,0 C505,28 565,36 628,22 C665,14 705,22 735,0 Z"
+              className="fill-teal-700/[0.07] dark:fill-cyan-300/[0.08] stroke-teal-800/22 dark:stroke-cyan-300/22"
+              strokeWidth="1.1"
+            />
+            {/* Jalur logistik dari dermaga menuju armada */}
+            <path
+              d="M195,52 C290,26 375,44 470,48 C550,52 615,32 680,44"
+              className="stroke-amber-700/35 dark:stroke-amber-300/35 animate-route-dash"
+              strokeWidth="1.5"
+              strokeDasharray="6 5"
+              strokeLinecap="round"
+            />
+            <g className="text-rose-700 dark:text-amber-300">
+              <rect x="268" y="76" width="8" height="8" rx="1.5" fill="currentColor" opacity="0.25" />
+              <circle cx="470" cy="48" r="7" fill="currentColor" opacity="0.15" className="animate-pulse" />
+              <circle cx="470" cy="48" r="2.8" fill="currentColor" opacity="0.75" />
+              <circle cx="680" cy="44" r="2.8" fill="currentColor" opacity="0.7" />
+            </g>
+          </>
+        )}
 
-        {/* Gugusan pulau kecil & gosong karang */}
-        <path
-          d="M525,84 C542,72 574,70 594,82 C612,92 608,108 584,110 C558,112 518,98 525,84 Z"
-          className="fill-amber-700/[0.08] dark:fill-amber-300/[0.08] stroke-amber-800/25 dark:stroke-amber-300/25"
-          strokeWidth="1.1"
-        />
-        <ellipse
-          cx="412"
-          cy="44"
-          rx="26"
-          ry="11"
-          transform="rotate(-12 412 44)"
-          className="fill-teal-700/[0.07] dark:fill-cyan-300/[0.08] stroke-teal-800/22 dark:stroke-cyan-300/22"
-          strokeWidth="1"
-        />
+        {variant === "weekly" && (
+          <>
+            {/* Gugusan pulau & busur pelayaran 7 hari (Sen–Min) */}
+            <path
+              d="M165,120 C198,88 265,86 308,104 C338,116 368,102 396,120 Z"
+              className="fill-sky-700/[0.07] dark:fill-sky-300/[0.08] stroke-sky-800/22 dark:stroke-sky-300/22"
+              strokeWidth="1.1"
+            />
+            <path
+              d="M495,0 C525,30 578,36 635,18 C672,6 708,24 736,0 Z"
+              className="fill-sky-700/[0.07] dark:fill-sky-300/[0.08] stroke-sky-800/22 dark:stroke-sky-300/22"
+              strokeWidth="1.1"
+            />
+            <path
+              d="M180,76 C265,30 375,32 455,62 C525,88 605,40 675,46"
+              className="stroke-sky-700/35 dark:stroke-sky-300/35 animate-route-dash"
+              strokeWidth="1.5"
+              strokeDasharray="5 5"
+              strokeLinecap="round"
+            />
+            {/* 7 titik waypoint mingguan */}
+            {[
+              [180, 76],
+              [262, 46],
+              [348, 39],
+              [432, 54],
+              [512, 68],
+              [594, 52],
+              [675, 46],
+            ].map(([cx, cy], i) => (
+              <g key={i} className="text-sky-700 dark:text-sky-300">
+                <circle cx={cx} cy={cy} r={i === 3 ? 6.5 : 4.5} fill="currentColor" opacity="0.16" />
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={i === 3 ? 3 : 2.2}
+                  fill="currentColor"
+                  opacity={i === 3 ? 0.85 : 0.65}
+                  className={i === 3 ? "animate-pulse" : undefined}
+                />
+              </g>
+            ))}
+          </>
+        )}
 
-        {/* Garis kedalaman laut / kontur batimetri */}
-        <path
-          d="M110,64 C210,48 295,66 375,58 C455,50 545,62 670,44"
-          className="stroke-teal-800/15 dark:stroke-cyan-300/15"
-          strokeWidth="0.8"
-          strokeDasharray="2 4"
-        />
+        {variant === "monthly" && (
+          <>
+            {/* Kontur pasang surut & horizon pelayaran 4 minggu */}
+            <path
+              d="M140,120 C220,76 310,92 395,74 C480,56 565,88 665,68 L760,72 L760,120 Z"
+              className="fill-emerald-700/[0.06] dark:fill-emerald-300/[0.07] stroke-emerald-800/20 dark:stroke-emerald-300/20"
+              strokeWidth="1.1"
+            />
+            <path
+              d="M170,66 Q290,26 420,52 T680,36"
+              className="stroke-emerald-700/35 dark:stroke-emerald-300/35 animate-route-dash"
+              strokeWidth="1.5"
+              strokeDasharray="6 5"
+              strokeLinecap="round"
+            />
+            {/* 4 penanda meridian mingguan */}
+            {[230, 360, 495, 625].map((x, idx) => (
+              <g key={x} className="text-emerald-700 dark:text-emerald-300">
+                <line x1={x} y1="16" x2={x} y2="104" stroke="currentColor" strokeWidth="0.8" strokeDasharray="3 4" opacity="0.3" />
+                <circle cx={x} cy={idx % 2 === 0 ? 48 : 42} r="3" fill="currentColor" opacity="0.7" />
+              </g>
+            ))}
+          </>
+        )}
 
-        {/* Rute pelayaran aktif melintasi selat (animasi garis bergerak halus) */}
-        <path
-          d="M175,78 Q295,30 412,62 T622,52"
-          className="stroke-amber-700/35 dark:stroke-amber-300/35 animate-route-dash"
-          strokeWidth="1.5"
-          strokeDasharray="6 5"
-          strokeLinecap="round"
-        />
-
-        {/* Titik pelabuhan / waypoint navigasi */}
-        <g className="text-amber-700 dark:text-amber-300">
-          <circle cx="175" cy="78" r="6" fill="currentColor" opacity="0.16" />
-          <circle cx="175" cy="78" r="2.6" fill="currentColor" opacity="0.7" />
-
-          <circle cx="412" cy="62" r="7" fill="currentColor" opacity="0.16" className="animate-pulse" />
-          <circle cx="412" cy="62" r="3" fill="currentColor" opacity="0.78" />
-
-          <circle cx="622" cy="52" r="6" fill="currentColor" opacity="0.18" />
-          <circle cx="622" cy="52" r="2.6" fill="currentColor" opacity="0.75" />
-        </g>
+        {variant === "targets" && (
+          <>
+            {/* Cincin radar kalibrasi jarak & garis bidik */}
+            <g className="text-amber-700 dark:text-amber-300">
+              <circle cx="545" cy="60" r="24" stroke="currentColor" strokeWidth="1" opacity="0.26" />
+              <circle cx="545" cy="60" r="44" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" opacity="0.22" />
+              <circle cx="545" cy="60" r="66" stroke="currentColor" strokeWidth="0.9" strokeDasharray="2 5" opacity="0.16" />
+              <line x1="455" y1="60" x2="645" y2="60" stroke="currentColor" strokeWidth="0.9" strokeDasharray="3 4" opacity="0.25" />
+              <line x1="545" y1="6" x2="545" y2="114" stroke="currentColor" strokeWidth="0.9" strokeDasharray="3 4" opacity="0.25" />
+              <circle cx="545" cy="60" r="3.5" fill="currentColor" opacity="0.75" className="animate-pulse" />
+            </g>
+            <path
+              d="M190,82 Q360,34 545,60"
+              className="stroke-amber-700/35 dark:stroke-amber-300/35 animate-route-dash"
+              strokeWidth="1.5"
+              strokeDasharray="6 5"
+              strokeLinecap="round"
+            />
+          </>
+        )}
       </svg>
 
       {/* Mawar kompas navigasi berputar sangat pelan di pojok kanan */}

@@ -21,7 +21,7 @@ import { parseTimestamp } from "@/lib/dateUtils";
 import { format, startOfWeek, addWeeks } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import {
-  MaritimeWaveBackdrop,
+  NauticalChartBackdrop,
   MaritimeTargetCompassIcon,
   SailorCompassIcon,
 } from "@/components/productivity/MaritimeAnimations";
@@ -166,29 +166,29 @@ function AdjustTargetContent() {
     <div className="min-h-screen bg-[#e8eef5] dark:bg-transparent">
       <div className="w-full px-3 sm:px-6 py-4 space-y-5">
         {/* Maritime Captain's Brass Compass & Calibration Hero Banner */}
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#0a192f] via-[#132f54] to-[#24476e] dark:from-slate-900 dark:via-[#0d213d] dark:to-[#183152] border border-sky-900/30 dark:border-slate-700/80 text-white px-5 py-4 shadow-lg">
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#fffdf9] via-[#fdf9f3] to-[#f8efe3] dark:from-[#161c2c] dark:via-[#1c2334] dark:to-[#24212c] border border-slate-200/90 dark:border-slate-700/80 border-l-4 border-l-orange-500 dark:border-l-amber-400 text-slate-900 dark:text-white px-5 py-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)]">
           {/* Top metallic brass-gold horizon highlight */}
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-400/85 via-orange-300/75 to-cyan-300/75" />
-          <MaritimeWaveBackdrop />
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-orange-500/75 via-amber-400/65 to-transparent" />
+          <NauticalChartBackdrop variant="targets" />
 
           <div className="relative z-10 flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3.5">
               <MaritimeTargetCompassIcon />
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <h1 className="text-xl font-extrabold tracking-tight text-white">
+                  <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                     Adjust Target Produktivitas
                   </h1>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-400/20 text-amber-200 border border-amber-300/35">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100/90 text-amber-800 border border-amber-300/70 dark:bg-amber-400/20 dark:text-amber-200 dark:border-amber-300/35">
                     Target Calibration
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-sky-100/85 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                  <SailorCompassIcon className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1.5 flex-wrap font-medium">
+                  <SailorCompassIcon className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300 flex-shrink-0" />
                   <span>Hub:</span>
-                  <span className="font-bold text-amber-300">{hubName}</span>
-                  <span className="text-sky-300/60">•</span>
-                  <span className="text-sky-200/85">
+                  <span className="font-bold text-amber-700 dark:text-amber-300">{hubName}</span>
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                  <span className="text-slate-500 dark:text-slate-300">
                     Kalibrasi Target Appeal &amp; Haluan Kuota Fleet Mingguan
                   </span>
                 </p>
@@ -196,15 +196,15 @@ function AdjustTargetContent() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex items-center gap-1.5 bg-white/10 backdrop-blur-xs border border-white/20 rounded-xl px-3 py-1.5 text-xs font-semibold text-amber-200 shadow-sm">
-                <Anchor className="h-3.5 w-3.5 text-amber-300" />
+              <div className="inline-flex items-center gap-1.5 bg-amber-50/90 dark:bg-slate-800/80 backdrop-blur-xs border border-amber-300/70 dark:border-amber-400/35 rounded-xl px-3 py-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200 shadow-2xs">
+                <Anchor className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
                 <span>{sortedAppeals.length} Target Diset</span>
               </div>
               <Link
                 href={`/productivity/weekly?week=${weekStart}`}
-                className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 backdrop-blur-xs border border-white/20 rounded-xl px-3 py-1.5 text-xs font-semibold text-white transition-colors shadow-sm"
+                className="inline-flex items-center gap-1.5 bg-white/90 hover:bg-slate-50 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 backdrop-blur-xs border border-slate-200/90 dark:border-slate-600/70 rounded-xl px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-white transition-colors shadow-2xs"
               >
-                <ArrowLeft className="h-3.5 w-3.5 text-sky-200" />
+                <ArrowLeft className="h-3.5 w-3.5 text-slate-500 dark:text-sky-200" />
                 <span>Weekly KPI</span>
               </Link>
             </div>

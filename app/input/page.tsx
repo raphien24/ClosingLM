@@ -30,7 +30,7 @@ import {
 import toast from "react-hot-toast";
 import Link from "next/link";
 import {
-  MaritimeWaveBackdrop,
+  NauticalChartBackdrop,
   CargoLogbookIcon,
 } from "@/components/productivity/MaritimeAnimations";
 
@@ -862,32 +862,32 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       <div className="w-full px-3 sm:px-6 py-5 space-y-6">
         {/* Header Utama Pusat Input Data — Captain's Cargo & Logbook Dock */}
         <div
-          className={`relative overflow-hidden rounded-2xl text-white px-5 py-4 shadow-lg border transition-colors duration-300 ${
+          className={`relative overflow-hidden rounded-2xl px-5 py-4 border border-l-4 transition-colors duration-300 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)] ${
             activeTab === "closing"
-              ? "bg-gradient-to-r from-[#0e1f3d] via-[#1c294b] to-[#4a1829] dark:from-slate-900 dark:via-[#1e213d] dark:to-[#3b1525] border-rose-900/35 dark:border-slate-700/80"
-              : "bg-gradient-to-r from-[#0b1f3a] via-[#113163] to-[#1a3f80] dark:from-slate-900 dark:via-[#0f2447] dark:to-[#132c57] border-sky-900/35 dark:border-slate-700/80"
-          }`}
+              ? "bg-gradient-to-r from-[#fffdfb] via-[#fdf9fa] to-[#f8eef1] dark:from-[#171828] dark:via-[#1e1d32] dark:to-[#291724] border-slate-200/90 border-l-rose-600 dark:border-slate-700/80 dark:border-l-rose-400"
+              : "bg-gradient-to-r from-[#fffdf9] via-[#f6fafe] to-[#ebf2fa] dark:from-[#121d2f] dark:via-[#13233b] dark:to-[#132b47] border-slate-200/90 border-l-sky-600 dark:border-slate-700/80 dark:border-l-sky-400"
+          } text-slate-900 dark:text-white`}
         >
           <div
             className={`pointer-events-none absolute inset-x-0 top-0 h-[2px] ${
               activeTab === "closing"
-                ? "bg-gradient-to-r from-rose-400/75 via-amber-300/75 to-rose-400/75"
-                : "bg-gradient-to-r from-amber-400/75 via-sky-300/75 to-amber-400/75"
+                ? "bg-gradient-to-r from-rose-500/75 via-amber-400/60 to-transparent"
+                : "bg-gradient-to-r from-sky-500/75 via-amber-400/60 to-transparent"
             }`}
           />
-          <MaritimeWaveBackdrop />
+          <NauticalChartBackdrop variant="input" />
 
           <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
               <CargoLogbookIcon />
               <div>
-                <h1 className="text-xl font-extrabold tracking-tight text-white">
+                <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                   Pusat Input Data Harian
                 </h1>
-                <p className="text-xs sm:text-sm text-sky-100/90 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1.5 flex-wrap font-medium">
                   <span>Hub:</span>
-                  <span className="font-bold text-amber-300">{hubName}</span>
-                  <span className="text-sky-300/50">·</span>
+                  <span className="font-bold text-amber-700 dark:text-amber-300">{hubName}</span>
+                  <span className="text-slate-300 dark:text-slate-600">·</span>
                   <span>
                     {activeTab === "closing"
                       ? "Logbook Harian — Closing & Parcel Sweeper"
@@ -896,6 +896,16 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                 </p>
               </div>
             </div>
+
+            <span
+              className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-xs shadow-2xs ${
+                activeTab === "closing"
+                  ? "bg-rose-50/90 border-rose-200/80 text-rose-800 dark:bg-rose-950/50 dark:border-rose-400/35 dark:text-rose-200"
+                  : "bg-sky-50/90 border-sky-200/80 text-sky-800 dark:bg-sky-950/50 dark:border-sky-400/35 dark:text-sky-200"
+              }`}
+            >
+              {activeTab === "closing" ? "Cargo Log • Closing" : "Fleet Manifest • FMS"}
+            </span>
           </div>
         </div>
 
