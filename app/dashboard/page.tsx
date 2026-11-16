@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useRef } from "react";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { KpiCards } from "@/components/dashboard/KpiCards";
@@ -14,6 +14,7 @@ import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { SunsetSailTransition } from "@/components/ocean/SunsetSailTransition";
+import { DashboardShipWipeOverlay } from "@/components/ocean/DashboardShipWipeOverlay";
 import {
   NauticalChartBackdrop,
   LighthouseBeaconIcon,
@@ -97,6 +98,10 @@ function DashboardContent() {
     return isSailParam;
   });
   const [dashboardReady, setDashboardReady] = useState(() => !showSail);
+  const hadShipRevealRef = useRef(showSail);
+  const [revealStage, setRevealStage] = useState<
+    "pre" | "sailing" | "assembling" | "done"
+  >(() => (showSail ? "pre" : "done"));
 
   const handleReadyForDashboard = useCallback(() => {
     setDashboardReady(true);
@@ -108,11 +113,25 @@ function DashboardContent() {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("jtt08_sail_played", "1");
     }
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    setRevealStage(reduced ? "done" : "sailing");
     const params = new URLSearchParams(searchParams.toString());
     params.delete("sail");
     const query = params.toString();
     router.replace(`/dashboard${query ? `?${query}` : ""}`, { scroll: false });
   }, [searchParams, router]);
+
+  const handleShipPassed = useCallback(() => {
+    setRevealStage("assembling");
+  }, []);
+
+  useEffect(() => {
+    if (revealStage !== "assembling") return;
+    const timer = setTimeout(() => setRevealStage("done"), 1300);
+    return () => clearTimeout(timer);
+  }, [revealStage]);
 
   const fetchDashboard = useCallback(async () => {
     setIsLoading(true);
@@ -175,12 +194,33 @@ function DashboardContent() {
         />
       )}
 
+      {dashboardReady && (revealStage === "pre" || revealStage === "sailing") && (
+        <DashboardShipWipeOverlay
+          phase={revealStage === "sailing" ? "sailing" : "curtain"}
+          onShipPassed={handleShipPassed}
+        />
+      )}
+
       {/* JANGAN render atau tampilkan elemen dashboard sebelum animasi mengemudi selesai */}
       {dashboardReady && (
-        <div className="min-h-screen bg-[#e7eef4] dark:bg-transparent">
-          <div className="w-full px-2 sm:px-4 py-4 space-y-4 animate-page-enter">
+        <div
+          className={`min-h-screen bg-[#e7eef4] dark:bg-transparent ${
+            revealStage !== "done" ? "overflow-x-clip" : ""
+          }`}
+        >
+          <div
+            className={`w-full px-2 sm:px-4 py-4 space-y-4 ${
+              revealStage === "done"
+                ? hadShipRevealRef.current
+                  ? ""
+                  : "animate-page-enter"
+                : revealStage === "assembling"
+                ? "dashboard-assemble-stage dashboard-assemble-enter"
+                : "dashboard-assemble-stage dashboard-assemble-pre"
+            }`}
+          >
             {/* Page Header — Captain's Logbook Command */}
-            <div className="relative overflow-hidden bg-gradient-to-r from-[#fffdf9] via-[#f8fafd] to-[#eef4f9] dark:from-[#121d2f] dark:via-[#142338] dark:to-[#10293a] border border-slate-200/90 dark:border-slate-700/80 border-l-4 border-l-amber-600 dark:border-l-amber-400 text-slate-900 dark:text-white rounded-2xl px-5 py-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)]">
+            <div className="dash-hero relative overflow-hidden bg-gradient-to-r from-[#fffdf9] via-[#f8fafd] to-[#eef4f9] dark:from-[#121d2f] dark:via-[#142338] dark:to-[#10293a] border border-slate-200/90 dark:border-slate-700/80 border-l-4 border-l-amber-600 dark:border-l-amber-400 text-slate-900 dark:text-white rounded-2xl px-5 py-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)]">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-500/75 via-amber-300/60 to-transparent" />
               <NauticalChartBackdrop />
 
@@ -227,33 +267,41 @@ function DashboardContent() {
             </div>
 
             {/* KPI Cards */}
-            <KpiCards kpi={kpi} isLoading={isLoading} />
+            <div className="dash-kpis">
+              <KpiCards kpi={kpi} isLoading={isLoading} />
+            </div>
 
             {/* 5 Operational Insight Cards */}
-            <ClosingInsightCards
-              data={closingData}
-              isLoading={isLoading}
-              onSelectHub={setSelectedHubDetail}
-            />
+            <div className="dash-insights">
+              <ClosingInsightCards
+                data={closingData}
+                isLoading={isLoading}
+                onSelectHub={setSelectedHubDetail}
+              />
+            </div>
 
             {/* Filter Bar */}
-            <FilterBar
-              allHubs={allHubs}
-              missingHubs={closingData.filter((d) => !d.submitted_at).map((d) => d.nama_hub)}
-              selectedDate={selectedDate}
-              selectedHubs={selectedHubs}
-              onDateChange={setSelectedDate}
-              onHubsChange={setSelectedHubs}
-              onRefresh={fetchDashboard}
-              isLoading={isLoading}
-            />
+            <div className="dash-filter">
+              <FilterBar
+                allHubs={allHubs}
+                missingHubs={closingData.filter((d) => !d.submitted_at).map((d) => d.nama_hub)}
+                selectedDate={selectedDate}
+                selectedHubs={selectedHubs}
+                onDateChange={setSelectedDate}
+                onHubsChange={setSelectedHubs}
+                onRefresh={fetchDashboard}
+                isLoading={isLoading}
+              />
+            </div>
 
             {/* Hub Table */}
-            <HubTable
-              data={closingData}
-              isLoading={isLoading}
-              onSelectHub={setSelectedHubDetail}
-            />
+            <div className="dash-table">
+              <HubTable
+                data={closingData}
+                isLoading={isLoading}
+                onSelectHub={setSelectedHubDetail}
+              />
+            </div>
           </div>
 
           <HubClosingDetailModal
