@@ -195,19 +195,19 @@ export function ClosingCountdownWidget({
     <div
       title="Sisa waktu closing harian hingga pukul 23:59:59 WIB (End of Day)"
       className={cn(
-        "hidden lg:flex relative items-center gap-2 rounded-xl border px-2.5 py-1.5 backdrop-blur-md transition-colors flex-shrink-0",
+        "hidden lg:flex relative items-center gap-3 rounded-2xl border px-3.5 py-2 backdrop-blur-md transition-colors flex-shrink-0",
         theme.box
       )}
     >
       {/* Stud paku kuningan khas peti / instrumen navigasi kapal */}
-      <span aria-hidden="true" className={cn("absolute top-1 left-1 w-1 h-1 rounded-full", theme.stud)} />
-      <span aria-hidden="true" className={cn("absolute bottom-1 left-1 w-1 h-1 rounded-full", theme.stud)} />
+      <span aria-hidden="true" className={cn("absolute top-1.5 left-1.5 w-1 h-1 rounded-full", theme.stud)} />
+      <span aria-hidden="true" className={cn("absolute bottom-1.5 left-1.5 w-1 h-1 rounded-full", theme.stud)} />
 
       {/* Emblem Kronometer Saku Kapten Beranimasi */}
       <div
         aria-hidden="true"
         className={cn(
-          "relative w-7 h-7 rounded-full border flex items-center justify-center flex-shrink-0 shadow-inner overflow-hidden",
+          "relative w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0 shadow-inner overflow-hidden",
           theme.dialBg
         )}
       >
@@ -236,15 +236,15 @@ export function ClosingCountdownWidget({
         </svg>
       </div>
 
-      {/* Info label + progress bar beranimasi (lebar penuh pada layar >= 1400px) */}
-      <div className="hidden min-[1400px]:flex flex-col min-w-[134px]">
+      {/* Info label + progress bar beranimasi (tampil penuh mulai layar xl >= 1280px) */}
+      <div className="hidden xl:flex flex-col min-w-[148px]">
         <div className="flex items-center justify-between gap-2">
-          <span className={cn("text-[9px] font-bold uppercase tracking-wider leading-none whitespace-nowrap", theme.label)}>
+          <span className={cn("text-[10px] font-bold uppercase tracking-wider leading-none whitespace-nowrap", theme.label)}>
             Batas Closing
           </span>
           <span
             className={cn(
-              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold border leading-none whitespace-nowrap",
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border leading-none whitespace-nowrap",
               theme.badge
             )}
           >
@@ -254,7 +254,7 @@ export function ClosingCountdownWidget({
         </div>
 
         {/* Progress Bar Berkilau (sisa waktu hari ini menuju 23:59 WIB) */}
-        <div className={cn("relative w-full h-1.5 rounded-full overflow-hidden mt-1.5", theme.track)}>
+        <div className={cn("relative w-full h-2 rounded-full overflow-hidden mt-1.5", theme.track)}>
           <div
             className={cn(
               "relative h-full rounded-full bg-gradient-to-r transition-all duration-700 overflow-hidden",
@@ -268,10 +268,10 @@ export function ClosingCountdownWidget({
       </div>
 
       {/* Timer Digital Monospace */}
-      <div className={cn("flex flex-col items-end pl-0.5 min-[1400px]:border-l min-[1400px]:pl-2.5", theme.divider)}>
+      <div className={cn("flex flex-col items-end pl-0.5 xl:border-l xl:pl-3", theme.divider)}>
         <div
           className={cn(
-            "flex items-baseline gap-0.5 font-mono font-extrabold text-[13px] tracking-tight tabular-nums leading-none whitespace-nowrap",
+            "flex items-baseline gap-0.5 font-mono font-extrabold text-[15px] tracking-tight tabular-nums leading-none whitespace-nowrap",
             theme.timer
           )}
         >
@@ -281,14 +281,14 @@ export function ClosingCountdownWidget({
           <span className="animate-pulse opacity-75">:</span>
           <span>{ss}</span>
         </div>
-        <span className={cn("text-[9px] font-semibold leading-none mt-1 whitespace-nowrap", theme.label)}>
-          <span className="min-[1400px]:hidden">Closing · WIB</span>
-          <span className="hidden min-[1400px]:inline">Sisa waktu · WIB</span>
+        <span className={cn("text-[10px] font-semibold leading-none mt-1 whitespace-nowrap", theme.label)}>
+          <span className="xl:hidden">Closing · WIB</span>
+          <span className="hidden xl:inline">Sisa waktu · WIB</span>
         </span>
       </div>
 
-      {/* Garis progres pasang-surut ringkas untuk layar laptop (1024px–1399px) */}
-      <div className={cn("min-[1400px]:hidden absolute inset-x-2.5 bottom-0.5 h-[2px] rounded-full overflow-hidden", theme.track)}>
+      {/* Garis progres pasang-surut ringkas untuk layar laptop (1024px–1279px) */}
+      <div className={cn("xl:hidden absolute inset-x-3 bottom-0.5 h-[2px] rounded-full overflow-hidden", theme.track)}>
         <div
           className={cn("h-full rounded-full bg-gradient-to-r transition-all duration-700", theme.fill)}
           style={{ width: `${Math.max(4, remainingPct)}%` }}

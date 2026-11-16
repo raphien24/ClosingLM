@@ -1131,7 +1131,6 @@ export async function getMonthlyMetrics(
   });
 
   const buildTotalSegmentMetrics = (
-    segRecords: CourierRecord[],
     coreSeg: CoreSegmentMetrics
   ): DailySegmentMetrics => {
     const hasShifts = coreSeg.totalShifts > 0;
@@ -1141,7 +1140,7 @@ export async function getMonthlyMetrics(
         ? Math.round((coreSeg.avgProductivity / targ) * 1000) / 10
         : 0;
     return {
-      cour: new Set(segRecords.map((r) => r.courier_id.trim())).size,
+      cour: coreSeg.totalShifts,
       deliv: coreSeg.totalDelivered,
       prod: coreSeg.avgProductivity,
       targ,
@@ -1150,9 +1149,9 @@ export async function getMonthlyMetrics(
   };
 
   const dailyBreakdownTotals: DailyBreakdownTotals = {
-    riderDedicated: buildTotalSegmentMetrics(ded2whRecords, dedicated2wh),
-    riderPlus: buildTotalSegmentMetrics(kp2whRecords, kurirPlus2wh),
-    driverDedicated: buildTotalSegmentMetrics(ded4whRecords, dedicated4wh),
+    riderDedicated: buildTotalSegmentMetrics(dedicated2wh),
+    riderPlus: buildTotalSegmentMetrics(kurirPlus2wh),
+    driverDedicated: buildTotalSegmentMetrics(dedicated4wh),
   };
 
   const operatingDays = dailyBreakdown.length;

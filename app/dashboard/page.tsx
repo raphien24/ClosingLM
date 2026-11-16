@@ -11,7 +11,7 @@ import { ClosingData, KpiSummary } from "@/types/closing";
 import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { SunsetSailTransition } from "@/components/ocean/SunsetSailTransition";
 import {
   MaritimeWaveBackdrop,
@@ -67,7 +67,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, displayName } = useUserProfileDisplay();
 
   const today = todayWIB();
   const [selectedDate, setSelectedDate] = useState(
@@ -187,7 +187,13 @@ function DashboardContent() {
                   <LighthouseBeaconIcon />
                   <div>
                     <h1 className="text-xl font-extrabold tracking-tight text-white">
-                      Closing Report LM JTT08
+                      Welcome Back Sailor
+                      {displayName && (
+                        <>
+                          {" "}
+                          <span className="text-amber-200">{displayName}</span>
+                        </>
+                      )}
                     </h1>
                     <p className="text-xs text-cyan-100/90 mt-0.5 flex items-center gap-2 flex-wrap">
                       <span className="inline-flex items-center gap-1.5 text-emerald-300 font-semibold">

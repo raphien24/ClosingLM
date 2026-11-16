@@ -193,7 +193,7 @@ function SegmentCells({
           isTotal ? "font-bold text-gray-900" : "text-gray-700"
         }`}
       >
-        {seg.cour}
+        {seg.cour.toLocaleString("en-US")}
       </td>
       <td
         className={`py-3 px-2.5 text-center tabular-nums font-semibold ${
@@ -741,12 +741,12 @@ export default function DashboardMonthlyPage() {
                     <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-semibold text-gray-500">
                       {BREAKDOWN_SEGMENTS.map((seg) => (
                         <th key={`${seg.key}-cour`} className="pb-2 pt-0.5 px-2.5 text-center border-l border-gray-200">
-                          Cour
+                          ManPower
                         </th>
-                      )).flatMap((courTh, idx) => {
+                      )).flatMap((manpowerTh, idx) => {
                         const key = BREAKDOWN_SEGMENTS[idx].key;
                         return [
-                          courTh,
+                          manpowerTh,
                           <th key={`${key}-deliv`} className="pb-2 pt-0.5 px-2.5 text-center">Deliv</th>,
                           <th key={`${key}-prod`}  className="pb-2 pt-0.5 px-2.5 text-center">Prod</th>,
                           <th key={`${key}-targ`}  className="pb-2 pt-0.5 px-2.5 text-center">Targ</th>,

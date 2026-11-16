@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useAuth } from "@/hooks/useAuth";
+import { useUserProfileDisplay } from "@/hooks/useAuth";
 import {
   LogOut,
   ChevronDown,
@@ -188,48 +188,16 @@ function DrawerNavSection({
  */
 export function Navbar() {
   const pathname = usePathname();
-  const { user, hubName, hubUser, isSuperAdmin } = useAuth();
+  const { user, hubName, isSuperAdmin, displayName, avatarSrc } = useUserProfileDisplay();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [prodMenuOpen, setProdMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [customAvatar, setCustomAvatar] = useState<string>("");
-  const [customName, setCustomName] = useState<string | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    setCustomAvatar("");
-    setCustomName(null);
-    if (!user?.email) return;
-    let active = true;
-    fetch("/api/profile")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => {
-        if (!active || !json?.profile) return;
-        setCustomAvatar(json.profile.avatar_url || "");
-        if (json.profile.nama_user) setCustomName(json.profile.nama_user);
-      })
-      .catch(() => {});
-
-    const onProfileUpdated = (ev: Event) => {
-      const detail = (ev as CustomEvent<{ nama_user?: string; avatar_url?: string }>).detail;
-      if (!detail) return;
-      if (typeof detail.avatar_url === "string") setCustomAvatar(detail.avatar_url);
-      if (typeof detail.nama_user === "string") setCustomName(detail.nama_user);
-    };
-    window.addEventListener("jtt08-profile-updated", onProfileUpdated);
-    return () => {
-      active = false;
-      window.removeEventListener("jtt08-profile-updated", onProfileUpdated);
-    };
-  }, [user?.email]);
-
-  const displayName = customName || hubUser || user?.name || "";
-  const avatarSrc = customAvatar || user?.image || "";
 
   useEffect(() => {
     setMobileOpen(false);
@@ -289,19 +257,8 @@ export function Navbar() {
         <MaritimeWaveBackdrop compact className="opacity-65" />
       </div>
 
-      {/* Rel tali & kuningan beranyam di bibir atas navbar */}
-      <div className="relative z-10 h-[3px] w-full bg-gradient-to-r from-[#6b3e12] via-[#fbbf24] to-[#6b3e12]">
-        <div
-          className="h-full w-full opacity-35"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(125deg, rgba(255,255,255,0.45) 0px, rgba(255,255,255,0.45) 3px, transparent 3px, transparent 7px)",
-          }}
-        />
-      </div>
-
       <div className="relative z-10 w-full px-3 sm:px-4 xl:px-5">
-        <div className="flex items-center h-16 gap-1.5 lg:gap-2">
+        <div className="flex items-center h-16 md:h-20 gap-1.5 lg:gap-2.5">
           {/* Tombol Drawer Mobile */}
           <button
             type="button"
