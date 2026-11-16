@@ -411,8 +411,8 @@ export function DashboardShipWipeOverlay({
       const endX = w + hullLen * 0.88;
       const shipX = startX + (endX - startX) * easeP;
 
-      // Tepi tirai yang disapu kapal tepat di belakang garis haluan/tiang utama
-      const wipeEdgeX = Math.max(0, Math.min(w + 80, shipX - hullLen * 0.05));
+      // Tepi tirai yang disapu kapal tepat di belakang layar utama/buritan dengan kabut halus
+      const wipeEdgeX = Math.max(0, Math.min(w + 80, shipX - hullLen * 0.18));
 
       // ── 1. Tirai Laut & Senja pada bagian kanan layar yang belum dilewati kapal ──
       if (wipeEdgeX < w + 60) {
@@ -423,7 +423,7 @@ export function DashboardShipWipeOverlay({
         ctx.lineTo(w + 60, h);
         ctx.lineTo(Math.max(0, wipeEdgeX - 42), h);
         for (let y = h; y >= 0; y -= 24) {
-          const waveIndent = Math.sin(y * 0.025 - tSec * 7) * 16;
+          const waveIndent = Math.sin(y * 0.025 - tSec * 7) * 14;
           const xEdge = wipeEdgeX + waveIndent - ((h - y) / h) * 18;
           ctx.lineTo(xEdge, y);
         }
@@ -456,31 +456,37 @@ export function DashboardShipWipeOverlay({
         ctx.restore();
       }
 
-      // Garis kabut / buih air vertikal lembut di perbatasan tirai yang baru saja tersingkap
+      // Garis kabut lembut di perbatasan tirai yang baru saja tersingkap kapal
       if (rawP > 0.02 && rawP < 0.97) {
-        const edgeMist = ctx.createLinearGradient(wipeEdgeX - 55, 0, wipeEdgeX + 35, 0);
+        const edgeMist = ctx.createLinearGradient(wipeEdgeX - 75, 0, wipeEdgeX + 55, 0);
         edgeMist.addColorStop(0, "rgba(255, 240, 214, 0)");
-        edgeMist.addColorStop(0.55, "rgba(255, 232, 198, 0.24)");
+        edgeMist.addColorStop(0.55, "rgba(255, 232, 198, 0.28)");
         edgeMist.addColorStop(1, "rgba(19, 44, 72, 0)");
         ctx.fillStyle = edgeMist;
-        ctx.fillRect(wipeEdgeX - 55, 0, 90, h);
+        ctx.fillRect(wipeEdgeX - 75, 0, 130, h);
       }
 
-      // ── 2. Gelombang Laut Belakang di sekitar lambung ──
+      // ── 2. Gelombang Laut Belakang di sekitar lambung (dengan gradasi pudar halus di buritan) ──
       const drawSeaWaveBand = (
         baseY: number,
         amp: number,
         freq: number,
         speed: number,
-        fillStyle: string | CanvasGradient,
+        r: number,
+        g: number,
+        b: number,
         alpha = 1
       ) => {
+        const leftBound = Math.max(0, shipX - hullLen * 0.98);
+        const solidX = Math.max(leftBound + 40, shipX - hullLen * 0.25);
+        const hGrad = ctx.createLinearGradient(leftBound, 0, Math.min(w + 24, solidX), 0);
+        hGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`);
+        hGrad.addColorStop(0.45, `rgba(${r}, ${g}, ${b}, ${(alpha * 0.72).toFixed(3)})`);
+        hGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${alpha.toFixed(3)})`);
+
         ctx.save();
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = fillStyle;
+        ctx.fillStyle = hGrad;
         ctx.beginPath();
-        // Muncul memudar di belakang kapal dan menutupi tirai kanan hingga selesai
-        const leftBound = Math.max(0, shipX - hullLen * 0.95);
         ctx.moveTo(leftBound, h);
         for (let x = leftBound; x <= w + 24; x += 22) {
           const y = baseY + Math.sin(x * freq - tSec * speed) * amp;
@@ -493,14 +499,7 @@ export function DashboardShipWipeOverlay({
       };
 
       const seaFade = rawP < 0.12 ? rawP / 0.12 : rawP > 0.85 ? (1 - rawP) / 0.15 : 1;
-      drawSeaWaveBand(
-        waterlineY - 8,
-        10,
-        0.012,
-        5.5,
-        "#0c2a45",
-        0.82 * Math.max(0, seaFade)
-      );
+      drawSeaWaveBand(waterlineY - 8, 10, 0.012, 5.5, 12, 42, 69, 0.85 * Math.max(0, seaFade));
 
       // ── 3. Render Kapal Galleon dengan gerakan pitch & heave ombak ──
       const bobY = Math.sin(tSec * 5.2) * (shipH * 0.012);
@@ -512,31 +511,31 @@ export function DashboardShipWipeOverlay({
       drawFullGalleon(ctx, shipH, tSec);
       ctx.restore();
 
-      // ── 4. Partikel Buih Air Haluan & Jejak Buritan ──
+      // ── 4. Partikel Buih Air Haluan & Jejak Buritan (terkonsentrasi tepat di permukaan air) ──
       if (rawP < 0.92) {
-        const bowSprayX = shipX + hullLen * 0.44;
-        const sternFoamX = shipX - hullLen * 0.45;
-        for (let k = 0; k < 3; k++) {
+        const bowSprayX = shipX + hullLen * 0.45;
+        const sternFoamX = shipX - hullLen * 0.46;
+        for (let k = 0; k < 2; k++) {
           particles.push({
-            x: bowSprayX + (Math.random() - 0.5) * 26,
-            y: waterlineY + bobY - Math.random() * 12,
-            vx: -1.5 - Math.random() * 3.5,
-            vy: -2.2 - Math.random() * 4.2,
-            r: 2 + Math.random() * 4.5,
-            alpha: 0.75,
+            x: bowSprayX + Math.random() * 24,
+            y: waterlineY + 2 + Math.random() * 8,
+            vx: -1.8 - Math.random() * 2.4,
+            vy: -1.2 - Math.random() * 2.0,
+            r: 1.8 + Math.random() * 3.2,
+            alpha: 0.72,
             life: 0,
-            maxLife: 24 + Math.random() * 20,
+            maxLife: 18 + Math.random() * 14,
           });
         }
         particles.push({
-          x: sternFoamX + (Math.random() - 0.5) * 18,
-          y: waterlineY + bobY + Math.random() * 10,
-          vx: -2.2 - Math.random() * 2.5,
-          vy: (Math.random() - 0.5) * 1.2,
-          r: 3 + Math.random() * 5.5,
-          alpha: 0.52,
+          x: sternFoamX - Math.random() * 22,
+          y: waterlineY + 4 + Math.random() * 10,
+          vx: -2.4 - Math.random() * 2.0,
+          vy: (Math.random() - 0.5) * 0.8,
+          r: 2.2 + Math.random() * 4.2,
+          alpha: 0.5,
           life: 0,
-          maxLife: 28 + Math.random() * 18,
+          maxLife: 24 + Math.random() * 16,
         });
       }
 
@@ -545,7 +544,7 @@ export function DashboardShipWipeOverlay({
         pt.life += 1;
         pt.x += pt.vx;
         pt.y += pt.vy;
-        pt.vy += 0.16;
+        pt.vy += 0.14;
         const ratio = 1 - pt.life / pt.maxLife;
         if (ratio <= 0) {
           particles.splice(i, 1);
@@ -558,18 +557,7 @@ export function DashboardShipWipeOverlay({
       }
 
       // ── 5. Gelombang Ombak Depan (menutup bagian dasar lunas kapal secara alami) ──
-      const frontSeaGrad = ctx.createLinearGradient(0, waterlineY - 12, 0, h);
-      frontSeaGrad.addColorStop(0, "rgba(18, 62, 94, 0.92)");
-      frontSeaGrad.addColorStop(0.22, "rgba(11, 39, 66, 0.96)");
-      frontSeaGrad.addColorStop(1, "rgba(7, 22, 42, 0.98)");
-      drawSeaWaveBand(
-        waterlineY + 8,
-        13,
-        0.015,
-        7.2,
-        frontSeaGrad,
-        Math.max(0, seaFade)
-      );
+      drawSeaWaveBand(waterlineY + 8, 12, 0.015, 7.2, 10, 35, 62, 0.96 * Math.max(0, seaFade));
 
       ctx.restore();
 

@@ -105,6 +105,25 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
       : String(bv).localeCompare(String(av));
   });
 
+  const totalDeliveredSum = data.reduce((s, r) => s + r.totalDelivered, 0);
+  const totalShiftsSum = data.reduce((s, r) => s + r.shiftsCount, 0);
+  const weightedTargetSum = data.reduce((s, r) => s + r.target * r.shiftsCount, 0);
+  const overallAvgDaily =
+    totalShiftsSum > 0 ? Math.round((totalDeliveredSum / totalShiftsSum) * 10) / 10 : 0;
+  const overallTarget =
+    totalShiftsSum > 0 ? Math.round((weightedTargetSum / totalShiftsSum) * 10) / 10 : 0;
+  const overallProdPct =
+    overallTarget > 0 ? Math.round((overallAvgDaily / overallTarget) * 1000) / 10 : 0;
+  const combinedActiveDays: CourierScheduleRow["activeDays"] = {
+    sen: data.some((r) => r.activeDays.sen),
+    sel: data.some((r) => r.activeDays.sel),
+    rab: data.some((r) => r.activeDays.rab),
+    kam: data.some((r) => r.activeDays.kam),
+    jum: data.some((r) => r.activeDays.jum),
+    sab: data.some((r) => r.activeDays.sab),
+    min: data.some((r) => r.activeDays.min),
+  };
+
   const TH = ({ label, sortable, sk }: { label: string; sortable?: boolean; sk?: SortKey }) => (
     <th
       onClick={sortable && sk ? () => handleSort(sk) : undefined}
@@ -125,7 +144,7 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead><tr className="bg-gray-50 border-b border-gray-200">
-              {["Kurir","Zone","Contract","Vehicle","Produktivitas","Avg","Total","Success","Aktif",""].map((h,i)=>(
+              {["Kurir","Zone","Contract","Vehicle","Produktivitas","Target","Total Deliv","Productivity","Aktif","Shift"].map((h,i)=>(
                 <th key={i} className="px-3 py-2.5 text-xs font-semibold text-gray-500 uppercase text-left">{h}</th>
               ))}
             </tr></thead>
@@ -164,9 +183,9 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
               <TH label="Contract"     sortable sk="contract_type" />
               <TH label="Kendaraan"    sortable sk="vehicle_type" />
               <TH label="Produktivitas vs Target" sortable sk="productivityPct" />
-              <TH label="Avg / Target" sortable sk="avgDaily" />
+              <TH label="Target"       sortable sk="target" />
               <TH label="Total Deliv"  sortable sk="totalDelivered" />
-              <TH label="Success %"    sortable sk="successRate" />
+              <TH label="Productivity" sortable sk="avgDaily" />
               <TH label="Hari Aktif"   sortable sk="shiftsCount" />
               <TH label="Shift"        sortable sk="shiftsCount" />
             </tr>
@@ -209,21 +228,55 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
                 </td>
                 <td className="px-3 py-2.5 text-gray-600 text-sm">{row.vehicle_type}</td>
                 <td className="px-3 py-2.5"><ProductivityBar pct={row.productivityPct} /></td>
-                <td className="px-3 py-2.5 text-sm text-gray-700 whitespace-nowrap">
-                  <span className="font-medium">{row.avgDaily}</span>
-                  <span className="text-gray-400"> / {row.target}</span>
+                <td className="px-3 py-2.5 text-sm text-gray-700 whitespace-nowrap tabular-nums">
+                  {row.target}
                 </td>
-                <td className="px-3 py-2.5 font-medium text-gray-900">{row.totalDelivered.toLocaleString("id-ID")}</td>
-                <td className="px-3 py-2.5">
-                  <span className={`text-sm font-medium ${row.successRate >= 95 ? "text-green-600" : row.successRate >= 90 ? "text-yellow-600" : "text-red-600"}`}>
-                    {row.successRate}%
-                  </span>
+                <td className="px-3 py-2.5 font-medium text-gray-900 tabular-nums">
+                  {row.totalDelivered.toLocaleString("id-ID")}
+                </td>
+                <td className="px-3 py-2.5 font-semibold text-gray-900 tabular-nums">
+                  {row.shiftsCount > 0 ? (row.totalDelivered / row.shiftsCount).toFixed(1) : "-"}
                 </td>
                 <td className="px-3 py-2.5"><DayDots activeDays={row.activeDays} /></td>
                 <td className="px-3 py-2.5 text-center text-gray-600 text-sm">{row.shiftsCount}</td>
               </tr>
             ))}
           </tbody>
+          <tfoot>
+            <tr className="bg-gray-50 border-t-2 border-gray-200 font-bold text-gray-900">
+              <td className="px-3 py-3 whitespace-nowrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wider font-extrabold text-gray-900">
+                    TOTAL / RATA-RATA
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700">
+                    {data.length} kurir
+                  </span>
+                </div>
+              </td>
+              <td className="px-3 py-3 text-gray-400 text-sm">-</td>
+              <td className="px-3 py-3 text-gray-400 text-sm">-</td>
+              <td className="px-3 py-3 text-gray-400 text-sm">-</td>
+              <td className="px-3 py-3">
+                <ProductivityBar pct={overallProdPct} />
+              </td>
+              <td className="px-3 py-3 text-sm font-bold text-gray-700 whitespace-nowrap tabular-nums">
+                {overallTarget}
+              </td>
+              <td className="px-3 py-3 font-extrabold text-blue-600 tabular-nums">
+                {totalDeliveredSum.toLocaleString("id-ID")}
+              </td>
+              <td className="px-3 py-3 font-extrabold text-gray-900 tabular-nums">
+                {totalShiftsSum > 0 ? (totalDeliveredSum / totalShiftsSum).toFixed(1) : "-"}
+              </td>
+              <td className="px-3 py-3">
+                <DayDots activeDays={combinedActiveDays} />
+              </td>
+              <td className="px-3 py-3 text-center font-extrabold text-gray-900 text-sm tabular-nums">
+                {totalShiftsSum.toLocaleString("id-ID")}
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
       <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-500 flex items-center justify-between flex-wrap gap-2">
