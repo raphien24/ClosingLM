@@ -140,28 +140,32 @@ const BREAKDOWN_SEGMENTS: {
   label: string;
   subLabel: string;
   headerClass: string;
-  highlightProd: boolean;
+  prodTextClass: string;
+  prodCellClass: string;
 }[] = [
   {
     key: "riderDedicated",
     label: "Rider Dedicated",
     subLabel: "Dedicated 2WH",
     headerClass: "text-blue-600",
-    highlightProd: true,
+    prodTextClass: "text-blue-600",
+    prodCellClass: "text-blue-600 bg-blue-50/40",
   },
   {
     key: "riderPlus",
     label: "Rider Plus",
     subLabel: "Kurir Plus 2WH",
-    headerClass: "text-gray-900",
-    highlightProd: false,
+    headerClass: "text-purple-600",
+    prodTextClass: "text-purple-600",
+    prodCellClass: "text-purple-600 bg-purple-50/40",
   },
   {
     key: "driverDedicated",
     label: "Driver Dedicated",
     subLabel: "Dedicated 4WH",
-    headerClass: "text-gray-900",
-    highlightProd: false,
+    headerClass: "text-cyan-700",
+    prodTextClass: "text-cyan-700",
+    prodCellClass: "text-cyan-700 bg-cyan-50",
   },
 ];
 
@@ -177,11 +181,11 @@ function getAchvTextColor(achv: number): string {
 
 function SegmentCells({
   seg,
-  highlightProd,
+  prodCellClass,
   isTotal = false,
 }: {
   seg: DailySegmentMetrics;
-  highlightProd: boolean;
+  prodCellClass: string;
   isTotal?: boolean;
 }) {
   const hasShifts = seg.cour > 0;
@@ -207,11 +211,7 @@ function SegmentCells({
       </td>
       <td
         className={`py-3 px-2.5 text-center tabular-nums font-bold ${
-          !hasShifts
-            ? "text-gray-400"
-            : highlightProd
-            ? "text-blue-600"
-            : "text-gray-900"
+          hasShifts ? prodCellClass : "text-gray-400"
         }`}
       >
         {hasShifts ? roundedProd.toLocaleString("en-US") : "-"}
@@ -749,13 +749,13 @@ export default function DashboardMonthlyPage() {
                           ManPower
                         </th>
                       )).flatMap((manpowerTh, idx) => {
-                        const key = BREAKDOWN_SEGMENTS[idx].key;
+                        const seg = BREAKDOWN_SEGMENTS[idx];
                         return [
                           manpowerTh,
-                          <th key={`${key}-deliv`} className="pb-2 pt-0.5 px-2.5 text-center">Deliv</th>,
-                          <th key={`${key}-prod`}  className="pb-2 pt-0.5 px-2.5 text-center">Prod</th>,
-                          <th key={`${key}-targ`}  className="pb-2 pt-0.5 px-2.5 text-center">Targ</th>,
-                          <th key={`${key}-achv`}  className="pb-2 pt-0.5 px-2.5 text-center">Achv%</th>,
+                          <th key={`${seg.key}-deliv`} className="pb-2 pt-0.5 px-2.5 text-center">Deliv</th>,
+                          <th key={`${seg.key}-prod`}  className={`pb-2 pt-0.5 px-2.5 text-center font-bold ${seg.prodTextClass}`}>Prod</th>,
+                          <th key={`${seg.key}-targ`}  className="pb-2 pt-0.5 px-2.5 text-center">Targ</th>,
+                          <th key={`${seg.key}-achv`}  className="pb-2 pt-0.5 px-2.5 text-center">Achv%</th>,
                         ];
                       })}
                     </tr>
@@ -791,7 +791,7 @@ export default function DashboardMonthlyPage() {
                               <SegmentCells
                                 key={seg.key}
                                 seg={row[seg.key]}
-                                highlightProd={seg.highlightProd}
+                                prodCellClass={seg.prodCellClass}
                               />
                             ))}
                           </tr>
@@ -809,7 +809,7 @@ export default function DashboardMonthlyPage() {
                           <SegmentCells
                             key={seg.key}
                             seg={data.dailyBreakdownTotals[seg.key]}
-                            highlightProd={seg.highlightProd}
+                            prodCellClass={seg.prodCellClass}
                             isTotal
                           />
                         ))}
