@@ -186,6 +186,8 @@ function SegmentCells({
 }) {
   const hasShifts = seg.cour > 0;
   const achvColor = getAchvTextColor(seg.achv);
+  // Bulatkan Prod langsung dari rasio asli (Deliv / ManPower): < 0.50 turun, >= 0.50 naik
+  const roundedProd = hasShifts ? Math.round(seg.deliv / seg.cour) : 0;
 
   return (
     <>
@@ -212,7 +214,7 @@ function SegmentCells({
             : "text-gray-900"
         }`}
       >
-        {hasShifts ? seg.prod.toFixed(1) : "-"}
+        {hasShifts ? roundedProd.toLocaleString("en-US") : "-"}
       </td>
       <td
         className={`py-3 px-2.5 text-center tabular-nums ${
