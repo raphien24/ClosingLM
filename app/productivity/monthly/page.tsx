@@ -10,6 +10,7 @@ import {
   BarChart3,
   Loader2,
   Anchor,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
@@ -67,6 +68,12 @@ interface MonthlyData {
   progress: number;
   operatingDays: number;
   uniqueHeadcount: number;
+  activeManpowerBreakdown?: {
+    dedicated2wh: number;
+    kurirPlus2wh: number;
+    dedicated4wh: number;
+    mitra: number;
+  };
   metQuota: number;
   totalCouriers: number;
   lastUpdate: string | null;
@@ -620,8 +627,8 @@ export default function DashboardMonthlyPage() {
               </div>
             </div>
 
-            {/* 5 Summary Metric Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {/* 6 Summary Metric Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
               <div className="hover-lift bg-gradient-to-br from-[#f6faff] to-[#e9f2fe] dark:from-[#1e293b] dark:to-[#142238] rounded-2xl border border-blue-200/85 dark:border-slate-700/80 border-t-[3px] border-t-blue-600 dark:border-t-blue-500 p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Total Delivered
@@ -644,6 +651,40 @@ export default function DashboardMonthlyPage() {
                 <p className="text-xs text-gray-400 mt-1">
                   Total active courier shifts
                 </p>
+              </div>
+
+              <div className="hover-lift bg-gradient-to-br from-[#f4fbf7] to-[#e3f5ec] dark:from-[#1e293b] dark:to-[#122a23] rounded-2xl border border-emerald-200/85 dark:border-slate-700/80 border-t-[3px] border-t-emerald-600 dark:border-t-emerald-500 p-5 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Active Manpower
+                    </p>
+                    <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                  </div>
+                  <p className="mt-1.5 text-2xl font-extrabold text-gray-900 tabular-nums">
+                    {data.uniqueHeadcount.toLocaleString("en-US")}
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Manpower aktif (delivered &gt; 0)
+                  </p>
+                </div>
+                {data.activeManpowerBreakdown && (
+                  <div className="mt-2.5 pt-2 border-t border-emerald-200/70 dark:border-slate-700/70 grid grid-cols-2 gap-x-2.5 gap-y-1 text-[11px]">
+                    {[
+                      { label: "2WH Ded", value: data.activeManpowerBreakdown.dedicated2wh },
+                      { label: "2WH Plus", value: data.activeManpowerBreakdown.kurirPlus2wh },
+                      { label: "4WH Ded", value: data.activeManpowerBreakdown.dedicated4wh },
+                      { label: "Mitra", value: data.activeManpowerBreakdown.mitra },
+                    ].map((seg) => (
+                      <div key={seg.label} className="flex items-center justify-between text-gray-600">
+                        <span>{seg.label}</span>
+                        <span className="font-bold text-gray-900 tabular-nums">
+                          {seg.value.toLocaleString("en-US")}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="hover-lift bg-gradient-to-br from-[#f7f8ff] to-[#ebeffe] dark:from-[#1e293b] dark:to-[#17213a] rounded-2xl border border-indigo-200/85 dark:border-slate-700/80 border-t-[3px] border-t-indigo-600 dark:border-t-indigo-500 p-5 shadow-sm">
@@ -670,7 +711,7 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="hover-lift bg-gradient-to-br from-[#f8fafc] to-[#eaeff6] dark:from-[#1e293b] dark:to-[#161f2e] rounded-2xl border border-slate-300/85 dark:border-slate-700/80 border-t-[3px] border-t-slate-600 dark:border-t-slate-400 p-5 shadow-sm col-span-2 sm:col-span-1">
+              <div className="hover-lift bg-gradient-to-br from-[#f8fafc] to-[#eaeff6] dark:from-[#1e293b] dark:to-[#161f2e] rounded-2xl border border-slate-300/85 dark:border-slate-700/80 border-t-[3px] border-t-slate-600 dark:border-t-slate-400 p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Operating Days
                 </p>

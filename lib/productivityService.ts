@@ -860,6 +860,13 @@ export interface DailyBreakdownTotals {
   driverDedicated: DailySegmentMetrics;
 }
 
+export interface ActiveManpowerBreakdown {
+  dedicated2wh: number;
+  kurirPlus2wh: number;
+  dedicated4wh: number;
+  mitra: number;
+}
+
 function calcThresholdAchievement(avg: number, target: number): number {
   if (target <= 0) return 0;
   const thr = target * 0.75;
@@ -885,6 +892,7 @@ export async function getMonthlyMetrics(
   progress: number;
   operatingDays: number;
   uniqueHeadcount: number;
+  activeManpowerBreakdown: ActiveManpowerBreakdown;
   metQuota: number;
   totalCouriers: number;
   lastUpdate: string | null;
@@ -1180,7 +1188,30 @@ export async function getMonthlyMetrics(
   const lastUpdate =
     allMonthDates.length > 0 ? format(allMonthDates[0], "d MMM yyyy") : null;
 
-  const uniqueHeadcount = new Set(allMonthCouriers.map((r) => r.courier_id)).size;
+  const countUniqueCouriers = (records: CourierRecord[]): number =>
+    new Set(records.map((r) => r.courier_id.trim()).filter(Boolean)).size;
+
+  const uniqueHeadcount = countUniqueCouriers(allMonthCouriers);
+  const activeManpowerBreakdown: ActiveManpowerBreakdown = {
+    dedicated2wh: countUniqueCouriers(
+      allMonthCouriers.filter(
+        (r) => r.contract_type === "Dedicated" && r.vehicle_type === "2WH"
+      )
+    ),
+    kurirPlus2wh: countUniqueCouriers(
+      allMonthCouriers.filter(
+        (r) => r.contract_type.includes("Kurir Plus") && r.vehicle_type === "2WH"
+      )
+    ),
+    dedicated4wh: countUniqueCouriers(
+      allMonthCouriers.filter(
+        (r) => r.contract_type === "Dedicated" && r.vehicle_type === "4WH"
+      )
+    ),
+    mitra: countUniqueCouriers(
+      allMonthCouriers.filter((r) => r.contract_type === "Mitra")
+    ),
+  };
   const cMap: Record<string, { d: number; s: number; tSum: number }> = {};
   active.forEach((r) => {
     if (!cMap[r.courier_id]) cMap[r.courier_id] = { d: 0, s: 0, tSum: 0 };
@@ -1218,6 +1249,7 @@ export async function getMonthlyMetrics(
     progress: Math.round(progress * 10) / 10,
     operatingDays,
     uniqueHeadcount,
+    activeManpowerBreakdown,
     metQuota,
     totalCouriers: Object.keys(cMap).length,
     lastUpdate,
