@@ -13,15 +13,19 @@ import {
   Package,
   CheckCircle2,
   Calendar,
+  CalendarOff,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { format, addDays } from "date-fns";
+import toast from "react-hot-toast";
 
 interface Props {
   data: CourierScheduleRow[];
   isLoading?: boolean;
   weekStart?: string;
   weekLabel?: string;
+  onLeaveChange?: () => void | Promise<void>;
 }
 
 type SortKey = keyof CourierScheduleRow;
@@ -36,6 +40,23 @@ const DAYS = [
   { key: "sab", label: "Sab", fullName: "Sabtu" },
   { key: "min", label: "Min", fullName: "Minggu" },
 ] as const;
+
+type DayKey = (typeof DAYS)[number]["key"];
+
+const MONTHS_ID = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"];
+
+interface LeaveModalTarget {
+  courier: CourierScheduleRow;
+  dayKey: DayKey;
+  dayName: string;
+  dateKey: string;
+  dateLabel: string;
+  isCurrentlyLeave: boolean;
+}
+
+function isRiderDedicatedRow(row: CourierScheduleRow): boolean {
+  return row.contract_type === "Dedicated" && row.vehicle_type === "2WH";
+}
 
 function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) return <ChevronsUpDown className="h-3 w-3 opacity-40" />;
@@ -55,36 +76,153 @@ function ProductivityBar({ pct }: { pct: number }) {
   );
 }
 
-function DayDots({ activeDays }: { activeDays: CourierScheduleRow["activeDays"] }) {
+function DayDots({
+  activeDays,
+  leaveDays,
+  interactive,
+  onDayClick,
+}: {
+  activeDays: CourierScheduleRow["activeDays"];
+  leaveDays?: CourierScheduleRow["leaveDays"];
+  interactive?: boolean;
+  onDayClick?: (key: DayKey, idx: number, isLeave: boolean) => void;
+}) {
   return (
     <div className="flex gap-0.5">
-      {DAYS.map(({ key, label }) => (
-        <div key={key} title={label}
-          className={`w-5 h-5 rounded text-[10px] font-medium flex items-center justify-center ${
-            activeDays[key] ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400"
-          }`}
-        >
-          {label[0]}
-        </div>
-      ))}
+      {DAYS.map(({ key, label, fullName }, idx) => {
+        const isActive = activeDays[key];
+        const isLeave = !isActive && Boolean(leaveDays?.[key]);
+        const canClick = Boolean(interactive && onDayClick && !isActive);
+
+        const colorClass = isActive
+          ? "bg-green-500 text-white"
+          : isLeave
+          ? "bg-amber-400 text-amber-950 font-bold ring-1 ring-amber-500/70"
+          : "bg-gray-100 text-gray-400";
+
+        const interactiveClass = canClick
+          ? isLeave
+            ? "cursor-pointer hover:bg-amber-300 hover:scale-105 transition-all"
+            : "cursor-pointer hover:bg-amber-200 hover:text-amber-900 dark:hover:bg-amber-500/35 dark:hover:text-amber-200 hover:scale-105 transition-all"
+          : "";
+
+        const title = isActive
+          ? `${fullName} · Aktif`
+          : isLeave
+          ? canClick
+            ? `${fullName} · Cuti (Klik untuk batalkan)`
+            : `${fullName} · Cuti`
+          : canClick
+          ? `${fullName} · Off (Klik untuk tandai cuti)`
+          : `${fullName} · Off`;
+
+        if (canClick) {
+          return (
+            <button
+              key={key}
+              type="button"
+              title={title}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDayClick?.(key, idx, isLeave);
+              }}
+              className={`w-5 h-5 rounded text-[10px] font-medium flex items-center justify-center ${colorClass} ${interactiveClass}`}
+            >
+              {label[0]}
+            </button>
+          );
+        }
+
+        return (
+          <div
+            key={key}
+            title={title}
+            className={`w-5 h-5 rounded text-[10px] font-medium flex items-center justify-center ${colorClass}`}
+          >
+            {label[0]}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
+export function CourierTable({ data, isLoading, weekStart, weekLabel, onLeaveChange }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("productivityPct");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedCourier, setSelectedCourier] = useState<CourierScheduleRow | null>(null);
+  const [leaveTarget, setLeaveTarget] = useState<LeaveModalTarget | null>(null);
+  const [leaveSubmitting, setLeaveSubmitting] = useState(false);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelectedCourier(null);
+      if (e.key === "Escape") {
+        if (leaveTarget && !leaveSubmitting) {
+          setLeaveTarget(null);
+        } else if (selectedCourier) {
+          setSelectedCourier(null);
+        }
+      }
     };
-    if (selectedCourier) {
+    if (selectedCourier || leaveTarget) {
       window.addEventListener("keydown", onKeyDown);
     }
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedCourier]);
+  }, [selectedCourier, leaveTarget, leaveSubmitting]);
+
+  const handleOpenLeaveModal = (
+    courier: CourierScheduleRow,
+    dayKey: DayKey,
+    dayIdx: number,
+    isCurrentlyLeave: boolean
+  ) => {
+    if (!weekStart) return;
+    const baseMonday = new Date(`${weekStart}T00:00:00`);
+    if (isNaN(baseMonday.getTime())) return;
+    const targetDate = addDays(baseMonday, dayIdx);
+    const dateKey = format(targetDate, "yyyy-MM-dd");
+    const dateLabel = `${String(targetDate.getDate()).padStart(2, "0")} ${MONTHS_ID[targetDate.getMonth()]} ${targetDate.getFullYear()}`;
+    setLeaveTarget({
+      courier,
+      dayKey,
+      dayName: DAYS[dayIdx].fullName,
+      dateKey,
+      dateLabel,
+      isCurrentlyLeave,
+    });
+  };
+
+  const handleConfirmLeave = async () => {
+    if (!leaveTarget || leaveSubmitting) return;
+    setLeaveSubmitting(true);
+    try {
+      const isRemove = leaveTarget.isCurrentlyLeave;
+      const res = await fetch("/api/productivity/leave", {
+        method: isRemove ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courier_id: leaveTarget.courier.courier_id,
+          courier_name: leaveTarget.courier.courier_name,
+          date: leaveTarget.dateKey,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error || "Gagal memperbarui status cuti.");
+      }
+      toast.success(
+        isRemove
+          ? `Cuti ${leaveTarget.courier.courier_name} (${leaveTarget.dayName}, ${leaveTarget.dateLabel}) dibatalkan.`
+          : `${leaveTarget.courier.courier_name} ditandai cuti (${leaveTarget.dayName}, ${leaveTarget.dateLabel}).`
+      );
+      setLeaveTarget(null);
+      await onLeaveChange?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal memperbarui status cuti.");
+    } finally {
+      setLeaveSubmitting(false);
+    }
+  };
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -237,7 +375,16 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
                 <td className="px-3 py-2.5 font-semibold text-gray-900 tabular-nums">
                   {row.shiftsCount > 0 ? (row.totalDelivered / row.shiftsCount).toFixed(1) : "-"}
                 </td>
-                <td className="px-3 py-2.5"><DayDots activeDays={row.activeDays} /></td>
+                <td className="px-3 py-2.5">
+                  <DayDots
+                    activeDays={row.activeDays}
+                    leaveDays={row.leaveDays}
+                    interactive={Boolean(weekStart && isRiderDedicatedRow(row))}
+                    onDayClick={(dayKey, dayIdx, isLeave) =>
+                      handleOpenLeaveModal(row, dayKey, dayIdx, isLeave)
+                    }
+                  />
+                </td>
                 <td className="px-3 py-2.5 text-center text-gray-600 text-sm">{row.shiftsCount}</td>
               </tr>
             ))}
@@ -281,7 +428,9 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
       </div>
       <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-500 flex items-center justify-between flex-wrap gap-2">
         <span>{data.length} kurir · Sorted by produktivitas</span>
-        <span className="text-gray-400">💡 Klik nama kurir untuk melihat detail produktivitas harian</span>
+        <span className="text-gray-400">
+          💡 Klik nama kurir untuk detail · Klik hari abu pada Rider Dedicated untuk tandai cuti
+        </span>
       </div>
 
       {/* Modal Detail Produktivitas Kurir */}
@@ -291,6 +440,18 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel }: Props) {
           weekStart={weekStart}
           weekLabel={weekLabel}
           onClose={() => setSelectedCourier(null)}
+        />
+      )}
+
+      {/* Modal Pop-up Tandai / Batalkan Cuti */}
+      {leaveTarget && (
+        <LeaveConfirmModal
+          target={leaveTarget}
+          isSubmitting={leaveSubmitting}
+          onConfirm={handleConfirmLeave}
+          onClose={() => {
+            if (!leaveSubmitting) setLeaveTarget(null);
+          }}
         />
       )}
     </div>
@@ -332,15 +493,18 @@ function CourierDetailModal({
     const dateObj =
       mondayDate && !isNaN(mondayDate.getTime()) ? addDays(mondayDate, idx) : null;
     const dateLabel = detail?.dateLabel || (dateObj ? format(dateObj, "dd MMM yyyy") : "-");
+    const isLeave = !detail && Boolean(courier.leaveDays?.[day.key]);
     return {
       dayKey: day.key,
       dayShort: day.label,
       dayName: day.fullName,
       dateLabel,
       active: Boolean(detail),
+      isLeave,
       detail: detail || null,
     };
   });
+  const leaveCount = fullWeekRows.filter((r) => r.isLeave).length;
 
   const maxDailyDeliv = Math.max(
     courier.target || 1,
@@ -483,9 +647,14 @@ function CourierDetailModal({
               <p className="text-xl font-extrabold text-gray-900 mt-1">
                 {courier.shiftsCount}
                 <span className="text-xs font-normal text-gray-400 ml-1">/ 7 hari</span>
+                {leaveCount > 0 && (
+                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-amber-950 align-middle">
+                    +{leaveCount} cuti
+                  </span>
+                )}
               </p>
               <div className="mt-1.5">
-                <DayDots activeDays={courier.activeDays} />
+                <DayDots activeDays={courier.activeDays} leaveDays={courier.leaveDays} />
               </div>
             </div>
           </div>
@@ -566,6 +735,10 @@ function CourierDetailModal({
                             <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               Aktif
                             </span>
+                          ) : r.isLeave ? (
+                            <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-400 text-amber-950">
+                              Cuti
+                            </span>
                           ) : (
                             <span className="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-400">
                               Off
@@ -645,6 +818,135 @@ function CourierDetailModal({
               </table>
             </div>
           </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+function LeaveConfirmModal({
+  target,
+  isSubmitting,
+  onConfirm,
+  onClose,
+}: {
+  target: LeaveModalTarget;
+  isSubmitting: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
+  if (!mounted) return null;
+
+  const isCancelMode = target.isCurrentlyLeave;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-md overflow-hidden animate-dropdown"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                isCancelMode ? "bg-rose-100 text-rose-600" : "bg-amber-400/30 text-amber-700 dark:text-amber-300"
+              }`}
+            >
+              {isCancelMode ? (
+                <CalendarOff className="h-4.5 w-4.5" />
+              ) : (
+                <Calendar className="h-4.5 w-4.5" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-sm sm:text-base font-bold text-gray-900">
+                {isCancelMode ? "Batalkan Status Cuti" : "Tandai Cuti Kurir"}
+              </h3>
+              <p className="text-xs text-gray-500">Rider Dedicated (2WH)</p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-40 cursor-pointer"
+            title="Tutup (Esc)"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3.5 space-y-1.5 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-gray-500">Kurir</span>
+              <span className="font-bold text-gray-900 text-right">{target.courier.courier_name}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-gray-500">ID Kurir</span>
+              <span className="text-xs font-mono text-gray-700">{target.courier.courier_id}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-gray-500">Hari &amp; Tanggal</span>
+              <span className="text-xs font-bold text-amber-700 dark:text-amber-300">
+                {target.dayName}, {target.dateLabel}
+              </span>
+            </div>
+          </div>
+
+          {isCancelMode ? (
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Apakah Anda yakin ingin membatalkan status cuti pada tanggal ini? Kotak hari akan kembali menjadi{" "}
+              <strong className="text-gray-800">abu-abu (Off)</strong> dan tidak lagi dihitung sebagai masuk pada{" "}
+              <strong className="text-gray-800">Daily Active Rate</strong>.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Kurir yang ditandai cuti akan berubah menjadi <strong className="text-amber-700 dark:text-amber-300">kuning</strong> dan dihitung{" "}
+              <strong className="text-gray-800">masuk</strong> pada perhitungan <strong className="text-gray-800">Daily Active Rate</strong>, namun{" "}
+              <strong className="text-gray-800">tidak mempengaruhi</strong> perhitungan Productivity (weekly maupun monthly).
+            </p>
+          )}
+        </div>
+
+        <div className="px-5 py-3.5 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={onClose}
+            className="px-3.5 py-2 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-colors disabled:opacity-40 cursor-pointer"
+          >
+            Batal
+          </button>
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={onConfirm}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-60 cursor-pointer ${
+              isCancelMode
+                ? "bg-rose-600 hover:bg-rose-700 text-white"
+                : "bg-amber-400 hover:bg-amber-300 text-amber-950"
+            }`}
+          >
+            {isSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {isCancelMode ? "Batalkan Cuti" : "Tandai Cuti"}
+          </button>
         </div>
       </div>
     </div>,

@@ -177,20 +177,30 @@ export async function sheetExists(sheetName: string): Promise<boolean> {
  */
 export async function ensureSheet(
   sheetName: string,
-  header: string[]
+  header: string[],
+  options?: { hidden?: boolean }
 ): Promise<void> {
   const sheets = getSheetsClient();
   const meta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
-  const exists = (meta.data.sheets || []).some(
+  const existingSheet = (meta.data.sheets || []).find(
     (s) => s.properties?.title === sheetName
   );
 
-  if (!exists) {
+  if (!existingSheet) {
     // Buat sheet baru
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       requestBody: {
-        requests: [{ addSheet: { properties: { title: sheetName } } }],
+        requests: [
+          {
+            addSheet: {
+              properties: {
+                title: sheetName,
+                ...(options?.hidden ? { hidden: true } : {}),
+              },
+            },
+          },
+        ],
       },
     });
     // Tulis header
@@ -201,6 +211,23 @@ export async function ensureSheet(
       requestBody: { values: [header] },
     });
     sheetListCache = null;
+  } else if (options?.hidden && existingSheet.properties?.sheetId != null && !existingSheet.properties.hidden) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            updateSheetProperties: {
+              properties: {
+                sheetId: existingSheet.properties.sheetId,
+                hidden: true,
+              },
+              fields: "hidden",
+            },
+          },
+        ],
+      },
+    });
   }
 }
 

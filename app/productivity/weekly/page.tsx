@@ -74,9 +74,11 @@ function DashboardWeeklyContent() {
   const [kpiLoading, setKpiLoading] = useState(true);
   const [schLoading, setSchLoading] = useState(true);
 
-  const fetchData = useCallback(async () => {
-    setKpiLoading(true);
-    setSchLoading(true);
+  const fetchData = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setKpiLoading(true);
+      setSchLoading(true);
+    }
     const { contract, vehicle } = getContractVehicle(fleetType);
     try {
       const [kpiRes, schRes] = await Promise.all([
@@ -90,8 +92,10 @@ function DashboardWeeklyContent() {
     } catch {
       toast.error("Gagal memuat data produktivitas.");
     } finally {
-      setKpiLoading(false);
-      setSchLoading(false);
+      if (!options?.silent) {
+        setKpiLoading(false);
+        setSchLoading(false);
+      }
     }
   }, [weekStart, fleetType, excludeNew]);
 
@@ -228,7 +232,7 @@ function DashboardWeeklyContent() {
               ))}
             </div>
 
-            <Button variant="ghost" size="sm" onClick={fetchData}
+            <Button variant="ghost" size="sm" onClick={() => fetchData()}
               loading={kpiLoading || schLoading} className="ml-auto">
               <RefreshCw className="h-4 w-4" /> Refresh
             </Button>
@@ -239,6 +243,7 @@ function DashboardWeeklyContent() {
               isLoading={schLoading}
               weekStart={weekStart}
               weekLabel={formatWeekLabel(weekStart)}
+              onLeaveChange={() => fetchData({ silent: true })}
             />
           </div>
         </div>

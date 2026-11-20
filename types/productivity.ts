@@ -159,6 +159,16 @@ export interface CourierDailyDetail {
   productivityPct: number;
 }
 
+/** Data cuti kurir harian (disimpan di sheet tersembunyi CUTI_LOG) */
+export interface CourierLeaveRecord {
+  hub_name: string;
+  courier_id: string;
+  courier_name: string;
+  date: string; // YYYY-MM-DD
+  created_at?: string;
+  created_by?: string;
+}
+
 /** Satu baris di tabel kurir (hasil agregasi) */
 export interface CourierScheduleRow {
   courier_id: string;
@@ -178,6 +188,10 @@ export interface CourierScheduleRow {
   productivityPct: number;
   successRate: number;
   activeDays: {
+    sen: boolean; sel: boolean; rab: boolean; kam: boolean;
+    jum: boolean; sab: boolean; min: boolean;
+  };
+  leaveDays?: {
     sen: boolean; sel: boolean; rab: boolean; kam: boolean;
     jum: boolean; sab: boolean; min: boolean;
   };

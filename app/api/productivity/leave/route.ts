@@ -1,0 +1,102 @@
+import { NextRequest, NextResponse } from "next/server";
+import type { Session } from "next-auth";
+import { auth } from "@/lib/auth";
+import { addCourierLeave, removeCourierLeave } from "@/lib/productivityService";
+
+function getAuthorizedUser(session: Session | null) {
+  if (!session?.user) return null;
+  const user = session.user as typeof session.user & {
+    hubName: string | null;
+    isAuthorized: boolean;
+  };
+  if (!user.isAuthorized || !user.hubName) return null;
+  return user;
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const user = getAuthorizedUser(session);
+  if (!user) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+
+  let body: { courier_id?: string; courier_name?: string; date?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Format body tidak valid" }, { status: 400 });
+  }
+
+  const courierId = String(body.courier_id ?? "").trim();
+  const courierName = String(body.courier_name ?? "").trim();
+  const date = String(body.date ?? "").trim();
+
+  if (!courierId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return NextResponse.json(
+      { error: "courier_id dan date (YYYY-MM-DD) wajib valid" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const result = await addCourierLeave({
+      hubName: user.hubName!,
+      courierId,
+      courierName,
+      date,
+      userEmail: session.user?.email || "unknown",
+    });
+    return NextResponse.json({
+      success: true,
+      added: result.added,
+      message: result.added ? "Status cuti berhasil ditandai." : "Kurir sudah ditandai cuti pada tanggal tersebut.",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Gagal menandai cuti";
+    const status = message.includes("hanya berlaku") || message.includes("tidak valid") ? 400 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const user = getAuthorizedUser(session);
+  if (!user) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+
+  let body: { courier_id?: string; date?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Format body tidak valid" }, { status: 400 });
+  }
+
+  const courierId = String(body.courier_id ?? "").trim();
+  const date = String(body.date ?? "").trim();
+
+  if (!courierId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return NextResponse.json(
+      { error: "courier_id dan date (YYYY-MM-DD) wajib valid" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const result = await removeCourierLeave({
+      hubName: user.hubName!,
+      courierId,
+      date,
+    });
+    return NextResponse.json({
+      success: true,
+      removed: result.removed,
+      message: result.removed ? "Status cuti berhasil dibatalkan." : "Data cuti tidak ditemukan.",
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Gagal membatalkan cuti" },
+      { status: 500 }
+    );
+  }
+}

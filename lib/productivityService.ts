@@ -1,6 +1,7 @@
-import { getSheetData, batchGetSheetData, appendRow, findRows, updateRow, ensureSheet, appendRows, updateRows, deleteRowsByColumnValue, rewriteSheetRows, colorRowYellow, clearRowColors, dropFirstColumnIfHeaderMatches } from "./sheets";
+import { getSheetData, batchGetSheetData, appendRow, findRows, updateRow, ensureSheet, appendRows, updateRows, deleteRowsByColumnValue, rewriteSheetRows, colorRowYellow, clearRowColors, dropFirstColumnIfHeaderMatches, listSheets, deleteSheetRow } from "./sheets";
 import {
   CourierRecord,
+  CourierLeaveRecord,
   CourierScheduleRow,
   ProductivityKpi,
   TargetAppeal,
@@ -17,8 +18,9 @@ import { normalizeContractType, normalizeVehicleType } from "./fmsParser";
 
 // ── Sheet name helpers ───────────────────────────────────────
 // Satu sheet per hub: RAW_SOKO HUB, TARGETS_SOKO HUB, dll.
-const RAW_SHEET    = (hubName: string) => `RAW_${hubName.toUpperCase().trim()}`;
+const RAW_SHEET     = (hubName: string) => `RAW_${hubName.toUpperCase().trim()}`;
 const TARGETS_SHEET = (hubName: string) => `TARGETS_${hubName.toUpperCase().trim()}`;
+const LEAVE_SHEET   = "CUTI_LOG";
 
 // Header untuk sheet RAW per hub (dimulai langsung dari courier_id di kolom A)
 const RAW_HEADER = [
@@ -77,6 +79,183 @@ export function normalizeRawSheetRows(rows: string[][]): string[][] {
 const TCOL = {
   WEEK_START:0, CONTRACT:1, VEHICLE:2, TARGET:3, CREATED_AT:4, CREATED_BY:5,
 };
+
+// ── Header & kolom CUTI_LOG sheet (tersembunyi) ──────────────
+const LEAVE_HEADER = [
+  "hub_name", "courier_id", "courier_name", "date", "created_at", "created_by",
+];
+const LCOL = {
+  HUB_NAME: 0, COURIER_ID: 1, COURIER_NAME: 2, DATE: 3, CREATED_AT: 4, CREATED_BY: 5,
+};
+
+function isRiderDedicated(contractType: string, vehicleType: string): boolean {
+  return contractType === "Dedicated" && vehicleType === "2WH";
+}
+
+/** Peta tipe armada terbaru per courier_id dari data RAW hub */
+function buildCourierLatestFleetMap(
+  allRaw: CourierRecord[]
+): Map<string, { contract_type: string; vehicle_type: string; courier_name: string }> {
+  const map = new Map<string, { contract_type: string; vehicle_type: string; courier_name: string; dateKey: string }>();
+  for (const r of allRaw) {
+    const cid = (r.courier_id || "").trim();
+    if (!cid) continue;
+    const dKey = normalizeDateKey(r.date);
+    const prev = map.get(cid);
+    if (!prev || (dKey && dKey >= prev.dateKey)) {
+      map.set(cid, {
+        contract_type: r.contract_type,
+        vehicle_type: r.vehicle_type,
+        courier_name: r.courier_name,
+        dateKey: dKey,
+      });
+    }
+  }
+  const result = new Map<string, { contract_type: string; vehicle_type: string; courier_name: string }>();
+  for (const [cid, val] of map.entries()) {
+    result.set(cid, {
+      contract_type: val.contract_type,
+      vehicle_type: val.vehicle_type,
+      courier_name: val.courier_name,
+    });
+  }
+  return result;
+}
+
+/** Ambil daftar cuti Rider Dedicated untuk hub (dan rentang tanggal opsional) */
+export async function getCourierLeaves(
+  hubName: string,
+  dateRange?: { start: Date; end: Date }
+): Promise<CourierLeaveRecord[]> {
+  const titles = await listSheets();
+  if (!titles.includes(LEAVE_SHEET)) return [];
+
+  const data = await getSheetData(LEAVE_SHEET);
+  const normHub = hubName.toLowerCase().trim();
+  const seen = new Map<string, CourierLeaveRecord>();
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row || !row[LCOL.HUB_NAME] || !row[LCOL.COURIER_ID] || !row[LCOL.DATE]) continue;
+    if (row[LCOL.HUB_NAME].toLowerCase().trim() !== normHub) continue;
+
+    const dateKey = normalizeDateKey(row[LCOL.DATE]);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) continue;
+    if (dateRange) {
+      const d = parseDate(dateKey);
+      if (!d || d < dateRange.start || d > dateRange.end) continue;
+    }
+
+    const courierId = row[LCOL.COURIER_ID].trim();
+    const dedupKey = `${courierId}_${dateKey}`;
+    seen.set(dedupKey, {
+      hub_name: row[LCOL.HUB_NAME].trim(),
+      courier_id: courierId,
+      courier_name: (row[LCOL.COURIER_NAME] || "").trim(),
+      date: dateKey,
+      created_at: (row[LCOL.CREATED_AT] || "").trim(),
+      created_by: (row[LCOL.CREATED_BY] || "").trim(),
+    });
+  }
+
+  return Array.from(seen.values());
+}
+
+/** Simpan tanda cuti Rider Dedicated ke sheet tersembunyi CUTI_LOG */
+export async function addCourierLeave(params: {
+  hubName: string;
+  courierId: string;
+  courierName: string;
+  date: string;
+  userEmail: string;
+}): Promise<{ added: boolean }> {
+  const dateKey = normalizeDateKey(params.date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    throw new Error("Format tanggal cuti tidak valid (harus YYYY-MM-DD).");
+  }
+  const courierId = params.courierId.trim();
+  if (!courierId) {
+    throw new Error("Courier ID wajib diisi.");
+  }
+
+  // Validasi bahwa kurir memang Rider Dedicated di hub ini
+  const allRaw = await getRawData(params.hubName);
+  const fleetMap = buildCourierLatestFleetMap(allRaw);
+  const fleet = fleetMap.get(courierId);
+  const hasDedicated2whRecord = allRaw.some(
+    (r) => r.courier_id.trim() === courierId && isRiderDedicated(r.contract_type, r.vehicle_type)
+  );
+  if (!hasDedicated2whRecord || (fleet && !isRiderDedicated(fleet.contract_type, fleet.vehicle_type))) {
+    throw new Error("Tandai cuti hanya berlaku untuk kurir Rider Dedicated (Dedicated · 2WH).");
+  }
+
+  await ensureSheet(LEAVE_SHEET, LEAVE_HEADER, { hidden: true });
+  const existing = await getSheetData(LEAVE_SHEET, { skipCache: true });
+  const normHub = params.hubName.toLowerCase().trim();
+
+  for (let i = 1; i < existing.length; i++) {
+    const row = existing[i];
+    if (!row) continue;
+    if (
+      (row[LCOL.HUB_NAME] || "").toLowerCase().trim() === normHub &&
+      (row[LCOL.COURIER_ID] || "").trim() === courierId &&
+      normalizeDateKey(row[LCOL.DATE]) === dateKey
+    ) {
+      return { added: false };
+    }
+  }
+
+  const resolvedName = (params.courierName || fleet?.courier_name || "").trim();
+  await appendRow(LEAVE_SHEET, [
+    params.hubName.trim(),
+    courierId,
+    resolvedName,
+    dateKey,
+    nowWIBTimestamp(),
+    params.userEmail,
+  ]);
+  return { added: true };
+}
+
+/** Hapus tanda cuti dari sheet tersembunyi CUTI_LOG */
+export async function removeCourierLeave(params: {
+  hubName: string;
+  courierId: string;
+  date: string;
+}): Promise<{ removed: boolean }> {
+  const dateKey = normalizeDateKey(params.date);
+  const courierId = params.courierId.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !courierId) {
+    throw new Error("Parameter courier_id dan date tidak valid.");
+  }
+
+  const titles = await listSheets();
+  if (!titles.includes(LEAVE_SHEET)) return { removed: false };
+
+  const data = await getSheetData(LEAVE_SHEET, { skipCache: true });
+  const normHub = params.hubName.toLowerCase().trim();
+  const matchingRowIndices: number[] = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row) continue;
+    if (
+      (row[LCOL.HUB_NAME] || "").toLowerCase().trim() === normHub &&
+      (row[LCOL.COURIER_ID] || "").trim() === courierId &&
+      normalizeDateKey(row[LCOL.DATE]) === dateKey
+    ) {
+      matchingRowIndices.push(i + 1); // 1-indexed
+    }
+  }
+
+  if (matchingRowIndices.length === 0) return { removed: false };
+
+  // Hapus dari bawah ke atas agar nomor baris tidak bergeser
+  for (let idx = matchingRowIndices.length - 1; idx >= 0; idx--) {
+    await deleteSheetRow(LEAVE_SHEET, matchingRowIndices[idx]);
+  }
+  return { removed: true };
+}
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -433,9 +612,10 @@ export async function getKpiMetrics(
   weekStart: string,
   filters: { contract?: string; vehicle?: string; excludeNew?: boolean } = {}
 ): Promise<ProductivityKpi> {
-  const [allRaw, appeals] = await Promise.all([
+  const [allRaw, appeals, weekLeaves] = await Promise.all([
     getRawData(hubName),
     getTargetAppeals(hubName),
+    getCourierLeaves(hubName, dateRange),
   ]);
   const appealMap     = buildAppealMap(appeals);
   const mondayMap     = buildMondayTargetMap(allRaw);
@@ -512,18 +692,34 @@ export async function getKpiMetrics(
     : 0;
   const productivityProgress = avgTarget > 0 ? (weeklyAvg / avgTarget) * 100 : 0;
 
-  // Daily Active Rate (Static: selalu 2WH · Dedicated + Kurir Plus, TETAP menghitung kurir baru)
+  // Daily Active Rate (Static: selalu 2WH · Dedicated + Kurir Plus, TETAP menghitung kurir baru + cuti Rider Dedicated)
   const da = allWeekActive.filter(
     (r) =>
       r.vehicle_type === "2WH" &&
       (r.contract_type === "Dedicated" || r.contract_type.includes("Kurir Plus"))
   );
-  const uniqueHeadcount  = new Set(da.map((r) => r.courier_id)).size;
-  const operatingDays    = new Set(
-    da.map((r) => normalizeDateKey(r.date))
-  ).size || 6;
-  const dailyActiveRate  = uniqueHeadcount > 0 && operatingDays > 0
-    ? (da.length / (uniqueHeadcount * operatingDays)) * 100 : 0;
+  const fleetMap = buildCourierLatestFleetMap(allRaw);
+  const daActiveKeys = new Set(
+    da.map((r) => `${r.courier_id.trim()}_${normalizeDateKey(r.date)}`)
+  );
+  const validLeaves = weekLeaves.filter((l) => {
+    const cid = l.courier_id.trim();
+    const fleet = fleetMap.get(cid);
+    if (!fleet || !isRiderDedicated(fleet.contract_type, fleet.vehicle_type)) return false;
+    const key = `${cid}_${normalizeDateKey(l.date)}`;
+    return !daActiveKeys.has(key);
+  });
+  const uniqueHeadcount = new Set([
+    ...da.map((r) => r.courier_id.trim()),
+    ...validLeaves.map((l) => l.courier_id.trim()),
+  ]).size;
+  const operatingDays =
+    new Set(da.map((r) => normalizeDateKey(r.date))).size || 6;
+  const dailyActiveShifts = da.length + validLeaves.length;
+  const dailyActiveRate =
+    uniqueHeadcount > 0 && operatingDays > 0
+      ? (dailyActiveShifts / (uniqueHeadcount * operatingDays)) * 100
+      : 0;
 
   // Met Quota
   const cMap: Record<string, {d:number;s:number;ct:string;vt:string}> = {};
@@ -673,8 +869,8 @@ export async function getKpiMetrics(
     },
     dailyActive: {
       value: Math.round(dailyActiveRate*10)/10,
-      activeShifts: da.length, uniqueHeadcount, operatingDays,
-      avgCouriersPerDay: operatingDays>0 ? Math.round((da.length/operatingDays)*10)/10 : 0,
+      activeShifts: dailyActiveShifts, uniqueHeadcount, operatingDays,
+      avgCouriersPerDay: operatingDays>0 ? Math.round((dailyActiveShifts/operatingDays)*10)/10 : 0,
     },
     metQuota: {
       count: metQuota, total: uniqueTotal,
@@ -725,15 +921,29 @@ export async function getCourierSchedule(
   weekStart: string,
   filters: { contract?:string; vehicle?:string; zone?:string; excludeNew?: boolean } = {}
 ): Promise<CourierScheduleRow[]> {
-  const [allRaw, appeals] = await Promise.all([
+  const [allRaw, appeals, weekLeaves] = await Promise.all([
     getRawData(hubName),
     getTargetAppeals(hubName),
+    getCourierLeaves(hubName, dateRange),
   ]);
   const appealMap = buildAppealMap(appeals);
   const mondayMap = buildMondayTargetMap(allRaw);
   const active    = dedup(filterActive(allRaw, dateRange));
 
   const firstJoinMap = buildCourierFirstJoinMap(allRaw);
+
+  const leaveDatesByCourier = new Map<string, Set<string>>();
+  for (const l of weekLeaves) {
+    const cid = l.courier_id.trim();
+    const dKey = normalizeDateKey(l.date);
+    if (!cid || !dKey) continue;
+    let set = leaveDatesByCourier.get(cid);
+    if (!set) {
+      set = new Set<string>();
+      leaveDatesByCourier.set(cid, set);
+    }
+    set.add(dKey);
+  }
 
   const DAY: (keyof CourierScheduleRow["activeDays"])[] = ["sen","sel","rab","kam","jum","sab","min"];
   const DAY_NAMES_BY_IDX = ["Senin","Selasa","Rabu","Kamis","Jumat","Sabtu","Minggu"];
@@ -749,6 +959,7 @@ export async function getCourierSchedule(
         totalFailed:0, totalOnhold:0,
         avgDaily:0, target:0, productivityPct:0, successRate:0,
         activeDays:{sen:false,sel:false,rab:false,kam:false,jum:false,sab:false,min:false},
+        leaveDays:{sen:false,sel:false,rab:false,kam:false,jum:false,sab:false,min:false},
         dailyDetails: [],
       };
     }
@@ -801,8 +1012,26 @@ export async function getCourierSchedule(
     const daysSince = getDaysSinceJoin(latestDate, firstDate);
     const isNew = isEligibleNewCourierContract(row.contract_type, row.vehicle_type) && daysSince <= 14;
 
+    const leaveDays = { sen:false, sel:false, rab:false, kam:false, jum:false, sab:false, min:false };
+    if (isRiderDedicated(row.contract_type, row.vehicle_type)) {
+      const courierLeaveDates = leaveDatesByCourier.get(row.courier_id.trim());
+      if (courierLeaveDates) {
+        for (const dKey of courierLeaveDates) {
+          const d = parseDate(dKey);
+          if (!d) continue;
+          const dow = d.getUTCDay();
+          const idx = dow === 0 ? 6 : dow - 1;
+          const dayKey = DAY[idx];
+          if (!row.activeDays[dayKey]) {
+            leaveDays[dayKey] = true;
+          }
+        }
+      }
+    }
+
     return {
       ...row,
+      leaveDays,
       avgDaily:        Math.round(avg*10)/10,
       target:          tgt,
       productivityPct: tgt>0 ? Math.round((avg/tgt)*1000)/10 : 0,
