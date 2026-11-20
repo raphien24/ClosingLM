@@ -1,12 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { ProductivityKpi, WeeklyMitraSegment, WeeklyAllocation2wh, WeeklyActionPlan } from "@/types/productivity";
-import { TrendingUp, TrendingDown, Users, Target, Package, Bike, Truck, Activity, Lightbulb, CheckCircle2, CalendarClock, Anchor } from "lucide-react";
+import { TrendingUp, TrendingDown, Users, Target, Package, Bike, Truck, Activity, Lightbulb, CheckCircle2, CalendarClock, Anchor, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 import { MaritimeWaveBackdrop, SailorCompassIcon } from "./MaritimeAnimations";
+import { DailyActiveModal } from "./DailyActiveModal";
 
-interface Props { kpi: ProductivityKpi | null; isLoading?: boolean; filterLabel?: string; }
+interface Props { kpi: ProductivityKpi | null; isLoading?: boolean; filterLabel?: string; periodLabel?: string; }
 
 function ProgressBar({
   value,
@@ -186,7 +188,9 @@ function SkeletonCard() {
   );
 }
 
-export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
+export function ProductivityKpiCards({ kpi, isLoading, filterLabel, periodLabel }: Props) {
+  const [showDailyActiveModal, setShowDailyActiveModal] = useState(false);
+
   if (isLoading || !kpi) {
     return (
       <div className="space-y-3">
@@ -255,10 +259,18 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
         </div>
 
         {/* Daily Active */}
-        <div className="hover-lift bg-gradient-to-br from-[#f8fdfc] to-[#e6f7f4] dark:from-[#1e293b] dark:to-[#13292d] rounded-xl border border-teal-200/85 dark:border-slate-700/80 border-t-[3px] border-t-teal-600 dark:border-t-teal-500 p-3.5 shadow-sm">
+        <button
+          type="button"
+          onClick={() => setShowDailyActiveModal(true)}
+          title="Klik untuk melihat detail Daily Active Rate"
+          className="text-left group cursor-pointer hover-lift bg-gradient-to-br from-[#f8fdfc] to-[#e6f7f4] dark:from-[#1e293b] dark:to-[#13292d] rounded-xl border border-teal-200/85 dark:border-slate-700/80 border-t-[3px] border-t-teal-600 dark:border-t-teal-500 hover:border-teal-400 dark:hover:border-teal-400/70 p-3.5 shadow-sm transition-colors"
+        >
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Daily Active Rate</p>
+              <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                <span>Daily Active Rate</span>
+                <ExternalLink className="h-3 w-3 text-teal-600 dark:text-teal-400 opacity-65 group-hover:opacity-100 transition-opacity" />
+              </p>
               <p className="mt-0.5 text-xl font-bold text-gray-900 leading-tight">
                 {kpi.dailyActive.value}
                 <span className="text-xs font-normal text-gray-400 ml-1">%</span>
@@ -275,7 +287,7 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
               <Users className="h-4 w-4 text-emerald-600" />
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Met Quota */}
         <div className="hover-lift bg-gradient-to-br from-[#fffdf7] to-[#fdf3dc] dark:from-[#1e293b] dark:to-[#282116] rounded-xl border border-amber-200/85 dark:border-slate-700/80 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 p-3.5 shadow-sm">
@@ -517,6 +529,14 @@ export function ProductivityKpiCards({ kpi, isLoading, filterLabel }: Props) {
             )}
           </div>
         </div>
+      )}
+
+      {showDailyActiveModal && (
+        <DailyActiveModal
+          dailyActive={kpi.dailyActive}
+          periodLabel={periodLabel}
+          onClose={() => setShowDailyActiveModal(false)}
+        />
       )}
     </div>
   );

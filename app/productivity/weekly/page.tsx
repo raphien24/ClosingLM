@@ -205,6 +205,7 @@ function DashboardWeeklyContent() {
           kpi={kpi}
           isLoading={kpiLoading}
           filterLabel={FLEET_TYPES.find((f) => f.value === fleetType)?.label}
+          periodLabel={formatWeekLabel(weekStart)}
         />
 
         {/* Filter + Table */}

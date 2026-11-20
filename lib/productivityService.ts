@@ -3,6 +3,9 @@ import {
   CourierRecord,
   CourierLeaveRecord,
   CourierScheduleRow,
+  DailyActiveCourierBreakdown,
+  DailyActiveDayBreakdown,
+  DailyActiveMetrics,
   ProductivityKpi,
   TargetAppeal,
   WeeklyThresholdSegment,
@@ -606,6 +609,165 @@ export async function getProductivityDatesCoverage(hubName: string): Promise<{
 
 // ── KPI Metrics ──────────────────────────────────────────────
 
+const DAILY_ACTIVE_DAY_NAMES = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+const DAILY_ACTIVE_MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+
+function formatDateLabelId(dateKey: string): { dateLabel: string; dayName: string } {
+  const d = parseDate(dateKey);
+  if (!d) return { dateLabel: dateKey, dayName: "-" };
+  const dateLabel = `${String(d.getUTCDate()).padStart(2, "0")} ${DAILY_ACTIVE_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  const dayName = DAILY_ACTIVE_DAY_NAMES[d.getUTCDay()];
+  return { dateLabel, dayName };
+}
+
+/**
+ * Hitung metrik Daily Active Rate (selalu 2WH · Dedicated + Kurir Plus,
+ * tetap menghitung kurir baru + cuti Rider Dedicated tanpa double-count)
+ * beserta rincian per kurir & per hari untuk pop-up detail.
+ */
+function computeDailyActiveMetrics(
+  activeRecords: CourierRecord[],
+  leaves: CourierLeaveRecord[],
+  allRaw: CourierRecord[],
+  fallbackOperatingDays = 0
+): DailyActiveMetrics {
+  const da = activeRecords.filter(
+    (r) =>
+      r.vehicle_type === "2WH" &&
+      (r.contract_type === "Dedicated" || r.contract_type.includes("Kurir Plus"))
+  );
+  const fleetMap = buildCourierLatestFleetMap(allRaw);
+  const daActiveKeys = new Set(
+    da.map((r) => `${r.courier_id.trim()}_${normalizeDateKey(r.date)}`)
+  );
+  const validLeaves = leaves.filter((l) => {
+    const cid = l.courier_id.trim();
+    const fleet = fleetMap.get(cid);
+    if (!fleet || !isRiderDedicated(fleet.contract_type, fleet.vehicle_type)) return false;
+    const key = `${cid}_${normalizeDateKey(l.date)}`;
+    return !daActiveKeys.has(key);
+  });
+  const uniqueHeadcount = new Set([
+    ...da.map((r) => r.courier_id.trim()),
+    ...validLeaves.map((l) => l.courier_id.trim()),
+  ]).size;
+  const operatingDays =
+    new Set(da.map((r) => normalizeDateKey(r.date))).size || fallbackOperatingDays;
+  const presentShifts = da.length;
+  const leaveShifts = validLeaves.length;
+  const activeShifts = presentShifts + leaveShifts;
+  const dailyActiveRate =
+    uniqueHeadcount > 0 && operatingDays > 0
+      ? (activeShifts / (uniqueHeadcount * operatingDays)) * 100
+      : 0;
+
+  // Rincian per kurir
+  const courierMap = new Map<
+    string,
+    { courier_id: string; courier_name: string; contract_type: string; presentDays: number; leaveDays: number }
+  >();
+  for (const r of da) {
+    const cid = r.courier_id.trim();
+    const prev = courierMap.get(cid) || {
+      courier_id: cid,
+      courier_name: r.courier_name || cid,
+      contract_type: r.contract_type.includes("Kurir Plus") ? "Kurir Plus" : "Dedicated",
+      presentDays: 0,
+      leaveDays: 0,
+    };
+    prev.presentDays += 1;
+    if (r.courier_name) prev.courier_name = r.courier_name;
+    courierMap.set(cid, prev);
+  }
+  for (const l of validLeaves) {
+    const cid = l.courier_id.trim();
+    const fleet = fleetMap.get(cid);
+    const prev = courierMap.get(cid) || {
+      courier_id: cid,
+      courier_name: l.courier_name || fleet?.courier_name || cid,
+      contract_type: "Dedicated",
+      presentDays: 0,
+      leaveDays: 0,
+    };
+    prev.leaveDays += 1;
+    courierMap.set(cid, prev);
+  }
+
+  const courierBreakdown: DailyActiveCourierBreakdown[] = Array.from(courierMap.values())
+    .map((c) => {
+      const countedDays = c.presentDays + c.leaveDays;
+      const activeRatePct =
+        operatingDays > 0 ? Math.round((countedDays / operatingDays) * 1000) / 10 : 0;
+      return {
+        ...c,
+        countedDays,
+        activeRatePct,
+      };
+    })
+    .sort((a, b) =>
+      b.activeRatePct !== a.activeRatePct
+        ? b.activeRatePct - a.activeRatePct
+        : b.countedDays !== a.countedDays
+        ? b.countedDays - a.countedDays
+        : a.courier_name.localeCompare(b.courier_name)
+    );
+
+  // Rincian per hari
+  const dayMap = new Map<
+    string,
+    { presentDedicated: number; leaveDedicated: number; presentPlus: number }
+  >();
+  for (const r of da) {
+    const dKey = normalizeDateKey(r.date);
+    if (!dKey) continue;
+    const prev = dayMap.get(dKey) || { presentDedicated: 0, leaveDedicated: 0, presentPlus: 0 };
+    if (r.contract_type.includes("Kurir Plus")) prev.presentPlus += 1;
+    else prev.presentDedicated += 1;
+    dayMap.set(dKey, prev);
+  }
+  for (const l of validLeaves) {
+    const dKey = normalizeDateKey(l.date);
+    if (!dKey) continue;
+    const prev = dayMap.get(dKey) || { presentDedicated: 0, leaveDedicated: 0, presentPlus: 0 };
+    prev.leaveDedicated += 1;
+    dayMap.set(dKey, prev);
+  }
+
+  const dailyBreakdown: DailyActiveDayBreakdown[] = Array.from(dayMap.keys())
+    .sort((a, b) => a.localeCompare(b))
+    .map((dateKey) => {
+      const counts = dayMap.get(dateKey)!;
+      const totalCounted =
+        counts.presentDedicated + counts.leaveDedicated + counts.presentPlus;
+      const dailyRatePct =
+        uniqueHeadcount > 0
+          ? Math.round((totalCounted / uniqueHeadcount) * 1000) / 10
+          : 0;
+      const { dateLabel, dayName } = formatDateLabelId(dateKey);
+      return {
+        dateKey,
+        dateLabel,
+        dayName,
+        ...counts,
+        totalCounted,
+        dailyRatePct,
+      };
+    });
+
+  return {
+    value: Math.round(dailyActiveRate * 10) / 10,
+    activeShifts,
+    presentShifts,
+    leaveShifts,
+    uniqueHeadcount,
+    operatingDays,
+    avgCouriersPerDay:
+      operatingDays > 0 ? Math.round((activeShifts / operatingDays) * 10) / 10 : 0,
+    courierBreakdown,
+    dailyBreakdown,
+  };
+}
+
 export async function getKpiMetrics(
   hubName: string,
   dateRange: { start: Date; end: Date },
@@ -693,33 +855,7 @@ export async function getKpiMetrics(
   const productivityProgress = avgTarget > 0 ? (weeklyAvg / avgTarget) * 100 : 0;
 
   // Daily Active Rate (Static: selalu 2WH · Dedicated + Kurir Plus, TETAP menghitung kurir baru + cuti Rider Dedicated)
-  const da = allWeekActive.filter(
-    (r) =>
-      r.vehicle_type === "2WH" &&
-      (r.contract_type === "Dedicated" || r.contract_type.includes("Kurir Plus"))
-  );
-  const fleetMap = buildCourierLatestFleetMap(allRaw);
-  const daActiveKeys = new Set(
-    da.map((r) => `${r.courier_id.trim()}_${normalizeDateKey(r.date)}`)
-  );
-  const validLeaves = weekLeaves.filter((l) => {
-    const cid = l.courier_id.trim();
-    const fleet = fleetMap.get(cid);
-    if (!fleet || !isRiderDedicated(fleet.contract_type, fleet.vehicle_type)) return false;
-    const key = `${cid}_${normalizeDateKey(l.date)}`;
-    return !daActiveKeys.has(key);
-  });
-  const uniqueHeadcount = new Set([
-    ...da.map((r) => r.courier_id.trim()),
-    ...validLeaves.map((l) => l.courier_id.trim()),
-  ]).size;
-  const operatingDays =
-    new Set(da.map((r) => normalizeDateKey(r.date))).size || 6;
-  const dailyActiveShifts = da.length + validLeaves.length;
-  const dailyActiveRate =
-    uniqueHeadcount > 0 && operatingDays > 0
-      ? (dailyActiveShifts / (uniqueHeadcount * operatingDays)) * 100
-      : 0;
+  const dailyActive = computeDailyActiveMetrics(allWeekActive, weekLeaves, allRaw, 6);
 
   // Met Quota
   const cMap: Record<string, {d:number;s:number;ct:string;vt:string}> = {};
@@ -867,11 +1003,7 @@ export async function getKpiMetrics(
       progress: Math.round(productivityProgress*10)/10,
       totalDelivered, activeShifts,
     },
-    dailyActive: {
-      value: Math.round(dailyActiveRate*10)/10,
-      activeShifts: dailyActiveShifts, uniqueHeadcount, operatingDays,
-      avgCouriersPerDay: operatingDays>0 ? Math.round((dailyActiveShifts/operatingDays)*10)/10 : 0,
-    },
+    dailyActive,
     metQuota: {
       count: metQuota, total: uniqueTotal,
       pct: uniqueTotal>0 ? Math.round((metQuota/uniqueTotal)*100) : 0,
@@ -1122,6 +1254,7 @@ export async function getMonthlyMetrics(
   operatingDays: number;
   uniqueHeadcount: number;
   activeManpowerBreakdown: ActiveManpowerBreakdown;
+  dailyActive: ProductivityKpi["dailyActive"];
   metQuota: number;
   totalCouriers: number;
   lastUpdate: string | null;
@@ -1147,9 +1280,10 @@ export async function getMonthlyMetrics(
 
   const weekStartStr = format(startOfWeek(monthStart, { weekStartsOn: 1 }), "yyyy-MM-dd");
 
-  const [allRaw, appeals] = await Promise.all([
+  const [allRaw, appeals, monthLeaves] = await Promise.all([
     getRawData(hubName),
     getTargetAppeals(hubName),
+    getCourierLeaves(hubName, { start: monthStart, end: monthEnd }),
   ]);
   const appealMap = buildAppealMap(appeals);
   const mondayMap = buildMondayTargetMap(allRaw);
@@ -1470,6 +1604,8 @@ export async function getMonthlyMetrics(
     (wk) => !hasWeekTarget(wk, appealMap, mondayMap, { contract, vehicle })
   );
 
+  const dailyActive = computeDailyActiveMetrics(allMonthActive, monthLeaves, allRaw, 0);
+
   return {
     totalDelivered,
     totalShifts,
@@ -1479,6 +1615,7 @@ export async function getMonthlyMetrics(
     operatingDays,
     uniqueHeadcount,
     activeManpowerBreakdown,
+    dailyActive,
     metQuota,
     totalCouriers: Object.keys(cMap).length,
     lastUpdate,

@@ -11,10 +11,13 @@ import {
   Loader2,
   Anchor,
   Users,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { GracePeriodToggle } from "@/components/productivity/GracePeriodToggle";
+import { DailyActiveModal } from "@/components/productivity/DailyActiveModal";
+import { DailyActiveMetrics } from "@/types/productivity";
 import {
   MaritimeWaveBackdrop,
   NauticalChartBackdrop,
@@ -74,6 +77,7 @@ interface MonthlyData {
     dedicated4wh: number;
     mitra: number;
   };
+  dailyActive?: DailyActiveMetrics;
   metQuota: number;
   totalCouriers: number;
   lastUpdate: string | null;
@@ -244,6 +248,7 @@ export default function DashboardMonthlyPage() {
   const [data, setData] = useState<MonthlyData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showFormula, setShowFormula] = useState(false);
+  const [showDailyActiveModal, setShowDailyActiveModal] = useState(false);
   const [excludeNew, setExcludeNew] = useState(false);
   const requestSeqRef = useRef(0);
 
@@ -627,13 +632,13 @@ export default function DashboardMonthlyPage() {
               </div>
             </div>
 
-            {/* 6 Summary Metric Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-4">
-              <div className="hover-lift bg-gradient-to-br from-[#f6faff] to-[#e9f2fe] dark:from-[#1e293b] dark:to-[#142238] rounded-2xl border border-blue-200/85 dark:border-slate-700/80 border-t-[3px] border-t-blue-600 dark:border-t-blue-500 p-5 shadow-sm">
+            {/* 7 Summary Metric Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3.5">
+              <div className="hover-lift bg-gradient-to-br from-[#f6faff] to-[#e9f2fe] dark:from-[#1e293b] dark:to-[#142238] rounded-2xl border border-blue-200/85 dark:border-slate-700/80 border-t-[3px] border-t-blue-600 dark:border-t-blue-500 p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Total Delivered
                 </p>
-                <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
+                <p className="mt-1.5 text-2xl font-extrabold text-gray-900 tabular-nums">
                   {data.totalDelivered.toLocaleString("en-US")}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
@@ -641,11 +646,11 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="hover-lift bg-gradient-to-br from-[#f7fdfc] to-[#e5f6f3] dark:from-[#1e293b] dark:to-[#13292d] rounded-2xl border border-teal-200/85 dark:border-slate-700/80 border-t-[3px] border-t-teal-600 dark:border-t-teal-500 p-5 shadow-sm">
+              <div className="hover-lift bg-gradient-to-br from-[#f7fdfc] to-[#e5f6f3] dark:from-[#1e293b] dark:to-[#13292d] rounded-2xl border border-teal-200/85 dark:border-slate-700/80 border-t-[3px] border-t-teal-600 dark:border-t-teal-500 p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Active Shifts
                 </p>
-                <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
+                <p className="mt-1.5 text-2xl font-extrabold text-gray-900 tabular-nums">
                   {data.totalShifts.toLocaleString("en-US")}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
@@ -653,7 +658,7 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="hover-lift bg-gradient-to-br from-[#f4fbf7] to-[#e3f5ec] dark:from-[#1e293b] dark:to-[#122a23] rounded-2xl border border-emerald-200/85 dark:border-slate-700/80 border-t-[3px] border-t-emerald-600 dark:border-t-emerald-500 p-5 shadow-sm flex flex-col justify-between">
+              <div className="hover-lift bg-gradient-to-br from-[#f4fbf7] to-[#e3f5ec] dark:from-[#1e293b] dark:to-[#122a23] rounded-2xl border border-emerald-200/85 dark:border-slate-700/80 border-t-[3px] border-t-emerald-600 dark:border-t-emerald-500 p-4 shadow-sm flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
@@ -669,7 +674,7 @@ export default function DashboardMonthlyPage() {
                   </p>
                 </div>
                 {data.activeManpowerBreakdown && (
-                  <div className="mt-2.5 pt-2 border-t border-emerald-200/70 dark:border-slate-700/70 grid grid-cols-2 gap-x-2.5 gap-y-1 text-[11px]">
+                  <div className="mt-2.5 pt-2 border-t border-emerald-200/70 dark:border-slate-700/70 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
                     {[
                       { label: "2WH Ded", value: data.activeManpowerBreakdown.dedicated2wh },
                       { label: "2WH Plus", value: data.activeManpowerBreakdown.kurirPlus2wh },
@@ -687,11 +692,11 @@ export default function DashboardMonthlyPage() {
                 )}
               </div>
 
-              <div className="hover-lift bg-gradient-to-br from-[#f7f8ff] to-[#ebeffe] dark:from-[#1e293b] dark:to-[#17213a] rounded-2xl border border-indigo-200/85 dark:border-slate-700/80 border-t-[3px] border-t-indigo-600 dark:border-t-indigo-500 p-5 shadow-sm">
+              <div className="hover-lift bg-gradient-to-br from-[#f7f8ff] to-[#ebeffe] dark:from-[#1e293b] dark:to-[#17213a] rounded-2xl border border-indigo-200/85 dark:border-slate-700/80 border-t-[3px] border-t-indigo-600 dark:border-t-indigo-500 p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Avg Daily Productivity
                 </p>
-                <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
+                <p className="mt-1.5 text-2xl font-extrabold text-gray-900 tabular-nums">
                   {data.avgProductivity.toFixed(1)}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
@@ -699,11 +704,11 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="hover-lift bg-gradient-to-br from-[#fffdf7] to-[#fdf3dc] dark:from-[#1e293b] dark:to-[#282116] rounded-2xl border border-amber-200/85 dark:border-slate-700/80 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 p-5 shadow-sm">
+              <div className="hover-lift bg-gradient-to-br from-[#fffdf7] to-[#fdf3dc] dark:from-[#1e293b] dark:to-[#282116] rounded-2xl border border-amber-200/85 dark:border-slate-700/80 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Monthly Target
                 </p>
-                <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
+                <p className="mt-1.5 text-2xl font-extrabold text-gray-900 tabular-nums">
                   {data.target.toFixed(1)}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">
@@ -711,15 +716,66 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
 
-              <div className="hover-lift bg-gradient-to-br from-[#f8fafc] to-[#eaeff6] dark:from-[#1e293b] dark:to-[#161f2e] rounded-2xl border border-slate-300/85 dark:border-slate-700/80 border-t-[3px] border-t-slate-600 dark:border-t-slate-400 p-5 shadow-sm">
+              <div className="hover-lift bg-gradient-to-br from-[#f8fafc] to-[#eaeff6] dark:from-[#1e293b] dark:to-[#161f2e] rounded-2xl border border-slate-300/85 dark:border-slate-700/80 border-t-[3px] border-t-slate-600 dark:border-t-slate-400 p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                   Operating Days
                 </p>
-                <p className="mt-1.5 text-2xl font-extrabold text-gray-900">
+                <p className="mt-1.5 text-2xl font-extrabold text-gray-900 tabular-nums">
                   {data.operatingDays}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">Days with activity</p>
               </div>
+
+              {(() => {
+                const da = data.dailyActive ?? {
+                  value: 0,
+                  activeShifts: 0,
+                  uniqueHeadcount: 0,
+                  operatingDays: 0,
+                  avgCouriersPerDay: 0,
+                };
+                const barColor =
+                  da.value >= 90
+                    ? "bg-emerald-500"
+                    : da.value >= 80
+                    ? "bg-amber-400"
+                    : "bg-red-500";
+                const pctWidth = Math.max(0, Math.min(da.value, 100));
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setShowDailyActiveModal(true)}
+                    title="Klik untuk melihat detail Daily Active Rate"
+                    className="text-left group cursor-pointer col-span-2 sm:col-span-1 hover-lift bg-gradient-to-br from-[#f8fdfc] to-[#e6f7f4] dark:from-[#1e293b] dark:to-[#13292d] rounded-2xl border border-teal-200/85 dark:border-slate-700/80 border-t-[3px] border-t-teal-600 dark:border-t-teal-500 hover:border-teal-400 dark:hover:border-teal-400/70 p-4 shadow-sm flex flex-col justify-between transition-colors"
+                  >
+                    <div className="w-full">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 flex items-center gap-1">
+                          <span>Daily Active Rate</span>
+                          <ExternalLink className="h-3 w-3 text-teal-600 dark:text-teal-400 opacity-65 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                        </p>
+                        <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+                      </div>
+                      <p className="mt-1.5 text-2xl font-extrabold text-gray-900 tabular-nums">
+                        {da.value}
+                        <span className="text-xs font-normal text-gray-400 ml-1">%</span>
+                      </p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        2WH · Dedicated + Kurir Plus
+                      </p>
+                      <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${barColor}`}
+                          style={{ width: `${pctWidth}%` }}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-2">
+                      {da.uniqueHeadcount} kurir · {da.operatingDays} hari · avg {da.avgCouriersPerDay}/hr
+                    </p>
+                  </button>
+                );
+              })()}
             </div>
 
             {/* Monthly Calculation Method Info Banner */}
@@ -863,6 +919,14 @@ export default function DashboardMonthlyPage() {
           </>
         )}
       </div>
+
+      {showDailyActiveModal && data?.dailyActive && (
+        <DailyActiveModal
+          dailyActive={data.dailyActive}
+          periodLabel={monthLabel}
+          onClose={() => setShowDailyActiveModal(false)}
+        />
+      )}
     </div>
   );
 }

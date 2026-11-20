@@ -90,6 +90,39 @@ export interface WeeklyActionPlan {
   driverDed: WeeklyActionPlanItem;
 }
 
+export interface DailyActiveCourierBreakdown {
+  courier_id: string;
+  courier_name: string;
+  contract_type: string;
+  presentDays: number;
+  leaveDays: number;
+  countedDays: number;
+  activeRatePct: number;
+}
+
+export interface DailyActiveDayBreakdown {
+  dateKey: string;
+  dateLabel: string;
+  dayName: string;
+  presentDedicated: number;
+  leaveDedicated: number;
+  presentPlus: number;
+  totalCounted: number;
+  dailyRatePct: number;
+}
+
+export interface DailyActiveMetrics {
+  value: number;            // %
+  activeShifts: number;
+  presentShifts?: number;
+  leaveShifts?: number;
+  uniqueHeadcount: number;
+  operatingDays: number;
+  avgCouriersPerDay: number;
+  courierBreakdown?: DailyActiveCourierBreakdown[];
+  dailyBreakdown?: DailyActiveDayBreakdown[];
+}
+
 /** KPI summary untuk weekly/monthly dashboard */
 export interface ProductivityKpi {
   weeklyAvgProductivity: {
@@ -99,13 +132,7 @@ export interface ProductivityKpi {
     totalDelivered: number;
     activeShifts: number;
   };
-  dailyActive: {
-    value: number;            // %
-    activeShifts: number;
-    uniqueHeadcount: number;
-    operatingDays: number;
-    avgCouriersPerDay: number;
-  };
+  dailyActive: DailyActiveMetrics;
   metQuota: {
     count: number;
     total: number;
