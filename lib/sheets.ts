@@ -409,6 +409,8 @@ export async function rewriteSheetRows(
 
 /**
  * Urutkan baris data sheet secara stabil (lama -> baru) berdasarkan key hasil getSortKey.
+ * Membaca nilai mentah (UNFORMATTED_VALUE + FORMATTED_STRING) agar tipe sel angka tetap
+ * bertahan sebagai number dan tidak berubah menjadi teks rata kiri.
  * Hanya menulis ke Google Sheets jika urutan berubah atau ada baris kosong di tengah.
  */
 export async function sortSheetByDateKey(
@@ -416,10 +418,25 @@ export async function sortSheetByDateKey(
   columnIndex: number,
   getSortKey: (rawCell: string) => string
 ): Promise<boolean> {
-  const all = await getSheetData(sheetName, { skipCache: true });
-  if (all.length <= 2) return false;
-  const header = all[0];
-  const nonBlank = all.slice(1).filter((r) => r && r.some((c) => String(c ?? "").trim() !== ""));
+  const sheets = getSheetsClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: sheetName,
+    valueRenderOption: "UNFORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+  const rawRows = (response.data.values as (string | number | null | undefined)[][]) || [];
+  if (rawRows.length <= 2) return false;
+
+  const normalizeRow = (r: (string | number | null | undefined)[] | undefined): (string | number | null)[] =>
+    (r || []).map((cell) => (cell === undefined ? "" : cell));
+
+  const header = normalizeRow(rawRows[0]);
+  const nonBlank = rawRows
+    .slice(1)
+    .map(normalizeRow)
+    .filter((r) => r.some((c) => String(c ?? "").trim() !== ""));
+
   const keyed = nonBlank.map((row, idx) => ({
     row,
     idx,
@@ -427,7 +444,7 @@ export async function sortSheetByDateKey(
   }));
   keyed.sort((a, b) => (a.key !== b.key ? a.key.localeCompare(b.key) : a.idx - b.idx));
   const changed =
-    nonBlank.length !== all.length - 1 ||
+    nonBlank.length !== rawRows.length - 1 ||
     keyed.some((entry, pos) => entry.idx !== pos);
   if (!changed) return false;
   await rewriteSheetRows(sheetName, [header, ...keyed.map((e) => e.row)]);

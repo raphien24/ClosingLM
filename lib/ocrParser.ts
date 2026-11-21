@@ -1055,8 +1055,6 @@ function extractBacklog(text: string): {
  */
 function extractExpedite(text: string): {
   total_expedite: number | null;
-  expedite:       number | null;
-  super_expedite: number | null;
 } {
   let total_expedite: number | null = null;
 
@@ -1120,23 +1118,7 @@ function extractExpedite(text: string): {
     }
   }
 
-  let expedite:       number | null = null;
-  let super_expedite: number | null = null;
-
-  if (total_expedite !== null) {
-    const expSectionPct = text.match(/To\s+Expedite[\s\S]{0,350}/i)?.[0] ?? "";
-    const pcts = [...expSectionPct.matchAll(/(\d+(?:[,.]\d+)?)\s*%/g)]
-      .map((pm) => parseNumber(pm[1]))
-      .filter((n): n is number => n !== null && n >= 0 && n <= 100)
-      .sort((a, b) => b - a);
-
-    if (pcts.length >= 1) {
-      expedite       = Math.round(total_expedite * (pcts[0] / 100));
-      super_expedite = Math.max(0, total_expedite - expedite);
-    }
-  }
-
-  return { total_expedite, expedite, super_expedite };
+  return { total_expedite };
 }
 
 /**

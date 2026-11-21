@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
       dedicated_actual_2wh: null, kurir_plus_actual_2wh: null,
       dedicated_actual_4wh: null, mitra_actual_2wh: null, mitra_actual_4wh: null,
       backlog_total: null,
-      expedite: null, super_expedite: null, total_expedite: null,
+      total_expedite: null,
       parcel_sweeper_total: null, parcel_sweeper_scanned_pct: null,
       submitted_at: "", submitted_by: "",
     });

@@ -30,12 +30,10 @@ export interface ClosingData {
   // [15] Backlog — dari Ringkasan Hub
   backlog_total: number | null;         // angka di tengah donut chart
 
-  // [16]–[18] Expedite — dari Ringkasan Hub
-  expedite?: number | null;             // (deprecated)
-  super_expedite?: number | null;       // (deprecated)
+  // [16] Expedite — dari Ringkasan Hub
   total_expedite: number | null;        // angka di tengah donut "To Expedite"
 
-  // [21]–[22] Parcel Sweeper — dari halaman Parcel Sweeper Task
+  // [19]–[20] Parcel Sweeper — dari halaman Parcel Sweeper Task
   parcel_sweeper_total: number | null;       // Total Expected Order
   parcel_sweeper_scanned_pct: number | null; // Persentase Expected Order Scanned (%)
 
@@ -57,10 +55,10 @@ export interface ClosingData {
   target_2w_mitra?: number | null;
   target_4w_mitra?: number | null;
 
-  // [23] Daftar nama field yang diketik/diedit secara manual oleh user (comma-separated)
+  // [21] Daftar nama field yang diketik/diedit secara manual oleh user (comma-separated)
   manual_fields?: string[];
 
-  // [19] [20]
+  // [17] [18]
   submitted_at?: string;
   submitted_by?: string;
 }

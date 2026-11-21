@@ -84,8 +84,6 @@ export async function POST(req: NextRequest) {
         mitra_actual_4wh: Number(src.mitra_actual_4wh) || 0,
         backlog_total: Number(src.backlog_total) || 0,
         total_expedite: Number(src.total_expedite) || 0,
-        expedite: Number(src.total_expedite) || 0,
-        super_expedite: 0,
         parcel_sweeper_total: Number(src.parcel_sweeper_total) || 0,
         parcel_sweeper_scanned_pct: Number(src.parcel_sweeper_scanned_pct ?? 100),
       };
@@ -150,8 +148,6 @@ export async function POST(req: NextRequest) {
           getHeadCount(headCounts, "Mitra", "lm_hub_fleet_schedule_4_wheelers_driver_qty_eod"),
         backlog_total: backlogTotal,
         total_expedite: totalExpedite,
-        expedite: totalExpedite,
-        super_expedite: 0,
         parcel_sweeper_total: Number(parcel.total) || 0,
         parcel_sweeper_scanned_pct: Math.min(100, Math.max(0, sweeperPct)),
       };
@@ -190,7 +186,7 @@ export async function POST(req: NextRequest) {
 
     closing.nama_hub = exactHubNameInSheet;
     const submittedAt = nowWIBTimestamp();
-    const submittedBy = "Auto Script SPX (GAS)";
+    const submittedBy = "rrafi.alvian@spxexpress.com";
     const rowValues = closingDataToRow(closing, submittedAt, submittedBy);
 
     let isOverwritten = false;
