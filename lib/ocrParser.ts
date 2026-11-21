@@ -204,9 +204,9 @@ export function parseOcrText(rawText: string): {
 
 // ── Helpers ───────────────────────────────────────────────────
 
-// Toleran terhadap variasi OCR: On-hold, On hold, Onhold, On-hoid, On-hokd, On-holkd, On hod, an hod, Onnoid, Onrhod, Qn-hold, Onhole
+// Toleran terhadap variasi OCR: On-hold, On hold, Onhold, On-hoid, On-hokd, On-holkd, On hod, an hod, Onnoid, Onrhod, Qn-hold, Onhole, Cn-hold, On–hold
 const ON_HOLD_LABEL_RE =
-  /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1tk]{0,2}d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b/i;
+  /\b(?:[oq0c]n[\s\-–—_.r]*[hb][o0c][il1tk]{0,2}(?:d|cl)|[oq0]nh[o0][il1]e|an[\s\-–—_]+h[o0]l?d)\b/i;
 
 /**
  * In Hub Status: cari baris label, ambil angka pertama (= kolom Volume)
@@ -319,10 +319,6 @@ function extractFleetDelivered(text: string): number | null {
  */
 function extractOnHold(text: string): { oh_volume: number | null; oh_total: number | null } {
   const lines = text.split(/\r?\n/);
-  const idx = lines.findIndex((l) => ON_HOLD_LABEL_RE.test(l));
-  if (idx === -1) return { oh_volume: null, oh_total: null };
-
-  const afterLabel = afterLabelOnLine(lines[idx], ON_HOLD_LABEL_RE);
   const parseOnHoldCell = (cell: string): number | null => {
     const cellNums = allNumbers(cell);
     if (cellNums.length > 0) return cellNums[0];
@@ -364,6 +360,49 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
     }
     return { oh_volume: fixedVol, oh_total: tot };
   };
+
+  const idx = lines.findIndex((l) => ON_HOLD_LABEL_RE.test(l));
+  if (idx === -1) {
+    // Fallback jika label "On-hold" gagal terbaca OCR (mis. terhalang watermark),
+    // cari baris ke-3 tabel Fleet status tepat di bawah baris "Delivered" (format: Vol  Tot  Done(Pct%)).
+    const delivRe = /\b(?:D[aeo]l[il]?v[aeo]r[ea]?d|Delvend|Dedvered)\b/i;
+    const delivIdx = lines.findIndex(
+      (l) => delivRe.test(l) && !/buyer|total\s+delivered|delivered\s*\(|handed|h[ae]nd[ea]d/i.test(l)
+    );
+    if (delivIdx !== -1) {
+      for (let j = delivIdx + 1; j <= delivIdx + 3 && j < lines.length; j++) {
+        let candidate = lines[j];
+        if (SECTION_BOUNDARY_RE.test(candidate)) break;
+        if (/^\s*(?:[TI]ransp|R[eo]c|A[sS][a-z]{2,5}[gn]g|A[sm]{1,2}[a-z]{1,4}n)/i.test(candidate)) {
+          const pctEnd = candidate.search(/%\s*\)/);
+          if (pctEnd === -1) continue;
+          candidate = candidate.slice(pctEnd + 2);
+        }
+        const m = candidate.match(
+          /(\d[\d.,]*)\s+(\d[\d.,]*)\s+(\d[\d.,]*|[Oo])\s*\(\s*(\d+(?:[.,]\d+)?|[Oo])\s*%/
+        );
+        if (m) {
+          const vol = parseNumber(m[1]);
+          const tot = parseNumber(m[2]);
+          const done = /^[Oo]$/.test(m[3]) ? 0 : parseNumber(m[3]);
+          const pct = /^[Oo]$/.test(m[4]) ? 0 : parseFloat(m[4].replace(",", "."));
+          if (
+            vol !== null &&
+            tot !== null &&
+            done !== null &&
+            !isNaN(pct) &&
+            tot >= vol &&
+            (tot === 0 || Math.abs((done / tot) * 100 - pct) <= 1.2)
+          ) {
+            return { oh_volume: vol, oh_total: tot };
+          }
+        }
+      }
+    }
+    return { oh_volume: null, oh_total: null };
+  }
+
+  const afterLabel = afterLabelOnLine(lines[idx], ON_HOLD_LABEL_RE);
 
   // Jika kolom dipisahkan >= 2 spasi (mis. "a   52   17.3%)" atau "103   113   10(8,8%)"), pertahankan posisi kolom Volume & Total
   const cells = afterLabel.trim().split(/\s{2,}/).filter(Boolean);

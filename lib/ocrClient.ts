@@ -729,10 +729,11 @@ export async function runOcrLocally(
 
       const { contentLeft, contentMid } = await detectDashboardContentBounds(images[i]);
       const leftCardW = Math.max(0.25, contentMid - contentLeft - 0.008);
-      const rightCardX = Math.max(0.42, contentMid - 0.05);
+      const rightCardX = Math.max(0.47, contentMid - 0.015);
       const regions: { tag?: string; rect: [number, number, number, number]; binAlso: boolean }[] = [];
       if (!hasOnHoldNums) {
-        regions.push({ rect: [rightCardX, 0.20, 1 - rightCardX, 0.42], binAlso: true });
+        const rightCardY = contentLeft > 0 ? 0.24 : 0.21;
+        regions.push({ rect: [rightCardX, rightCardY, 1 - rightCardX, 0.30], binAlso: true });
       }
       if (!hasInHubAll) {
         regions.push({ rect: [contentLeft, 0.20, leftCardW, 0.36], binAlso: false });
