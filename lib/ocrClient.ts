@@ -206,14 +206,15 @@ function detectColoredDonutInBand(
   w: number,
   yStart: number,
   yEnd: number,
-  xMax: number
+  xMax: number,
+  xMin = 0
 ): DonutHoleBounds | null {
   const bandH = yEnd - yStart + 1;
-  if (bandH < 40 || xMax < 60) return null;
+  if (bandH < 40 || xMax - xMin < 60) return null;
 
   const minColH = Math.max(10, Math.round(bandH * 0.08));
   const colCounts = new Int32Array(xMax);
-  for (let x = 0; x < xMax; x++) {
+  for (let x = Math.max(0, xMin); x < xMax; x++) {
     let cnt = 0;
     for (let y = yStart; y <= yEnd; y++) {
       const idx = (y * w + x) * 4;
@@ -231,7 +232,7 @@ function detectColoredDonutInBand(
   let bestScore = -1;
   let bestX0 = 0;
   let bestX1 = 0;
-  let x = 0;
+  let x = Math.max(0, xMin);
   while (x < xMax) {
     if (colCounts[x] >= minColH) {
       const c0 = x;
@@ -333,7 +334,8 @@ async function extractDonutHoleImages(
   dataUrl: string,
   hasBacklog: boolean,
   hasExpedite: boolean,
-  isFull: boolean
+  isFull: boolean,
+  contentLeftFrac = 0
 ): Promise<Partial<Record<"Backlog" | "To Expedite", string>>> {
   const result: Partial<Record<"Backlog" | "To Expedite", string>> = {};
   const img = await loadImage(dataUrl);
@@ -355,7 +357,8 @@ async function extractDonutHoleImages(
     return result;
   }
 
-  const xMax = Math.round(w * (isFull ? 0.48 : 0.72));
+  const xMin = Math.round(w * contentLeftFrac);
+  const xMax = Math.min(w, Math.round(w * (isFull ? Math.max(0.48, contentLeftFrac + 0.38) : 0.72)));
   const renderHole = (bounds: DonutHoleBounds): string | null => {
     const size = Math.min(bounds.rx1 - bounds.rx0, bounds.ry1 - bounds.ry0);
     const half = Math.max(8, size * 0.22);
@@ -382,44 +385,77 @@ async function extractDonutHoleImages(
 
     const outImg = outCtx.getImageData(0, 0, cw, ch);
     const od = outImg.data;
-    for (let i = 0; i < od.length; i += 4) {
-      const r = od[i];
-      const g = od[i + 1];
-      const b = od[i + 2];
-      const max = Math.max(r, g, b);
-      const sat = max - Math.min(r, g, b);
-      if (sat > 24 && (max > 155 || sat > 45)) {
-        od[i] = od[i + 1] = od[i + 2] = 255;
-        continue;
+    let minIx = cw;
+    let minIy = ch;
+    let maxIx = -1;
+    let maxIy = -1;
+    for (let y = 0; y < ch; y++) {
+      for (let x = 0; x < cw; x++) {
+        const i = (y * cw + x) * 4;
+        const r = od[i];
+        const g = od[i + 1];
+        const b = od[i + 2];
+        const max = Math.max(r, g, b);
+        const sat = max - Math.min(r, g, b);
+        if (sat > 24 && (max > 155 || sat > 45)) {
+          od[i] = od[i + 1] = od[i + 2] = 255;
+          continue;
+        }
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        const v = lum < 165 ? 0 : lum >= 208 ? 255 : Math.round(((lum - 165) / 43) * 255);
+        od[i] = od[i + 1] = od[i + 2] = v;
+        if (v < 180) {
+          if (x < minIx) minIx = x;
+          if (x > maxIx) maxIx = x;
+          if (y < minIy) minIy = y;
+          if (y > maxIy) maxIy = y;
+        }
       }
-      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-      const v = lum < 155 ? 0 : lum >= 202 ? 255 : Math.round(((lum - 155) / 47) * 255);
-      od[i] = od[i + 1] = od[i + 2] = v;
     }
     outCtx.putImageData(outImg, 0, 0);
+
+    // Pangkas margin putih berlebih di sekeliling digit agar angka 1-digit (mis. "9") tidak diabaikan PSM 7/8
+    if (maxIx > minIx && maxIy > minIy) {
+      const tightPad = 24;
+      const tx = Math.max(0, minIx - tightPad);
+      const ty = Math.max(0, minIy - tightPad);
+      const tw = Math.min(cw - tx, maxIx - minIx + 1 + tightPad * 2);
+      const th = Math.min(ch - ty, maxIy - minIy + 1 + tightPad * 2);
+      const tightCanvas = document.createElement("canvas");
+      tightCanvas.width = tw;
+      tightCanvas.height = th;
+      const tightCtx = tightCanvas.getContext("2d");
+      if (tightCtx) {
+        tightCtx.fillStyle = "#ffffff";
+        tightCtx.fillRect(0, 0, tw, th);
+        tightCtx.drawImage(outCanvas, tx, ty, tw, th, 0, 0, tw, th);
+        return tightCanvas.toDataURL("image/png");
+      }
+    }
+
     return outCanvas.toDataURL("image/png");
   };
 
   if (hasBacklog && hasExpedite) {
-    const topBounds = detectColoredDonutInBand(data, w, 0, Math.round(h * 0.54), xMax);
+    const topBounds = detectColoredDonutInBand(data, w, 0, Math.round(h * 0.54), xMax, xMin);
     if (topBounds) {
       const topUrl = renderHole(topBounds);
       if (topUrl) result["Backlog"] = topUrl;
     }
     const botStart = topBounds ? Math.min(h - 2, topBounds.ry1 + 6) : Math.round(h * 0.44);
-    const botBounds = detectColoredDonutInBand(data, w, botStart, h - 1, xMax);
+    const botBounds = detectColoredDonutInBand(data, w, botStart, h - 1, xMax, xMin);
     if (botBounds) {
       const botUrl = renderHole(botBounds);
       if (botUrl) result["To Expedite"] = botUrl;
     }
   } else if (hasBacklog) {
-    const bounds = detectColoredDonutInBand(data, w, 0, h - 1, xMax);
+    const bounds = detectColoredDonutInBand(data, w, 0, h - 1, xMax, xMin);
     if (bounds) {
       const url = renderHole(bounds);
       if (url) result["Backlog"] = url;
     }
   } else if (hasExpedite) {
-    const bounds = detectColoredDonutInBand(data, w, 0, h - 1, xMax);
+    const bounds = detectColoredDonutInBand(data, w, 0, h - 1, xMax, xMin);
     if (bounds) {
       const url = renderHole(bounds);
       if (url) result["To Expedite"] = url;
@@ -924,30 +960,30 @@ export async function runOcrLocally(
     }
     if (isBacklogExp) {
       try {
+        const { contentLeft } = await detectDashboardContentBounds(images[i]);
+        const hasExpediteOrLinehaul = hasExpediteWord || /Expedit|Linehaul/i.test(combinedMain);
         // 1. Prioritas utama: deteksi lubang tengah ring atas (Backlog) dan ring bawah (To Expedite) secara geometris
         const ringHoles = await extractDonutHoleImages(
           images[i],
           hasBacklogWord,
-          hasExpediteWord,
-          isFull
+          hasExpediteOrLinehaul,
+          isFull,
+          contentLeft
         );
         const solvedPrefixes = new Set<string>();
         const holeEntries = Object.entries(ringHoles) as Array<["Backlog" | "To Expedite", string]>;
         if (holeEntries.length > 0) {
           await worker.setParameters({
-            tessedit_pageseg_mode: "7" as never,
             tessedit_char_whitelist: "0123456789.,",
           });
           for (const [prefix, holeUrl] of holeEntries) {
-            let resHole = await worker.recognize(holeUrl, {}, { text: true, blocks: true });
-            collectPageTokenConfidence(resHole.data, tokenMap);
-            let digits = (resHole.data.text || "").replace(/[^\d.,]/g, "").trim();
-            if (!/\d/.test(digits)) {
-              await worker.setParameters({ tessedit_pageseg_mode: "8" as never });
-              resHole = await worker.recognize(holeUrl, {}, { text: true, blocks: true });
+            let digits = "";
+            for (const psm of ["7", "8", "10", "6"]) {
+              await worker.setParameters({ tessedit_pageseg_mode: psm as never });
+              const resHole = await worker.recognize(holeUrl, {}, { text: true, blocks: true });
               collectPageTokenConfidence(resHole.data, tokenMap);
               digits = (resHole.data.text || "").replace(/[^\d.,]/g, "").trim();
-              await worker.setParameters({ tessedit_pageseg_mode: "7" as never });
+              if (/^\d[\d.,]*$/.test(digits)) break;
             }
             if (/^\d[\d.,]*$/.test(digits)) {
               crops.push(`${prefix} [RING]\n${digits}`);
@@ -961,20 +997,22 @@ export async function runOcrLocally(
         await worker.setParameters({ tessedit_pageseg_mode: "11" as never });
         const donutRegions: [string, number, number, number, number, number][] = [];
         if (isFull) {
+          const sxStart = Math.max(0.01, contentLeft);
+          const swDonut = Math.min(0.32, Math.max(0.24, 1 - sxStart));
           if (hasBacklogWord) {
             if (!solvedPrefixes.has("Backlog")) {
-              donutRegions.push(["Backlog", 0.01, 0.05, 0.32, 0.43, 195]);
+              donutRegions.push(["Backlog", sxStart, 0.05, swDonut, 0.43, 195]);
             }
             if (!solvedPrefixes.has("To Expedite")) {
-              donutRegions.push(["To Expedite", 0.01, 0.52, 0.32, 0.46, 195]);
+              donutRegions.push(["To Expedite", sxStart, 0.52, swDonut, 0.46, 195]);
             }
           } else if (!solvedPrefixes.has("To Expedite")) {
-            donutRegions.push(["To Expedite", 0.01, 0.08, 0.34, 0.85, 195]);
+            donutRegions.push(["To Expedite", sxStart, 0.08, swDonut, 0.85, 195]);
           }
         } else {
           const hasRightSidePanel = /Aging|To\s+Buyer|Linehaul|Transporting/i.test(combinedMain);
           const cropW = hasRightSidePanel ? 0.52 : 1;
-          if (hasBacklogWord && hasExpediteWord) {
+          if (hasBacklogWord && hasExpediteOrLinehaul) {
             if (!solvedPrefixes.has("Backlog")) donutRegions.push(["Backlog", 0, 0, cropW, 0.5, 195]);
             if (!solvedPrefixes.has("To Expedite")) donutRegions.push(["To Expedite", 0, 0.5, cropW, 0.5, 195]);
           } else if (hasBacklogWord && !solvedPrefixes.has("Backlog")) {
