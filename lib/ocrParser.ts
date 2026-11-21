@@ -419,6 +419,37 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
 
   let nums = allNumbers(afterLabel);
   let fullSegment = afterLabel;
+  if (nums.length === 0 && afterLabel.trim() === "") {
+    // Mode kolom vertikal: "Delivering / Delivered / On-hold" lalu "Volume / v1 / v2 / v3" lalu "Total / t1 / t2 / t3"
+    let volHeader = -1;
+    let totHeader = -1;
+    for (let j = idx + 1; j < lines.length && j <= idx + 12; j++) {
+      if (SECTION_BOUNDARY_RE.test(lines[j])) break;
+      if (volHeader === -1 && /^\s*Volume\b/i.test(lines[j])) volHeader = j;
+      else if (volHeader !== -1 && totHeader === -1 && /^\s*Total\b/i.test(lines[j])) {
+        totHeader = j;
+        break;
+      }
+    }
+    if (volHeader !== -1 && totHeader !== -1) {
+      const readCol3rd = (startLine: number, endLine: number): number | null => {
+        const vals: (number | null)[] = [];
+        for (let k = startLine + 1; k < endLine && vals.length < 3; k++) {
+          const t = lines[k].trim();
+          if (!t) continue;
+          const n = allNumbers(t);
+          if (n.length > 0) vals.push(n[0]);
+          else if (t === "-") vals.push(0);
+        }
+        return vals.length >= 3 ? vals[2] : null;
+      };
+      const colVol = readCol3rd(volHeader, totHeader);
+      const colTot = readCol3rd(totHeader, Math.min(lines.length, totHeader + 6));
+      if (colVol !== null) {
+        return finalizeOnHold(colVol, colTot, lines.slice(totHeader, totHeader + 10).join(" "));
+      }
+    }
+  }
   if (nums.length < 2) {
     const extra = collectFollowingLines(lines, idx);
     if (extra) {

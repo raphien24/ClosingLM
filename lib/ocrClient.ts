@@ -149,7 +149,8 @@ async function cropRegionForOcr(
   const sw = Math.min(w - sx, Math.round(w * swFrac));
   const sh = Math.min(h - sy, Math.round(h * shFrac));
   if (stripColorRing ? sw < 40 || sh < 25 : sw < 50 || sh < 30) return null;
-  const tw = Math.min(2800, sw * 3);
+  const upscale = sw < 750 ? 4 : 3;
+  const tw = Math.min(2800, sw * upscale);
   const th = Math.max(1, Math.round((sh * tw) / sw));
 
   const canvas = document.createElement("canvas");
@@ -500,6 +501,137 @@ async function binarizeForOcr(dataUrl: string, threshold: number): Promise<strin
 }
 
 /**
+ * Rapatkan celah putih horizontal antar kolom tabel (per baris teks) agar
+ * angka kecil seperti "On-hold  31  31  0(0%)" pada layar HD tidak terpecah
+ * menjadi blok kolom terpisah atau dianggap noise oleh Tesseract.
+ */
+async function compactTableRowsForOcr(dataUrl: string): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  if (w < 60 || h < 30) return dataUrl;
+
+  const src = document.createElement("canvas");
+  src.width = w;
+  src.height = h;
+  const sctx = src.getContext("2d");
+  if (!sctx) return dataUrl;
+  sctx.drawImage(img, 0, 0);
+  const d = sctx.getImageData(0, 0, w, h).data;
+
+  const rowHasInk = new Uint8Array(h);
+  for (let y = 0; y < h; y++) {
+    let cnt = 0;
+    const rowOff = y * w * 4;
+    for (let x = 0; x < w; x++) {
+      if (d[rowOff + x * 4] < 128) cnt++;
+    }
+    if (cnt >= 3 && cnt <= w * 0.65) rowHasInk[y] = 1;
+  }
+
+  const bands: [number, number][] = [];
+  let y = 0;
+  while (y < h) {
+    if (rowHasInk[y]) {
+      const y0 = y;
+      while (y < h) {
+        if (rowHasInk[y]) {
+          y++;
+        } else {
+          let g = 0;
+          while (y + g < h && !rowHasInk[y + g] && g < 4) g++;
+          if (y + g < h && rowHasInk[y + g]) y += g;
+          else break;
+        }
+      }
+      if (y - y0 >= 6) {
+        bands.push([Math.max(0, y0 - 4), Math.min(h, y + 4)]);
+      }
+    } else {
+      y++;
+    }
+  }
+  if (bands.length === 0) return dataUrl;
+
+  const gapThresh = 44;
+  const gapKeep = 48;
+  const padX = 24;
+  const padY = 18;
+  const rows: { y0: number; y1: number; segs: [number, number][] }[] = [];
+  let maxW = 1;
+  let totalH = padY;
+
+  for (const [y0, y1] of bands) {
+    const colInk = new Uint8Array(w);
+    for (let x = 0; x < w; x++) {
+      for (let yy = y0; yy < y1; yy++) {
+        if (d[(yy * w + x) * 4] < 128) {
+          colInk[x] = 1;
+          break;
+        }
+      }
+    }
+
+    const segs: [number, number][] = [];
+    let x = 0;
+    while (x < w && !colInk[x]) x++;
+    while (x < w) {
+      const segStart = x;
+      while (x < w) {
+        if (colInk[x]) {
+          x++;
+        } else {
+          let g = 0;
+          while (x + g < w && !colInk[x + g]) g++;
+          if (x + g >= w || g > gapThresh) {
+            x += g;
+            break;
+          }
+          x += g;
+        }
+      }
+      let segEnd = x;
+      while (segEnd > segStart && !colInk[segEnd - 1]) segEnd--;
+      if (segEnd > segStart) segs.push([segStart, segEnd]);
+      while (x < w && !colInk[x]) x++;
+    }
+
+    if (segs.length > 0) {
+      const rowW =
+        padX * 2 +
+        segs.reduce((acc, [a, b]) => acc + (b - a), 0) +
+        (segs.length - 1) * gapKeep;
+      maxW = Math.max(maxW, rowW);
+      totalH += y1 - y0 + padY;
+      rows.push({ y0, y1, segs });
+    }
+  }
+  if (rows.length === 0) return dataUrl;
+
+  const out = document.createElement("canvas");
+  out.width = maxW;
+  out.height = totalH;
+  const octx = out.getContext("2d");
+  if (!octx) return dataUrl;
+  octx.fillStyle = "#ffffff";
+  octx.fillRect(0, 0, maxW, totalH);
+
+  let cy = padY;
+  for (const { y0, y1, segs } of rows) {
+    const bh = y1 - y0;
+    let cx = padX;
+    for (const [a, b] of segs) {
+      const sw = b - a;
+      octx.drawImage(src, a, y0, sw, bh, cx, cy, sw, bh);
+      cx += sw + gapKeep;
+    }
+    cy += bh + padY;
+  }
+
+  return out.toDataURL("image/png");
+}
+
+/**
  * Normalisasi kontras (auto-level) pada gambar grayscale:
  * - Piksel latar terang (>= 236) diputihkan ke 255 agar bebas noise abu-abu kartu FMS
  * - Piksel teks gelap (< 236) diregangkan kontrasnya agar tepi angka lebih tegas bagi LSTM Tesseract
@@ -672,8 +804,11 @@ export async function runOcrLocally(
       /In\s+Hub\s+Status|F[il1][aeo]{1,3}[rt]\s+(?:H[aeo]{2,3}[ad]\s+C[o0][au][nr][tl]s?|P[a-z]{0,3}[o0]du[ce]tiv|stat)|Clear\s+Fl?[o0]{2}r\s+Rate|To\s+Handover|To\s+Deliver/i.test(
         combinedMain
       );
+    const hasSideBySideOp =
+      /In\s+Hub\s+Status/i.test(combinedMain) &&
+      /F[il1][aeo]{1,3}[rt]\s+(?:stat|P[a-z]{0,3}[o0]du)|Delivering/i.test(combinedMain);
     const isOpProgress =
-      isFull &&
+      (isFull || hasSideBySideOp) &&
       !isParcelSweeper &&
       (hasOpBody ||
         (/Operation\s+Progress/i.test(combinedMain) && !/Backlog[\s\S]*To\s+Expedite/i.test(combinedMain)));
@@ -689,12 +824,12 @@ export async function runOcrLocally(
     const crops: string[] = [];
     if (isOpProgress) {
       const onHoldRe =
-        /\b(?:[oq0]n[\s\-r]*[hn][o0a][il1tk]{0,2}d|[oq0]nh[o0][il1]e|an[\s\-]+h[o0]l?d)\b[ \t:-]*(\d[\d.,]*)[ \t]+(\d[\d.,]*|-)/i;
+        /\b(?:[oq0c]n[\s\-–—_.r]*[hb][o0c][il1tk]{0,2}(?:d|cl)|[oq0]nh[o0][il1]e|an[\s\-–—_]+h[o0]l?d)\b[ \t:-]*(\d[\d.,]*)[ \t]+(\d[\d.,]*|-)/i;
       const checkValidOh = (txt: string) => {
         const m = txt.match(onHoldRe);
         if (!m) return null;
-        if (m[2] === "-") return true;
         const v = parseInt(m[1].replace(/[.,]/g, ""), 10);
+        if (m[2] === "-") return !isNaN(v) && v === 0 ? 0 : false;
         const t = parseInt(m[2].replace(/[.,]/g, ""), 10);
         return !isNaN(v) && !isNaN(t) && t >= v ? t : false;
       };
@@ -732,8 +867,12 @@ export async function runOcrLocally(
       const rightCardX = Math.max(0.47, contentMid - 0.015);
       const regions: { tag?: string; rect: [number, number, number, number]; binAlso: boolean }[] = [];
       if (!hasOnHoldNums) {
-        const rightCardY = contentLeft > 0 ? 0.24 : 0.21;
-        regions.push({ rect: [rightCardX, rightCardY, 1 - rightCardX, 0.30], binAlso: true });
+        const rightCardY = contentLeft > 0 ? 0.24 : 0.20;
+        regions.push({
+          tag: "__FLEET_STATUS__",
+          rect: [rightCardX, rightCardY, 1 - rightCardX, 0.34],
+          binAlso: true,
+        });
       }
       if (!hasInHubAll) {
         regions.push({ rect: [contentLeft, 0.20, leftCardW, 0.36], binAlso: false });
@@ -766,6 +905,14 @@ export async function runOcrLocally(
               const resBin = await worker.recognize(binCropUrl, {}, { text: true, blocks: true });
               collectPageTokenConfidence(resBin.data, tokenMap);
               if (resBin.data.text) crops.push(`${prefix}${resBin.data.text}`);
+            }
+            // Untuk Fleet status pada resolusi HD: binerisasi ambang 212 + rapatkan celah putih antar kolom per baris
+            if (tag === "__FLEET_STATUS__") {
+              const bin212Url = await binarizeForOcr(cropUrl, 212);
+              const compactUrl = await compactTableRowsForOcr(bin212Url);
+              const resCompact = await worker.recognize(compactUrl, {}, { text: true, blocks: true });
+              collectPageTokenConfidence(resCompact.data, tokenMap);
+              if (resCompact.data.text) crops.push(`${prefix}${resCompact.data.text}`);
             }
           }
         } catch {
