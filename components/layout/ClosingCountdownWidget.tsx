@@ -195,7 +195,7 @@ export function ClosingCountdownWidget({
     <div
       title="Sisa waktu closing harian hingga pukul 23:59:59 WIB (End of Day)"
       className={cn(
-        "hidden lg:flex relative items-center gap-3 rounded-2xl border px-3.5 py-2 backdrop-blur-md transition-colors flex-shrink-0",
+        "hidden lg:flex relative items-center gap-2 2xl:gap-2.5 rounded-xl 2xl:rounded-2xl border px-2.5 py-1.5 backdrop-blur-md transition-colors flex-shrink-0",
         theme.box
       )}
     >
@@ -207,7 +207,7 @@ export function ClosingCountdownWidget({
       <div
         aria-hidden="true"
         className={cn(
-          "relative w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0 shadow-inner overflow-hidden",
+          "relative w-7 h-7 rounded-full border flex items-center justify-center flex-shrink-0 shadow-inner overflow-hidden",
           theme.dialBg
         )}
       >
@@ -237,14 +237,14 @@ export function ClosingCountdownWidget({
       </div>
 
       {/* Info label + progress bar beranimasi (tampil penuh mulai layar 2xl >= 1536px) */}
-      <div className="hidden 2xl:flex flex-col min-w-[148px]">
-        <div className="flex items-center justify-between gap-2">
-          <span className={cn("text-[10px] font-bold uppercase tracking-wider leading-none whitespace-nowrap", theme.label)}>
+      <div className="hidden 2xl:flex flex-col min-w-[118px]">
+        <div className="flex items-center justify-between gap-1.5">
+          <span className={cn("text-[9px] font-bold uppercase tracking-wider leading-none whitespace-nowrap", theme.label)}>
             Batas Closing
           </span>
           <span
             className={cn(
-              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border leading-none whitespace-nowrap",
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border leading-none whitespace-nowrap",
               theme.badge
             )}
           >
@@ -254,7 +254,7 @@ export function ClosingCountdownWidget({
         </div>
 
         {/* Progress Bar Berkilau (sisa waktu hari ini menuju 23:59 WIB) */}
-        <div className={cn("relative w-full h-2 rounded-full overflow-hidden mt-1.5", theme.track)}>
+        <div className={cn("relative w-full h-1.5 rounded-full overflow-hidden mt-1.5", theme.track)}>
           <div
             className={cn(
               "relative h-full rounded-full bg-gradient-to-r transition-all duration-700 overflow-hidden",
@@ -268,10 +268,10 @@ export function ClosingCountdownWidget({
       </div>
 
       {/* Timer Digital Monospace */}
-      <div className={cn("flex flex-col items-end pl-0.5 2xl:border-l 2xl:pl-3", theme.divider)}>
+      <div className={cn("flex flex-col items-end pl-0.5 2xl:border-l 2xl:pl-2.5", theme.divider)}>
         <div
           className={cn(
-            "flex items-baseline gap-0.5 font-mono font-extrabold text-[15px] tracking-tight tabular-nums leading-none whitespace-nowrap",
+            "flex items-baseline gap-0.5 font-mono font-extrabold text-sm tracking-tight tabular-nums leading-none whitespace-nowrap",
             theme.timer
           )}
         >
