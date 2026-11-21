@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ClosingCountdownWidget } from "./ClosingCountdownWidget";
+import { ActiveViewersWidget } from "./ActiveViewersWidget";
 import { MaritimeWaveBackdrop } from "@/components/productivity/MaritimeAnimations";
 import {
   DeckCompassWatermark,
@@ -227,6 +228,14 @@ export function Navbar() {
     }
   };
 
+  const handleSignOut = () => {
+    fetch("/api/presence?action=leave", {
+      method: "POST",
+      keepalive: true,
+    }).catch(() => {});
+    void signOut({ callbackUrl: "/login" });
+  };
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -419,8 +428,17 @@ export function Navbar() {
             })()}
           </nav>
 
-          {/* Aksi Kanan: Kronometer Batas Closing, Lentera Tema, & Profil Kapten */}
+          {/* Aksi Kanan: User Aktif, Kronometer Batas Closing, Lentera Tema, & Profil Kapten */}
           <div className="flex items-center gap-1.5 min-[1680px]:gap-2 ml-auto flex-shrink-0">
+            <ActiveViewersWidget
+              userEmail={user?.email}
+              hubName={hubName}
+              onOpenPopover={() => {
+                setUserMenuOpen(false);
+                setProdMenuOpen(false);
+              }}
+            />
+
             <ClosingCountdownWidget />
 
             {/* Toggle Lentera Siang / Malam */}
@@ -585,7 +603,7 @@ export function Navbar() {
 
                   <button
                     type="button"
-                    onClick={() => signOut({ callbackUrl: "/login" })}
+                    onClick={handleSignOut}
                     className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm font-semibold text-rose-300 hover:text-rose-200 hover:bg-rose-500/15 transition-colors cursor-pointer"
                   >
                     <LogOut className="h-4 w-4" />
@@ -789,7 +807,7 @@ export function Navbar() {
 
                 <button
                   type="button"
-                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  onClick={handleSignOut}
                   className="flex items-center justify-center gap-2 w-full py-2.5 px-3 rounded-xl text-xs font-bold text-rose-200 bg-rose-950/70 border border-rose-500/40 hover:bg-rose-900/80 transition-colors cursor-pointer"
                 >
                   <LogOut className="h-4 w-4" />
