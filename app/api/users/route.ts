@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Session } from "next-auth";
 import { auth } from "@/lib/auth";
+import { resolveActiveHubForSession } from "@/lib/activeHub";
 import { isValidEmail } from "@/lib/authConstants";
 import {
   getHubUsers,
@@ -10,16 +11,12 @@ import {
   UserMappingError,
 } from "@/lib/userMapping";
 
-function getAuthorizedHubUser(session: Session | null) {
-  if (!session?.user) return null;
-  const user = session.user as typeof session.user & {
-    hubName: string | null;
-    isAuthorized: boolean;
-  };
-  if (!user.isAuthorized || !user.hubName) return null;
+async function getAuthorizedHubUser(session: Session | null) {
+  const access = await resolveActiveHubForSession(session);
+  if (!access) return null;
   return {
-    email: String(user.email ?? "").trim().toLowerCase(),
-    hubName: user.hubName,
+    email: access.email,
+    hubName: access.activeHub,
   };
 }
 
@@ -27,7 +24,7 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const authUser = getAuthorizedHubUser(session);
+  const authUser = await getAuthorizedHubUser(session);
   if (!authUser) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
 
   try {
@@ -45,7 +42,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const authUser = getAuthorizedHubUser(session);
+  const authUser = await getAuthorizedHubUser(session);
   if (!authUser) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
 
   let body: { email?: string; nama_user?: string };
@@ -93,7 +90,7 @@ export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const authUser = getAuthorizedHubUser(session);
+  const authUser = await getAuthorizedHubUser(session);
   if (!authUser) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
 
   let body: { email?: string; status?: "active" | "inactive" };
@@ -145,7 +142,7 @@ export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const authUser = getAuthorizedHubUser(session);
+  const authUser = await getAuthorizedHubUser(session);
   if (!authUser) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
 
   let body: { email?: string };

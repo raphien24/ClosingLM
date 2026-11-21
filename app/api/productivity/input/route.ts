@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { resolveActiveHubForSession } from "@/lib/activeHub";
 import { saveCourierRecordsBatch, checkExistingCourierRecords } from "@/lib/productivityService";
 import { CourierRecord } from "@/types/productivity";
 
@@ -7,12 +8,8 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = session.user as typeof session.user & {
-    hubName: string | null;
-    isAuthorized: boolean;
-  };
-
-  if (!user.isAuthorized || !user.hubName)
+  const access = await resolveActiveHubForSession(session);
+  if (!access)
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
 
   let body: {
@@ -27,7 +24,7 @@ export async function POST(req: NextRequest) {
     try {
       const check = await checkExistingCourierRecords(
         (body.records || []).map((r) => ({ courier_id: r.courier_id, date: r.date })),
-        user.hubName
+        access.activeHub
       );
       return NextResponse.json({
         success: true,
@@ -44,8 +41,8 @@ export async function POST(req: NextRequest) {
   try {
     const result = await saveCourierRecordsBatch(
       body.records,
-      user.hubName,
-      session.user?.email || "unknown"
+      access.activeHub,
+      access.email || "unknown"
     );
 
     const wasReplace = result.deletedExisting > 0;

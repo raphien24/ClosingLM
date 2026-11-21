@@ -9,6 +9,7 @@ export interface AuthUser {
   email: string | null | undefined;
   image: string | null | undefined;
   hubName: string | null;
+  hubs?: string[];
   hubUser: string | null;
   isAuthorized: boolean;
   isSuperAdmin?: boolean;
@@ -19,6 +20,26 @@ export function useAuth() {
   const { data: session, status, update } = useSession();
 
   const user = session?.user as AuthUser | undefined;
+  const hubs =
+    Array.isArray(user?.hubs) && user.hubs.length > 0
+      ? user.hubs
+      : user?.hubName
+        ? [user.hubName]
+        : [];
+
+  const switchHub = async (nextHub: string) => {
+    const res = await fetch("/api/active-hub", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hubName: nextHub }),
+    });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.activeHub) {
+      throw new Error(json?.error || "Gagal mengganti Hub aktif");
+    }
+    await update({ activeHub: json.activeHub });
+    window.location.reload();
+  };
 
   return {
     user: user ?? null,
@@ -28,13 +49,15 @@ export function useAuth() {
     isSuperAdmin: user?.isSuperAdmin ?? isSuperAdminEmail(user?.email),
     isOwnerAdmin: user?.isOwnerAdmin ?? isOwnerAdminEmail(user?.email),
     hubName: user?.hubName ?? null,
+    hubs,
     hubUser: user?.hubUser ?? null,
     refreshSession: update,
+    switchHub,
   };
 }
 
 /**
- * Mengambil nama tampilan, avatar profil, & status admin live terbaru
+ * Mengambil nama tampilan, avatar profil, hub aktif, & status admin live terbaru
  * (disinkronkan dengan /api/profile dan event "jtt08-profile-updated")
  * untuk dipakai konsisten di Navbar & Dashboard.
  */
@@ -43,11 +66,15 @@ export function useUserProfileDisplay() {
   const [customAvatar, setCustomAvatar] = useState<string>("");
   const [customName, setCustomName] = useState<string | null>(null);
   const [liveIsAdmin, setLiveIsAdmin] = useState<boolean | null>(null);
+  const [liveActiveHub, setLiveActiveHub] = useState<string | null>(null);
+  const [liveHubs, setLiveHubs] = useState<string[] | null>(null);
 
   useEffect(() => {
     setCustomAvatar("");
     setCustomName(null);
     setLiveIsAdmin(null);
+    setLiveActiveHub(null);
+    setLiveHubs(null);
     if (!auth.user?.email) return;
     let active = true;
     fetch("/api/profile")
@@ -57,6 +84,12 @@ export function useUserProfileDisplay() {
         setCustomAvatar(json.profile.avatar_url || "");
         if (json.profile.nama_user) setCustomName(json.profile.nama_user);
         if (typeof json.isAdmin === "boolean") setLiveIsAdmin(json.isAdmin);
+        if (typeof json.activeHub === "string" && json.activeHub) {
+          setLiveActiveHub(json.activeHub);
+        }
+        if (Array.isArray(json.hubs) && json.hubs.length > 0) {
+          setLiveHubs(json.hubs);
+        }
       })
       .catch(() => {});
 
@@ -78,6 +111,8 @@ export function useUserProfileDisplay() {
 
   return {
     ...auth,
+    hubName: liveActiveHub ?? auth.hubName,
+    hubs: liveHubs ?? auth.hubs,
     isSuperAdmin: liveIsAdmin ?? auth.isSuperAdmin,
     displayName,
     avatarSrc,

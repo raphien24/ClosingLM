@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { isAdminEmail } from "@/lib/adminService";
+import { resolveActiveHubForSession } from "@/lib/activeHub";
 import { isOwnerAdminEmail } from "@/lib/authConstants";
 import {
   getUserProfile,
@@ -14,37 +14,40 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = session.user as typeof session.user & {
-    isAuthorized: boolean;
-    hubName?: string | null;
-    hubUser?: string | null;
-  };
-  const email = String(user.email ?? "").trim().toLowerCase();
-  if (!user.isAuthorized || !email) {
+  const access = await resolveActiveHubForSession(session);
+  if (!access) {
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
   }
+  const { email, activeHub, allowedHubs, isAdmin } = access;
+  const user = session.user as typeof session.user & {
+    hubUser?: string | null;
+  };
 
   try {
-    const [rawProfile, isAdmin] = await Promise.all([
-      getUserProfile(email),
-      isAdminEmail(email),
-    ]);
+    const rawProfile = await getUserProfile(email);
     const isOwner = isOwnerAdminEmail(email);
-    const profile =
-      rawProfile ||
-      (isAdmin
+    const profile = rawProfile
+      ? { ...rawProfile, nama_hub: activeHub }
+      : isAdmin
         ? {
             email,
-            nama_hub: user.hubName || "Soko Hub",
+            nama_hub: activeHub,
             nama_user: user.hubUser || user.name || email.split("@")[0],
             status: "active" as const,
             avatar_url: "",
           }
-        : null);
+        : null;
     if (!profile) {
       return NextResponse.json({ error: "Profil tidak ditemukan" }, { status: 404 });
     }
-    return NextResponse.json({ success: true, profile, isAdmin, isOwner });
+    return NextResponse.json({
+      success: true,
+      profile,
+      isAdmin,
+      isOwner,
+      activeHub,
+      hubs: allowedHubs,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Gagal memuat profil" },

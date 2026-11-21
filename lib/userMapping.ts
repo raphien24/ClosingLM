@@ -80,27 +80,74 @@ export async function getAllUserMappings(): Promise<UserMapping[]> {
   return parseRowsToIndexedMappings(data).map(({ rowIndex: _rowIndex, ...rest }) => rest);
 }
 
+function splitHubList(rawHub: string): string[] {
+  return String(rawHub ?? "")
+    .split(",")
+    .map((h) => h.trim())
+    .filter(Boolean);
+}
+
+function rowHasHub(rawHub: string, targetHubLower: string): boolean {
+  return splitHubList(rawHub).some((h) => h.toLowerCase() === targetHubLower);
+}
+
 /**
- * Lookup email ke nama hub
- * Return nama_hub jika email terdaftar dan active, null jika tidak
+ * Ambil seluruh daftar hub aktif milik satu email (mendukung banyak baris di USER_MAPPING
+ * maupun penulisan dipisah koma pada kolom nama_hub).
+ */
+export async function getUserHubs(
+  email: string,
+  options?: { skipCache?: boolean }
+): Promise<{
+  hubs: string[];
+  primaryHub: string | null;
+  nama_user: string | null;
+}> {
+  if (!email) {
+    return { hubs: [], primaryHub: null, nama_user: null };
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const data = await getSheetData(USER_MAPPING_SHEET, { skipCache: options?.skipCache });
+  const activeMappings = parseRowsToIndexedMappings(data).filter(
+    (m) => m.email === normalizedEmail && m.status === "active"
+  );
+
+  const seen = new Set<string>();
+  const hubs: string[] = [];
+  let namaUser: string | null = null;
+
+  for (const m of activeMappings) {
+    if (!namaUser && m.nama_user) namaUser = m.nama_user;
+    for (const h of splitHubList(m.nama_hub)) {
+      const key = h.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        hubs.push(h);
+      }
+    }
+  }
+
+  return {
+    hubs,
+    primaryHub: hubs[0] ?? null,
+    nama_user: namaUser,
+  };
+}
+
+/**
+ * Lookup email ke nama hub utama pertama (kompatibel dengan caller single-hub)
  */
 export async function getUserHub(email: string): Promise<{
   nama_hub: string;
   nama_user: string;
 } | null> {
-  if (!email) return null;
-
-  const mappings = await getAllUserMappings();
-  const mapping = mappings.find(
-    (m) =>
-      m.email === email.toLowerCase().trim() && m.status === "active"
-  );
-
-  if (!mapping) return null;
+  const { primaryHub, nama_user } = await getUserHubs(email);
+  if (!primaryHub) return null;
 
   return {
-    nama_hub: mapping.nama_hub,
-    nama_user: mapping.nama_user,
+    nama_hub: primaryHub,
+    nama_user: nama_user || "",
   };
 }
 
@@ -109,8 +156,14 @@ export async function getUserHub(email: string): Promise<{
  */
 export async function getAllHubs(): Promise<string[]> {
   const mappings = await getAllUserMappings();
-  const hubs = [...new Set(mappings.map((m) => m.nama_hub).filter(Boolean))];
-  return hubs.sort();
+  const seen = new Map<string, string>();
+  for (const m of mappings) {
+    for (const h of splitHubList(m.nama_hub)) {
+      const key = h.toLowerCase();
+      if (!seen.has(key)) seen.set(key, h);
+    }
+  }
+  return Array.from(seen.values()).sort();
 }
 
 /**
@@ -120,8 +173,11 @@ export async function getHubUsers(hubName: string): Promise<UserMapping[]> {
   const normalizedHub = hubName.trim().toLowerCase();
   const data = await getSheetData(USER_MAPPING_SHEET, { skipCache: true });
   return parseRowsToIndexedMappings(data)
-    .filter((m) => m.nama_hub.trim().toLowerCase() === normalizedHub)
-    .map(({ rowIndex: _rowIndex, ...rest }) => rest)
+    .filter((m) => rowHasHub(m.nama_hub, normalizedHub))
+    .map(({ rowIndex: _rowIndex, ...rest }) => ({
+      ...rest,
+      nama_hub: splitHubList(rest.nama_hub).find((h) => h.toLowerCase() === normalizedHub) || rest.nama_hub,
+    }))
     .sort((a, b) => a.nama_user.localeCompare(b.nama_user, "id"));
 }
 
@@ -136,16 +192,17 @@ export async function getAllHubSummaries(): Promise<
   const grouped = new Map<string, { nama_hub: string; userCount: number; activeCount: number }>();
 
   for (const m of mappings) {
-    if (!m.nama_hub) continue;
-    const key = m.nama_hub.trim().toLowerCase();
-    const existing = grouped.get(key) ?? {
-      nama_hub: m.nama_hub,
-      userCount: 0,
-      activeCount: 0,
-    };
-    existing.userCount += 1;
-    if (m.status === "active") existing.activeCount += 1;
-    grouped.set(key, existing);
+    for (const hubLabel of splitHubList(m.nama_hub)) {
+      const key = hubLabel.toLowerCase();
+      const existing = grouped.get(key) ?? {
+        nama_hub: hubLabel,
+        userCount: 0,
+        activeCount: 0,
+      };
+      existing.userCount += 1;
+      if (m.status === "active") existing.activeCount += 1;
+      grouped.set(key, existing);
+    }
   }
 
   return Array.from(grouped.values()).sort((a, b) =>
@@ -154,8 +211,9 @@ export async function getAllHubSummaries(): Promise<
 }
 
 /**
- * Tambah pengguna baru ke hub tertentu.
- * Menolak email yang sudah terdaftar di hub yang sama maupun hub lain.
+ * Tambah pengguna ke hub tertentu.
+ * Mendukung 1 email mengakses lebih dari 1 hub berbeda; menolak hanya jika email
+ * sudah terdaftar di hub yang sama.
  */
 export async function addUserToHub(params: {
   email: string;
@@ -167,21 +225,17 @@ export async function addUserToHub(params: {
   const cleanUser = params.namaUser.trim();
 
   const data = await getSheetData(USER_MAPPING_SHEET, { skipCache: true });
-  const existing = parseRowsToIndexedMappings(data).find(
-    (m) => m.email === normalizedEmail
+  const existingSameHub = parseRowsToIndexedMappings(data).find(
+    (m) =>
+      m.email === normalizedEmail &&
+      rowHasHub(m.nama_hub, cleanHub.toLowerCase())
   );
 
-  if (existing) {
-    if (existing.nama_hub.trim().toLowerCase() === cleanHub.toLowerCase()) {
-      throw new UserMappingError(
-        existing.status === "inactive"
-          ? `Email "${normalizedEmail}" sudah ada di hub ini dengan status nonaktif. Silakan aktifkan kembali di daftar pengguna.`
-          : `Email "${normalizedEmail}" sudah terdaftar di ${existing.nama_hub}.`,
-        409
-      );
-    }
+  if (existingSameHub) {
     throw new UserMappingError(
-      `Email "${normalizedEmail}" sudah terdaftar di hub lain (${existing.nama_hub}). Satu email hanya dapat terhubung ke satu hub.`,
+      existingSameHub.status === "inactive"
+        ? `Email "${normalizedEmail}" sudah ada di hub ini dengan status nonaktif. Silakan aktifkan kembali di daftar pengguna.`
+        : `Email "${normalizedEmail}" sudah terdaftar di ${cleanHub}.`,
       409
     );
   }
@@ -208,9 +262,7 @@ export async function setUserStatusInHub(params: {
 
   const data = await getSheetData(USER_MAPPING_SHEET, { skipCache: true });
   const target = parseRowsToIndexedMappings(data).find(
-    (m) =>
-      m.email === normalizedEmail &&
-      m.nama_hub.trim().toLowerCase() === normalizedHub
+    (m) => m.email === normalizedEmail && rowHasHub(m.nama_hub, normalizedHub)
   );
 
   if (!target) {
@@ -254,11 +306,11 @@ export async function updateUserProfile(params: {
   const cleanAvatar = sanitizeAvatarUrl(params.avatarUrl);
 
   const data = await getSheetData(USER_MAPPING_SHEET, { skipCache: true });
-  const target = parseRowsToIndexedMappings(data).find(
+  const targets = parseRowsToIndexedMappings(data).filter(
     (m) => m.email === normalizedEmail && m.status === "active"
   );
 
-  if (!target) {
+  if (targets.length === 0) {
     throw new UserMappingError("Akun Anda tidak ditemukan atau tidak aktif.", 404);
   }
 
@@ -274,19 +326,23 @@ export async function updateUserProfile(params: {
     ]);
   }
 
-  await updateRow(USER_MAPPING_SHEET, target.rowIndex, [
-    target.email,
-    target.nama_hub,
-    cleanName,
-    target.status,
-    cleanAvatar,
-  ]);
+  // Sinkronkan nama & avatar ke semua baris hub aktif milik email tersebut
+  for (const target of targets) {
+    await updateRow(USER_MAPPING_SHEET, target.rowIndex, [
+      target.email,
+      target.nama_hub,
+      cleanName,
+      target.status,
+      cleanAvatar,
+    ]);
+  }
 
+  const first = targets[0];
   return {
-    email: target.email,
-    nama_hub: target.nama_hub,
+    email: first.email,
+    nama_hub: splitHubList(first.nama_hub)[0] || first.nama_hub,
     nama_user: cleanName,
-    status: target.status,
+    status: first.status,
     avatar_url: cleanAvatar,
   };
 }
@@ -303,16 +359,27 @@ export async function removeUserFromHub(params: {
 
   const data = await getSheetData(USER_MAPPING_SHEET, { skipCache: true });
   const target = parseRowsToIndexedMappings(data).find(
-    (m) =>
-      m.email === normalizedEmail &&
-      m.nama_hub.trim().toLowerCase() === normalizedHub
+    (m) => m.email === normalizedEmail && rowHasHub(m.nama_hub, normalizedHub)
   );
 
   if (!target) {
     throw new UserMappingError("Pengguna tidak ditemukan pada hub Anda.", 404);
   }
 
-  await deleteSheetRow(USER_MAPPING_SHEET, target.rowIndex);
+  const remainingHubs = splitHubList(target.nama_hub).filter(
+    (h) => h.toLowerCase() !== normalizedHub
+  );
+  if (remainingHubs.length > 0) {
+    await updateRow(USER_MAPPING_SHEET, target.rowIndex, [
+      target.email,
+      remainingHubs.join(", "),
+      target.nama_user,
+      target.status,
+      target.avatar_url || "",
+    ]);
+  } else {
+    await deleteSheetRow(USER_MAPPING_SHEET, target.rowIndex);
+  }
 }
 
 /**
@@ -330,20 +397,10 @@ export async function createNewHub(params: {
   const data = await getSheetData(USER_MAPPING_SHEET, { skipCache: true });
   const mappings = parseRowsToIndexedMappings(data);
 
-  const dupHub = mappings.find(
-    (m) => m.nama_hub.trim().toLowerCase() === cleanHub.toLowerCase()
-  );
+  const dupHub = mappings.find((m) => rowHasHub(m.nama_hub, cleanHub.toLowerCase()));
   if (dupHub) {
     throw new UserMappingError(
-      `Hub "${dupHub.nama_hub}" sudah terdaftar. Untuk menambah PIC di hub tersebut, gunakan menu Tambahkan Pengguna.`,
-      409
-    );
-  }
-
-  const dupEmail = mappings.find((m) => m.email === normalizedEmail);
-  if (dupEmail) {
-    throw new UserMappingError(
-      `Email "${normalizedEmail}" sudah terdaftar di "${dupEmail.nama_hub}". Gunakan email lain untuk PIC hub baru.`,
+      `Hub "${cleanHub}" sudah terdaftar. Untuk menambah PIC di hub tersebut, gunakan menu Tambahkan Pengguna.`,
       409
     );
   }

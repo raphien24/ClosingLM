@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import { getUserHub } from "./userMapping";
+import { getUserHubs } from "./userMapping";
 import { isOwnerAdminEmail, isSuperAdminEmail } from "./authConstants";
 import { isAdminEmail } from "./adminService";
 
@@ -31,6 +31,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // Attach custom fields dari token ke session
         const extendedUser = session.user as typeof session.user & {
           hubName: string | null;
+          hubs: string[];
           hubUser: string | null;
           isAuthorized: boolean;
           isExpired: boolean;
@@ -38,7 +39,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           isOwnerAdmin: boolean;
         };
         const userEmail = (session.user.email || token.email) as string | undefined;
-        extendedUser.hubName = (token.hubName as string | null) ?? null;
+        const hubs = Array.isArray(token.hubs)
+          ? (token.hubs as string[])
+          : token.hubName
+            ? [token.hubName as string]
+            : [];
+        extendedUser.hubName = (token.hubName as string | null) ?? hubs[0] ?? null;
+        extendedUser.hubs = hubs;
         extendedUser.hubUser = (token.hubUser as string | null) ?? null;
         extendedUser.isAuthorized = !isExpired && ((token.isAuthorized as boolean) ?? false);
         extendedUser.isExpired = isExpired;
@@ -51,7 +58,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return session;
     },
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, session }) {
       const now = Date.now();
       const MAX_SESSION_MS = 24 * 60 * 60 * 1000; // 24 jam
 
@@ -74,24 +81,47 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         !token.checkedAt ||
         now - Number(token.checkedAt) > RECHECK_MS;
 
-      if (email && shouldCheck) {
+      const isUpdateTrigger = (trigger as string | undefined) === "update";
+      const shouldFetch = shouldCheck || isUpdateTrigger;
+      if (email && shouldFetch) {
         const isSuper = await isAdminEmail(email);
         try {
-          const hubInfo = await getUserHub(email);
-          token.hubName = hubInfo?.nama_hub ?? (isSuper ? "Soko Hub" : null);
-          token.hubUser = hubInfo?.nama_user ?? (isSuper ? (user?.name || "Admin") : null);
-          token.isAuthorized = !!hubInfo || isSuper;
+          const hubInfo = await getUserHubs(email);
+          const hubs =
+            hubInfo.hubs.length > 0 ? hubInfo.hubs : isSuper ? ["Soko Hub"] : [];
+
+          const requestedHub =
+            isUpdateTrigger &&
+            session &&
+            typeof (session as { activeHub?: unknown }).activeHub === "string"
+              ? (session as { activeHub: string }).activeHub.trim()
+              : null;
+
+          const matchedRequested = requestedHub
+            ? hubs.find((h) => h.toLowerCase() === requestedHub.toLowerCase()) ?? null
+            : null;
+          const previousHub =
+            typeof token.hubName === "string"
+              ? hubs.find((h) => h.toLowerCase() === token.hubName!.toString().toLowerCase()) ?? null
+              : null;
+
+          token.hubs = hubs;
+          token.hubName = matchedRequested ?? previousHub ?? hubs[0] ?? null;
+          token.hubUser = hubInfo.nama_user ?? (isSuper ? (user?.name || "Admin") : null);
+          token.isAuthorized = hubs.length > 0 || isSuper;
           token.isAdmin = isSuper;
           token.checkedAt = now;
         } catch (error) {
           console.error("Error looking up user hub:", error);
           if (isSuper) {
+            token.hubs = ["Soko Hub"];
             token.hubName = "Soko Hub";
             token.hubUser = user?.name || "Admin";
             token.isAuthorized = true;
             token.isAdmin = true;
             token.checkedAt = now;
           } else if (user) {
+            token.hubs = [];
             token.hubName = null;
             token.hubUser = null;
             token.isAuthorized = false;
@@ -117,6 +147,7 @@ declare module "next-auth" {
       email?: string | null;
       image?: string | null;
       hubName: string | null;
+      hubs?: string[];
       hubUser: string | null;
       isAuthorized: boolean;
       isExpired?: boolean;

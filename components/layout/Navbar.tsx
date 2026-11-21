@@ -11,6 +11,8 @@ import {
   Moon,
   Menu,
   X,
+  ArrowLeftRight,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
@@ -202,13 +204,28 @@ function DrawerNavSection({
  */
 export function Navbar() {
   const pathname = usePathname();
-  const { user, hubName, isSuperAdmin, isOwnerAdmin, displayName, avatarSrc } =
+  const { user, hubName, hubs, switchHub, isSuperAdmin, isOwnerAdmin, displayName, avatarSrc } =
     useUserProfileDisplay();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [prodMenuOpen, setProdMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [switchingHub, setSwitchingHub] = useState<string | null>(null);
+
+  const handleSwitchHub = async (targetHub: string) => {
+    if (!targetHub || switchingHub) return;
+    if (hubName && targetHub.toLowerCase() === hubName.toLowerCase()) {
+      setUserMenuOpen(false);
+      return;
+    }
+    setSwitchingHub(targetHub);
+    try {
+      await switchHub(targetHub);
+    } catch {
+      setSwitchingHub(null);
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -480,8 +497,52 @@ export function Navbar() {
                     <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-0.5 bg-amber-400/15 text-amber-200 border border-amber-400/40 text-xs rounded-full font-semibold">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
                       {hubName || "All Hub"}
+                      {hubs.length > 1 && (
+                        <span className="text-[10px] text-amber-300/75 font-normal">
+                          ({hubs.length} Hub)
+                        </span>
+                      )}
                     </span>
                   </div>
+
+                  {hubs.length > 1 && (
+                    <div className="px-3 py-2.5 bg-[#0a1220] border-b border-amber-400/15">
+                      <p className="flex items-center gap-1.5 px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-300/80">
+                        <ArrowLeftRight className="h-3 w-3" />
+                        Ganti Hub Aktif ({hubs.length})
+                      </p>
+                      <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5">
+                        {hubs.map((h) => {
+                          const isActiveHub =
+                            hubName?.toLowerCase() === h.toLowerCase();
+                          const isSwitching = switchingHub === h;
+                          return (
+                            <button
+                              key={h}
+                              type="button"
+                              disabled={!!switchingHub}
+                              onClick={() => handleSwitchHub(h)}
+                              className={cn(
+                                "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors text-left cursor-pointer disabled:opacity-60",
+                                isActiveHub
+                                  ? "bg-amber-400/20 text-amber-100 border border-amber-400/50"
+                                  : "text-slate-300 hover:bg-amber-400/10 hover:text-amber-100 border border-transparent"
+                              )}
+                            >
+                              <span className="truncate">{h}</span>
+                              {isSwitching ? (
+                                <span className="text-[10px] text-amber-300 flex-shrink-0">
+                                  ...
+                                </span>
+                              ) : isActiveHub ? (
+                                <Check className="h-3.5 w-3.5 text-amber-300 flex-shrink-0" />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="py-1.5 px-1.5 border-b border-amber-400/15 space-y-0.5">
                     {accessLinks.map(({ href, label, iconId, badge }) => {
@@ -604,16 +665,46 @@ export function Navbar() {
                 {hubName && (
                   <div
                     className={cn(
-                      "px-3 py-2 rounded-xl border flex items-center justify-between text-xs font-semibold",
+                      "px-3 py-2 rounded-xl border text-xs font-semibold space-y-2",
                       isDark
                         ? "bg-[#111e33] border-amber-400/30 text-amber-200"
                         : "bg-[#efe2c6] border-amber-700/25 text-[#432910]"
                     )}
                   >
-                    <span className={isDark ? "text-amber-300/70" : "text-[#7a4b1e]"}>
-                      Hub Operasional:
-                    </span>
-                    <span className="font-bold">{hubName}</span>
+                    <div className="flex items-center justify-between">
+                      <span className={isDark ? "text-amber-300/70" : "text-[#7a4b1e]"}>
+                        Hub Operasional:
+                      </span>
+                      <span className="font-bold">{hubName}</span>
+                    </div>
+                    {hubs.length > 1 && (
+                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-amber-400/20">
+                        {hubs.map((h) => {
+                          const isActiveHub =
+                            hubName.toLowerCase() === h.toLowerCase();
+                          return (
+                            <button
+                              key={h}
+                              type="button"
+                              disabled={!!switchingHub}
+                              onClick={() => handleSwitchHub(h)}
+                              className={cn(
+                                "px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors border cursor-pointer disabled:opacity-60",
+                                isActiveHub
+                                  ? isDark
+                                    ? "bg-amber-400/20 border-amber-400/60 text-amber-100"
+                                    : "bg-amber-700 text-amber-50 border-amber-800"
+                                  : isDark
+                                    ? "bg-[#0d1727] border-amber-400/20 text-slate-300 hover:text-amber-100"
+                                    : "bg-white/70 border-amber-700/20 text-[#5a3717] hover:bg-white"
+                              )}
+                            >
+                              {switchingHub === h ? `${h}...` : h}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 

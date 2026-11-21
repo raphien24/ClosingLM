@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { resolveActiveHubForSession } from "@/lib/activeHub";
 import { getCourierSchedule } from "@/lib/productivityService";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { nowWIBDate } from "@/lib/dateUtils";
@@ -8,8 +9,8 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = session.user as typeof session.user & { hubName: string | null; isAuthorized: boolean };
-  if (!user.isAuthorized || !user.hubName)
+  const access = await resolveActiveHubForSession(session);
+  if (!access)
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
     const weekEndDate   = new Date(Date.UTC(y, m - 1, d + 6, 23, 59, 59, 999));
 
     const schedule = await getCourierSchedule(
-      user.hubName,
+      access.activeHub,
       { start: weekStartDate, end: weekEndDate },
       weekStartParam,
       { contract, vehicle, zone, excludeNew }

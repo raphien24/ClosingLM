@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { resolveActiveHubForSession } from "@/lib/activeHub";
 import { appendRow, getSheetData, sortSheetByDateKey, updateRow } from "@/lib/sheets";
 import { closingDataToRow, detectAnomalies, rowToClosingData } from "@/lib/utils";
 import { normalizeToYMD, nowWIBTimestamp, todayWIB } from "@/lib/dateUtils";
@@ -11,11 +12,8 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const sessionUser = session.user as typeof session.user & {
-    hubName: string | null;
-    isAuthorized: boolean;
-  };
-  if (!sessionUser.isAuthorized || !sessionUser.hubName)
+  const access = await resolveActiveHubForSession(session);
+  if (!access)
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
 
   const { searchParams } = new URL(req.url);
@@ -25,7 +23,7 @@ export async function GET(req: NextRequest) {
     const sheetData = await getSheetData(SHEET);
     const hubRows = sheetData
       .slice(1)
-      .filter((r) => r && r[1]?.toLowerCase().trim() === sessionUser.hubName!.toLowerCase().trim())
+      .filter((r) => r && r[1]?.toLowerCase().trim() === access.activeHub.toLowerCase().trim())
       .map(rowToClosingData)
       .sort((a, b) => b.tanggal.localeCompare(a.tanggal));
 
@@ -51,12 +49,8 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const sessionUser = session.user as typeof session.user & {
-    hubName: string | null;
-    isAuthorized: boolean;
-  };
-
-  if (!sessionUser.isAuthorized || !sessionUser.hubName)
+  const access = await resolveActiveHubForSession(session);
+  if (!access)
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
 
   let body: { data: ClosingData; overwrite?: boolean };
@@ -95,12 +89,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Otorisasi hub
-  if (data.nama_hub.toLowerCase().trim() !== sessionUser.hubName.toLowerCase().trim())
+  // Otorisasi hub — user bisa mengisi salah satu hub yang terdaftar untuk emailnya
+  const matchedAllowedHub = access.allowedHubs.find(
+    (h) => h.toLowerCase().trim() === data.nama_hub.toLowerCase().trim()
+  );
+  if (!matchedAllowedHub)
     return NextResponse.json(
-      { error: `Tidak bisa isi data hub "${data.nama_hub}". Hub Anda: "${sessionUser.hubName}"` },
+      {
+        error: `Tidak bisa isi data hub "${data.nama_hub}". Hub yang tersedia: "${access.allowedHubs.join(", ")}"`,
+      },
       { status: 403 }
     );
+  data.nama_hub = matchedAllowedHub;
 
   try {
     const sheetData = await getSheetData(SHEET, { skipCache: true });
