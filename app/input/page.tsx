@@ -637,6 +637,33 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           }
           applyFallback("backlog_total", extractBacklogSparse(sparseText));
           applyFallback("total_expedite", extractExpediteSparse(sparseText));
+        } else {
+          // Untuk halaman Parcel Sweeper, utamakan hasil crop terisolasi kartu kiri (__PS_CARD__) yang bebas sidebar, tabel resi, & pagination
+          for (const cropText of extraTexts[idx] || []) {
+            if (!cropText) continue;
+            const cropParsed = parseOcrText(cropText);
+            cropRecs.push(cropParsed.row as Record<string, unknown>);
+          }
+          const sparsePs = (sparseTexts[idx] ? parseOcrText(sparseTexts[idx]).row : {}) as Record<string, unknown>;
+          const pickBestPsValue = (key: "parcel_sweeper_total" | "parcel_sweeper_scanned_pct") => {
+            const cropVals = cropRecs
+              .map((cr) => cr[key])
+              .filter((v): v is number => typeof v === "number" && !isNaN(v));
+            if (cropVals.length === 0) return;
+            let chosen = cropVals[0];
+            if (cropVals.length >= 2 && cropVals[0] !== cropVals[1]) {
+              const otherReads = [pass1Snapshot[key], altRec[key], sparsePs[key]];
+              const matched = cropVals.find((cv) => otherReads.includes(cv));
+              if (matched !== undefined) chosen = matched;
+              else if (key === "parcel_sweeper_total" && cropVals[1] > cropVals[0]) chosen = cropVals[1];
+            }
+            if (parsed.row[key] !== chosen) {
+              parsed.row[key] = chosen;
+              cropTouchKeys.add(key);
+            }
+          };
+          pickBestPsValue("parcel_sweeper_total");
+          pickBestPsValue("parcel_sweeper_scanned_pct");
         }
 
         const sparseText = sparseTexts[idx] || "";

@@ -34,7 +34,7 @@ export function detectDate(text: string): string | null {
 }
 
 const PARCEL_SWEEPER_RE =
-  /Parcel\s+Sweeper|Expected\s+Orders?\s+Scanned|\bTotal\b[\s\S]{0,60}\bUnscanned\b|\bPS20\d{6,}/i;
+  /__PS_CARD__|Parcel\s+Sweeper|Expected\s+Orders?\s+Scanned|\bTotal\b[\s\S]{0,60}\bUnscanned\b|\bPS20\d{6,}/i;
 
 /** Apakah teks berasal dari halaman Parcel Sweeper (perlu validasi tanggal wajib hari ini). */
 export function isParcelSweeperPage(text: string): boolean {
@@ -1069,12 +1069,15 @@ function extractParcelSweeper(text: string): {
     return { parcel_sweeper_total: null, parcel_sweeper_scanned_pct: null };
   }
 
+  const isCardCrop = /^__PS_CARD__\b/.test(text);
+  const srcText = text.replace(/^__PS_CARD__[^\n]*\r?\n?/, "");
+
   let total: number | null = null;
   let scanned_pct: number | null = null;
 
   // 1. Cara Ctrl+A / Ctrl+C (Teks DOM bersih):
   // Cari pola eksplisit "Total <angka> Unscanned <angka> Scanned <angka>"
-  const explicitTriple = text.match(
+  const explicitTriple = srcText.match(
     /\bTotal\s+(\d[\d.,]*)\s+Unscanned\s+(\d[\d.,]*)\s+Scanned\s+(\d[\d.,]*)/i
   );
   if (explicitTriple) {
@@ -1091,15 +1094,15 @@ function extractParcelSweeper(text: string): {
   }
 
   // Jika persentase juga tertulis langsung sebelum "Expected Order Scanned" (misal "100% Expected Order Scanned" atau OCR "1 00%")
-  const explicitPct = text.match(/(\d+(?:[ \t]+\d+)*(?:[.,]\d+)?)[ \t]*%/i);
+  const explicitPct = srcText.match(/(\d+(?:[ \t]+\d+)*(?:[.,]\d+)?)[ \t]*%/i);
   if (scanned_pct === null && explicitPct) {
     const p = parseNumber(explicitPct[1].replace(/[ \t]+/g, ""));
     if (p !== null && p >= 0 && p <= 100) scanned_pct = p;
   }
 
-  // Jika Total tertulis setelah kata "Total" sebelum "Unscanned" (toleran simbol ikon tooltip seperti "©", "®", "&")
+  // Jika Total tertulis setelah kata "Total" sebelum "Unscanned" (toleran simbol ikon tooltip seperti "©", "®", "&", "(?)")
   if (total === null) {
-    const totalBeforeUnscanned = text.match(
+    const totalBeforeUnscanned = srcText.match(
       /\bTotal\b[ \t:]*(\d[\d.,]*)(?:[^\d\n]{0,12})\s+(?:Unscanned|Unscammed)\b/i
     );
     if (totalBeforeUnscanned) {
@@ -1111,18 +1114,35 @@ function extractParcelSweeper(text: string): {
   // Di OCR gambar berdampingan, panel kiri (lingkaran 100% + Total 260, Unscanned 0, Scanned 260)
   // berada di sebelah kiri tabel Nomor Resi (SPXID...).
   if (total === null || scanned_pct === null) {
-    const lines = text.split(/\r?\n/);
+    const lines = srcText.split(/\r?\n/);
     const leftColumnLines: string[] = [];
 
     for (const line of lines) {
-      // Lewati baris header judul Task ID dan baris pagination paling bawah ("Melompat", "24 / Halaman")
-      if (/Parcel\s+Sweeper\s+Task\s+ID|Melompat|Halaman|Pergi\s+ke/i.test(line)) continue;
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      // Lewati baris header judul Task ID, filter pencarian, dan baris pagination ID/EN ("24 / Page", "< 1 2 3 4 5 >")
+      if (
+        /Parcel\s+Sweeper\s+Task\s+ID|Melompat|Halaman|Pergi\s+ke|\bGo\s+to\s+page\b|\d+\s*\/\s*Page\b|\bSearch\b.*\bReset\b|\bCount\s+Type\b.*\bExpected\b/i.test(
+          trimmed
+        ) ||
+        /^[<\s]*1\s+2\s+3(?:\s+\d+)*[\s>]*$/.test(trimmed)
+      ) {
+        continue;
+      }
       // Potong bagian kanan baris mulai dari kolom tabel resi (Nomor Resi, SPXID, LMHub, BackLog, Process for delivery, dll)
       const cut = line.search(
-        /Nomor|Momot|SPXID|SPX[I1l0O]|LM\s*Hub|LMI|LMALD|Back\s*Log|BakLog|BarkLon|Process|Count\s+Type|Count\s+Tepe|Next\s+Step|Scanned\s+Status/i
+        /Nomor|Momot|SPX\s+Tracking|SPXID|SPX[I1l0O]|LM\s*Hub|LMI|LMALD|Back\s*Log|BakLog|BarkLon|Process|Count\s+Type|Count\s+Tepe|Next\s+Step|Scanned\s+Status|Expedite\s+Tag|Aging\s+Time|Final\s+Status|SOC_LH|Return\s+to\s+SOC|Rcturn_LMHub/i
       );
-      const leftPart = cut !== -1 ? line.slice(0, cut) : line.slice(0, 42);
-      leftColumnLines.push(leftPart);
+      let leftPart: string;
+      if (cut !== -1) {
+        leftPart = line.slice(0, cut);
+      } else if (isCardCrop) {
+        leftPart = line;
+      } else {
+        const kwIdx = line.search(/\b(?:Total|T[o0]ta[l1i]|Unscanned|Unscammed|Scanned|Expected)\b/i);
+        leftPart = kwIdx !== -1 ? line.slice(kwIdx, kwIdx + 60) : line.slice(0, 42);
+      }
+      if (leftPart.trim()) leftColumnLines.push(leftPart);
     }
 
     const leftText = leftColumnLines.join("\n");
@@ -1140,18 +1160,36 @@ function extractParcelSweeper(text: string): {
     // Cari urutan 3 angka vertikal di kolom kiri: [Total, Unscanned, Scanned]
     // Di mana Total == Unscanned + Scanned (misal [260, 0, 260])
     if (total === null) {
-      // Hapus tanggal ("Date: 2026-11-11"), watermark, ikon "(2)" / "(0)", dan persentase agar "11 === 11 + 0" tidak pernah salah terbaca Total
+      // Hapus tanggal ("Date: 2026-11-11"), watermark, ikon "(?)" / "(2)" / "@", dan persentase
       const leftClean = leftText
         .replace(/\b(?:Tanggal|Tgl|[DO]ate)\b[^\n]*/gi, "")
         .replace(/\S*\/\d{4}-\d{2}-\d{2}(?:[ \t]+\d{2}:\d{2}:\d{2})?/gi, "")
         .replace(/\b20\d{2}[-/]\d{2}[-/]\d{2}(?:[ \t]+\d{2}:\d{2}:\d{2})?\b/g, "")
         .replace(/Expected\s+Orders?[\s\S]{0,20}?Scanned\s*(?:\([^)\n]*\))?/gi, "")
-        .replace(/\(\s*[\d?]+\s*\)/g, "")
+        .replace(/\(\s*[\d?@©®Q]+\s*\)/g, "")
+        .replace(/(?<=\d)[ \t]+[?©®@Q](?=\s|$)/g, "")
         .replace(/\d+(?:[ \t]+\d+)*(?:[.,]\d+)?[ \t]*%/g, "");
 
-      const labeledTotal = leftClean.match(/\bTotal\b[ \t:]*(\d[\d.,]*)\b/i);
+      const labeledTotal = leftClean.match(/\b(?:Total|T[o0]ta[l1i])\b[ \t:]*(\d[\d.,]*)\b/i);
+      const labeledUnscannedMatch = leftClean.match(
+        /\b(?:Unscanned|Unscammed|Unscaned)\b[ \t:]*(\d[\d.,]*)\b/i
+      );
+      const labeledScannedMatch = leftClean.match(
+        /(?<!Un)\b(?:Scanned|Scammed|Scaned)\b[ \t:]+(\d[\d.,]*)\b/i
+      );
+      const labeledUnscanned = labeledUnscannedMatch ? parseNumber(labeledUnscannedMatch[1]) : null;
+      const labeledScanned = labeledScannedMatch ? parseNumber(labeledScannedMatch[1]) : null;
+
       if (labeledTotal) {
         total = parseNumber(labeledTotal[1]);
+      } else if (labeledScanned !== null && labeledUnscanned !== null) {
+        total = labeledScanned + labeledUnscanned;
+      } else if (labeledScanned !== null && scanned_pct === 100) {
+        total = labeledScanned;
+      }
+
+      if (total !== null && scanned_pct === null && labeledScanned !== null && total > 0) {
+        scanned_pct = Math.round((labeledScanned / total) * 1000) / 10;
       }
 
       if (total === null) {

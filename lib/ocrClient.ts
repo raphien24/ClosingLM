@@ -866,6 +866,29 @@ export async function runOcrLocally(
         });
       }
     }
+    if (isParcelSweeper && isFull) {
+      try {
+        const { contentLeft } = await detectDashboardContentBounds(images[i]);
+        const psCardW = contentLeft > 0 ? Math.min(0.24, 1 - contentLeft) : 0.36;
+        const psCropUrl = await cropRegionForOcr(images[i], contentLeft, 0.20, psCardW, 0.65);
+        if (psCropUrl) {
+          await worker.setParameters({ tessedit_pageseg_mode: "6" as never });
+          const enhPs = await enhanceGrayscaleForOcr(psCropUrl);
+          const resEnh = await worker.recognize(enhPs, {}, { text: true, blocks: true });
+          collectPageTokenConfidence(resEnh.data, tokenMap);
+          if (resEnh.data.text) crops.push(`__PS_CARD__\n${resEnh.data.text}`);
+
+          const binPs = await binarizeForOcr(psCropUrl, 200);
+          const resBin = await worker.recognize(binPs, {}, { text: true, blocks: true });
+          collectPageTokenConfidence(resBin.data, tokenMap);
+          if (resBin.data.text) crops.push(`__PS_CARD__\n${resBin.data.text}`);
+        }
+      } catch {
+        // abaikan error crop kartu Parcel Sweeper
+      } finally {
+        await worker.setParameters({ tessedit_pageseg_mode: mainMode as never });
+      }
+    }
     tokenConfidences.push(tokenMap);
     extraTexts.push(crops);
   }
