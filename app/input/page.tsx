@@ -514,12 +514,13 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             if (!cropText) continue;
             const isFhcLeft = cropText.startsWith("__FHC_LEFT__\n");
             const isFleetStatusCrop = cropText.startsWith("__FLEET_STATUS__\n");
+            const isFleetStatusCompact = cropText.startsWith("__FLEET_STATUS_COMPACT__\n");
             const cropParsed = parseOcrText(cropText);
             cropRecs.push(cropParsed.row as Record<string, unknown>);
             for (const ek of extraKeys) {
               applyFallback(ek, cropParsed.row[ek] as number | null | undefined);
             }
-            if (isFleetStatusCrop) {
+            if (isFleetStatusCrop || isFleetStatusCompact) {
               const cropVol = cropParsed.row.fleet_oh_volume;
               const cropTot = cropParsed.row.fleet_oh_total;
               if (
@@ -536,6 +537,18 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                 cropTot > 0 &&
                 parsed.row.fleet_oh_total === 0 &&
                 !agreedMainKeys.has("fleet_oh_total")
+              ) {
+                parsed.row.fleet_oh_total = cropTot;
+                cropTouchKeys.add("fleet_oh_total");
+              }
+              // Crop row-compacted otoritatif untuk On-hold jika Pass 1 & Pass 2 utama tidak sepakat (mis. tercemar Delivering Total 3.955)
+              if (
+                isFleetStatusCompact &&
+                cropVol != null &&
+                cropTot != null &&
+                cropTot >= cropVol &&
+                !agreedMainKeys.has("fleet_oh_total") &&
+                parsed.row.fleet_oh_total !== cropTot
               ) {
                 parsed.row.fleet_oh_total = cropTot;
                 cropTouchKeys.add("fleet_oh_total");

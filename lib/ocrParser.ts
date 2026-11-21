@@ -437,9 +437,10 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
         for (let k = startLine + 1; k < endLine && vals.length < 3; k++) {
           const t = lines[k].trim();
           if (!t) continue;
+          if (/^\s*(?:Selesai|Done)\b/i.test(t) || SECTION_BOUNDARY_RE.test(t)) break;
           const n = allNumbers(t);
           if (n.length > 0) vals.push(n[0]);
-          else if (t === "-") vals.push(0);
+          else if (/^[-–—~.]+$/.test(t)) vals.push(0);
         }
         return vals.length >= 3 ? vals[2] : null;
       };
@@ -450,8 +451,16 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
       }
     }
   }
-  if (nums.length < 2) {
-    const extra = collectFollowingLines(lines, idx);
+  if (nums.length < 2 && !/%/.test(afterLabel)) {
+    const onHoldStopRe =
+      /Fleet\s+(?:Head|Prod|stat)|Updated|Dedicated|Kurir|Mitra|Backlog|To\s+Expedite|Order|Delivering|Delivered|Volume|Total|Selesai|Transported|Received|Assigning|Assigned/i;
+    const extraParts: string[] = [];
+    for (let k = idx + 1; k <= idx + 2 && k < lines.length; k++) {
+      const l = lines[k] || "";
+      if (onHoldStopRe.test(l)) break;
+      extraParts.push(l);
+    }
+    const extra = extraParts.join(" ").trim();
     if (extra) {
       fullSegment = `${afterLabel} ${extra}`;
       nums = allNumbers(fullSegment);

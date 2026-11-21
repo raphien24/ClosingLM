@@ -912,7 +912,7 @@ export async function runOcrLocally(
               const compactUrl = await compactTableRowsForOcr(bin212Url);
               const resCompact = await worker.recognize(compactUrl, {}, { text: true, blocks: true });
               collectPageTokenConfidence(resCompact.data, tokenMap);
-              if (resCompact.data.text) crops.push(`${prefix}${resCompact.data.text}`);
+              if (resCompact.data.text) crops.push(`__FLEET_STATUS_COMPACT__\n${resCompact.data.text}`);
             }
           }
         } catch {
