@@ -142,10 +142,10 @@ function SailScene({
       lookY = THREE.MathUtils.lerp(captainFocusY, povLookY, easeTurn);
       lookZ = THREE.MathUtils.lerp(0, povLookZ, easeTurn);
     } else {
-      // Di dalam POV Kapten -> lalu di akhir (p > 0.78) zoom in tepat ke pusat tulisan JTT08 di lereng bukit
+      // Di dalam POV Kapten -> lalu di akhir (p > 0.78) zoom in tepat ke pusat tulisan LAST MILE di lereng bukit
       const signWorldX = ISLAND_POSITION[0] + signMetrics.centerX;
       const signWorldZ = ISLAND_POSITION[2] + signMetrics.centerZ;
-      const signTargetCamX = signWorldX - (isPortrait ? 72 : 64);
+      const signTargetCamX = signWorldX - (isPortrait ? 86 : 74);
       const signTargetCamY = signMetrics.centerY - 2.0;
       const signLookX = signWorldX;
       const signLookY = signMetrics.centerY - 0.5;
@@ -197,14 +197,14 @@ function SailScene({
         flowTimeScale={inPov ? 3.8 : 1.2}
       />
       <GalleonShip
-        quality={isMobile ? "low" : "high"}
+        quality="high"
         position={ship.position}
         heading={ship.heading}
         speed={0}
         travelOffset={travelOffset}
         inPov={inPov}
         shipPoseRef={shipPoseRef}
-        mobileCompact={isMobile}
+        mobileCompact={false}
       />
       <TropicalIsland position={ISLAND_POSITION} isLowSpec={isMobile} />
     </>

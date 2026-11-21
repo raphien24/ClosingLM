@@ -42,8 +42,8 @@ function getWoodTexture(): THREE.CanvasTexture | null {
 // ── Roda Kemudi Kapal Kayu & Binnacle Kompas (ShipHelm) ─────────
 
 export function ShipWheelRing({
-  radius = 0.56,
-  spokes = 10,
+  radius = 0.54,
+  spokes = 12,
   handleLength = 0.16,
 }: {
   radius?: number;
@@ -202,7 +202,7 @@ export function ShipHelmStand({
           </mesh>
           <group position={[-0.04, 1.05, 0]} rotation={[0, Math.PI / 2, 0]}>
             <group ref={wheelGroupRef}>
-              <ShipWheelRing radius={0.56} spokes={10} />
+              <ShipWheelRing radius={0.54} spokes={12} />
             </group>
           </group>
         </>
@@ -211,9 +211,19 @@ export function ShipHelmStand({
       <mesh position={[0.46, 0.58, 0]} material={standMat}>
         <cylinderGeometry args={[0.11, 0.13, 1.02, 16]} />
       </mesh>
-      {/* Kubah kompas kuningan */}
+      {/* Sabuk kuningan & kubah kompas binnacle */}
+      <mesh position={[0.46, 1.06, 0]} material={brassMat}>
+        <cylinderGeometry args={[0.122, 0.122, 0.06, 18]} />
+      </mesh>
       <mesh position={[0.46, 1.14, 0]} material={brassMat}>
-        <sphereGeometry args={[0.12, 16, 16]} />
+        <sphereGeometry args={[0.12, 18, 18]} />
+      </mesh>
+      {/* Lentera binnacle samping kiri & kanan */}
+      <mesh position={[0.46, 1.13, 0.14]} material={brassMat}>
+        <cylinderGeometry args={[0.032, 0.036, 0.09, 10]} />
+      </mesh>
+      <mesh position={[0.46, 1.13, -0.14]} material={brassMat}>
+        <cylinderGeometry args={[0.032, 0.036, 0.09, 10]} />
       </mesh>
     </group>
   );
@@ -234,18 +244,21 @@ export function CaptainPovHelmRig({
     }
   });
 
-  const gripRadius = 0.36;
+  const gripRadius = 0.37;
 
   return (
     <group>
-      {/* Roda kemudi mahoni POV di depan kamera Kapten */}
-      <group position={[-5.92, 7.14, 0]} rotation={[0, -Math.PI / 2, 0]}>
+      {/* Cahaya hangat lentera binnacle khusus menyinari tekstur kulit tangan & roda kemudi POV */}
+      <pointLight position={[-5.75, 7.36, 0.22]} color="#ffdba0" intensity={2.4} distance={3.5} />
+
+      {/* Roda kemudi mahoni POV di depan kamera Kapten (rotasi +PI/2 searah tangan POV) */}
+      <group position={[-5.94, 7.12, 0]} rotation={[0, Math.PI / 2, 0]}>
         <group ref={wheelRef}>
-          <ShipWheelRing radius={gripRadius} spokes={10} handleLength={0.1} />
+          <ShipWheelRing radius={gripRadius} spokes={12} handleLength={0.11} />
         </group>
       </group>
 
-      {/* Lengan & tangan manusia 3D nyata Kapten menggenggam lingkar roda kemudi (tanpa badan/torso) */}
+      {/* Lengan & tangan manusia 3D nyata Kapten menggenggam pegangan roda kemudi */}
       <RiggedCaptainPovArms wheelAngleRef={wheelAngleRef} gripRadius={gripRadius} />
     </group>
   );
@@ -257,7 +270,6 @@ export function ShipDeckCrew({
   inPov = false,
   wheelAngleRef,
   progressive = false,
-  mobileCompact = false,
   onQuarterdeckReady,
 }: {
   inPov?: boolean;
@@ -287,17 +299,17 @@ export function ShipDeckCrew({
   }, [batch1Ready, onQuarterdeckReady]);
 
   useEffect(() => {
-    if (!progressive || mobileCompact || !batch1Ready || batch2Mounted) return;
+    if (!progressive || !batch1Ready || batch2Mounted) return;
     const raf = requestAnimationFrame(() => setBatch2Mounted(true));
     return () => cancelAnimationFrame(raf);
-  }, [progressive, mobileCompact, batch1Ready, batch2Mounted]);
+  }, [progressive, batch1Ready, batch2Mounted]);
 
   useEffect(() => {
-    if (!progressive || mobileCompact || !batch2Mounted || batch2Ready) return;
+    if (!progressive || !batch2Mounted || batch2Ready) return;
     return precompileObjectAsync(gl, batch2Ref.current, camera, scene, () => {
       setBatch2Ready(true);
     });
-  }, [progressive, mobileCompact, batch2Mounted, batch2Ready, gl, camera, scene]);
+  }, [progressive, batch2Mounted, batch2Ready, gl, camera, scene]);
 
   return (
     <group>
@@ -307,14 +319,13 @@ export function ShipDeckCrew({
           <ShipHelmStand wheelAngleRef={wheelAngleRef} hideWheel={inPov} />
         </group>
 
-        {/* 2. Kapten di belakang Roda Kemudi (x = -6.58, y = 6.08) — berganti ke Tangan POV saat inPov */}
+        {/* 2. Kapten di belakang Roda Kemudi (x = -6.46, y = 6.08) — berganti ke Tangan POV saat inPov */}
         {!inPov ? (
-          <group position={[-6.58, 6.08, 0]} scale={1.06}>
+          <group position={[-6.46, 6.08, 0]} scale={1.06}>
             <RiggedHumanFigure
               role="captain"
               variant="captain"
               wheelAngleRef={wheelAngleRef}
-              mobileQuality={mobileCompact}
             />
           </group>
         ) : (
@@ -327,24 +338,11 @@ export function ShipDeckCrew({
             role="officer"
             variant="sailor1"
             phaseOffset={1.1}
-            mobileQuality={mobileCompact}
           />
         </group>
-
-        {/* Pada mode HP ringan, tampilkan juga pengintai haluan memakai aset sailor1-mobile tanpa memuat GLB tambahan */}
-        {mobileCompact && (
-          <group position={[9.4, 4.95, -0.75]} scale={1.02}>
-            <RiggedHumanFigure
-              role="lookout"
-              variant="sailor1"
-              phaseOffset={1.7}
-              mobileQuality
-            />
-          </group>
-        )}
       </group>
 
-      {!mobileCompact && batch2Mounted && (
+      {batch2Mounted && (
         <group ref={batch2Ref} visible={batch2Ready}>
           {/* 4. Awak Kapal Penarik Tali Layar Kiri (x = 1.6, y = 2.95, z = -1.65) */}
           <group position={[1.6, 2.95, -1.65]} rotation={[0, -0.35, 0]} scale={1.0}>

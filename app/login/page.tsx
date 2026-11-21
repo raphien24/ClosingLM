@@ -2,32 +2,12 @@
 
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { SunsetLoginBackground } from "@/components/ocean/SunsetLoginBackground";
-import { Anchor, Compass, ShieldCheck, Zap } from "lucide-react";
-import {
-  isLowSpecActive,
-  setPerformanceMode,
-  subscribePerformanceMode,
-  PerformanceMode,
-} from "@/lib/hardwareDetection";
+import { Anchor, Compass, ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
-  const [perfMode, setPerfMode] = useState<PerformanceMode>("high");
-
-  useEffect(() => {
-    setPerfMode(isLowSpecActive() ? "light" : "high");
-    return subscribePerformanceMode((mode) => {
-      setPerfMode(mode);
-    });
-  }, []);
-
-  const togglePerfMode = () => {
-    const nextMode = perfMode === "light" ? "high" : "light";
-    setPerformanceMode(nextMode);
-    setPerfMode(nextMode);
-  };
 
   const handleLogin = async () => {
     setLoading(true);
@@ -61,22 +41,7 @@ export default function LoginPage() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          {/* Tombol Pengalih Mode Ringan / Performa (Low-Spec Friendly) */}
-          <button
-            type="button"
-            onClick={togglePerfMode}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer shadow-md ${
-              perfMode === "light"
-                ? "bg-amber-500/30 border-amber-400/60 text-amber-200 hover:bg-amber-500/40"
-                : "bg-white/10 hover:bg-white/20 border-white/25 text-white/90"
-            }`}
-            title="Klik untuk beralih mode performa (Mode Ringan memangkas beban 3D & shader untuk device spesifikasi rendah)"
-          >
-            <Zap className={`h-3.5 w-3.5 ${perfMode === "light" ? "text-amber-300 fill-amber-300" : "text-amber-100/70"}`} />
-            <span>{perfMode === "light" ? "Mode Ringan: Aktif" : "Mode Standar"}</span>
-          </button>
-
-          <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-amber-50 text-xs font-semibold">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-amber-50 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
             <span>Sistem Siaga Operasional</span>
           </div>
@@ -117,18 +82,10 @@ export default function LoginPage() {
 
         {/* Right Side: Glass Login Box */}
         <div className="w-full sm:w-[420px] max-w-md lg:ml-auto">
-          <div
-            className={`relative overflow-hidden rounded-3xl shadow-[0_25px_60px_-15px_rgba(20,5,15,0.75)] border p-6 sm:p-8 text-white transition-all duration-300 ${
-              perfMode === "light"
-                ? "bg-[#180f24]/96 border-amber-500/25"
-                : "bg-[#180f24]/85 md:backdrop-blur-md border-white/20"
-            }`}
-          >
+          <div className="relative overflow-hidden rounded-3xl shadow-[0_25px_60px_-15px_rgba(20,5,15,0.75)] border p-6 sm:p-8 text-white transition-all duration-300 bg-[#180f24]/85 md:backdrop-blur-md border-white/20">
             {/* Kilau kaca tipis */}
             <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
-            {perfMode !== "light" && (
-              <div className="pointer-events-none hidden md:block absolute -top-24 -right-24 h-48 w-48 rounded-full bg-[#ffb27a]/15 blur-2xl" />
-            )}
+            <div className="pointer-events-none hidden md:block absolute -top-24 -right-24 h-48 w-48 rounded-full bg-[#ffb27a]/15 blur-2xl" />
 
             {/* Logo */}
             <div className="relative flex flex-col items-center mb-6">
@@ -192,21 +149,6 @@ export default function LoginPage() {
             <div className="relative flex items-center justify-center gap-1.5 text-center text-[11px] text-orange-50/70 mt-5">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-300 flex-shrink-0" />
               <span>Akses terproteksi &amp; diverifikasi per-Hub</span>
-            </div>
-
-            {/* Mode Ringan Switcher info */}
-            <div className="mt-4 pt-3.5 border-t border-white/10 flex items-center justify-between text-[11px] text-orange-50/80">
-              <span className="flex items-center gap-1.5 font-medium">
-                <Zap className={`h-3 w-3 ${perfMode === "light" ? "text-amber-400" : "text-orange-200/60"}`} />
-                <span>{perfMode === "light" ? "Mode Ringan Aktif" : "Mode Standar"}</span>
-              </span>
-              <button
-                type="button"
-                onClick={togglePerfMode}
-                className="text-amber-200/90 hover:text-amber-100 underline transition-colors cursor-pointer font-bold"
-              >
-                {perfMode === "light" ? "Ubah ke Standar" : "Aktifkan Mode Ringan"}
-              </button>
             </div>
           </div>
         </div>

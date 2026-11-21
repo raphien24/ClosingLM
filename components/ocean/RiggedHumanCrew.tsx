@@ -17,13 +17,6 @@ const MODEL_URLS: Record<HumanModelVariant, string> = {
   sailor3: "/models/human-sailor-3.glb",
 };
 
-const MOBILE_MODEL_URLS: Record<HumanModelVariant, string> = {
-  captain: "/models/human-captain-mobile.glb",
-  sailor1: "/models/human-sailor-1-mobile.glb",
-  sailor2: "/models/human-sailor-1-mobile.glb",
-  sailor3: "/models/human-sailor-1-mobile.glb",
-};
-
 interface RigBones {
   hips: THREE.Object3D | null;
   spine: THREE.Object3D | null;
@@ -35,10 +28,12 @@ interface RigBones {
   leftArm: THREE.Object3D | null;
   leftForeArm: THREE.Object3D | null;
   leftHand: THREE.Object3D | null;
+  leftFingerBase: THREE.Object3D | null;
   rightShoulder: THREE.Object3D | null;
   rightArm: THREE.Object3D | null;
   rightForeArm: THREE.Object3D | null;
   rightHand: THREE.Object3D | null;
+  rightFingerBase: THREE.Object3D | null;
   leftUpLeg: THREE.Object3D | null;
   leftLeg: THREE.Object3D | null;
   leftFoot: THREE.Object3D | null;
@@ -86,37 +81,63 @@ function configureLoader(loader: THREE.Loader) {
   (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
 }
 
-/** Preload model awak manusia secara paralel (hanya varian ringan saat mode mobile) */
-export function preloadHumanModels(mobileOnly = false) {
-  const urls = mobileOnly
-    ? [MOBILE_MODEL_URLS.captain, MOBILE_MODEL_URLS.sailor1]
-    : (Object.values(MODEL_URLS) as string[]);
-  urls.forEach((url) => {
+/** Preload seluruh model awak manusia kualitas tinggi secara paralel */
+export function preloadHumanModels(_mobileOnly = false) {
+  (Object.values(MODEL_URLS) as string[]).forEach((url) => {
     useLoader.preload(GLTFLoader, url, configureLoader);
   });
 }
 
 const _sharedDeckMaterials = new WeakMap<THREE.Material, THREE.Material>();
 const _sharedArmsMaterials = new WeakMap<THREE.Material, THREE.Material>();
+const _sharedEyeMaterials = new WeakMap<THREE.Material, THREE.Material>();
 
-function getSharedHumanMaterial(mat: THREE.Material, armsOnly: boolean): THREE.Material {
-  const cache = armsOnly ? _sharedArmsMaterials : _sharedDeckMaterials;
+function getSharedHumanMaterial(
+  mat: THREE.Material,
+  armsOnly: boolean,
+  isEye = false
+): THREE.Material {
+  const cache = isEye
+    ? _sharedEyeMaterials
+    : armsOnly
+    ? _sharedArmsMaterials
+    : _sharedDeckMaterials;
   const cached = cache.get(mat);
   if (cached) return cached;
 
   const sm = (mat as THREE.MeshStandardMaterial).clone();
   if (sm.isMeshStandardMaterial) {
-    sm.envMapIntensity = armsOnly ? 0.72 : 0.85;
-    sm.roughness = Math.max(sm.roughness ?? 0.68, armsOnly ? 0.72 : 0.65);
-    sm.metalness = Math.min(sm.metalness ?? 0.05, 0.08);
+    if (isEye) {
+      sm.roughness = 0.12;
+      sm.metalness = 0.04;
+      sm.envMapIntensity = 1.45;
+    } else {
+      sm.envMapIntensity = armsOnly ? 1.38 : 1.32;
+      sm.roughness = armsOnly ? 0.46 : 0.5;
+      sm.metalness = 0.04;
+      if (sm.normalMap) {
+        sm.normalScale = new THREE.Vector2(armsOnly ? 1.45 : 1.3, armsOnly ? 1.45 : 1.3);
+      }
+      if (sm.map) {
+        sm.map.anisotropy = 4;
+      }
+    }
   }
   cache.set(mat, sm);
   return sm;
 }
 
+const _armOnlyGeoCache = new WeakMap<THREE.BufferGeometry, THREE.BufferGeometry>();
+
 /** Menyaring segitiga SkinnedMesh agar hanya menyisakan lengan bawah, manset & tangan (tanpa badan/torso/kepala) */
 function filterArmOnlyGeometry(skinned: THREE.SkinnedMesh) {
   const geo = skinned.geometry;
+  const cached = _armOnlyGeoCache.get(geo);
+  if (cached) {
+    skinned.geometry = cached;
+    return;
+  }
+
   const idx = geo.index;
   const si = geo.attributes.skinIndex;
   const sw = geo.attributes.skinWeight;
@@ -161,6 +182,7 @@ function filterArmOnlyGeometry(skinned: THREE.SkinnedMesh) {
   // Kloning geometry sebelum mengubah index agar mesh awak kapal di dek tidak ikut terpotong
   const clonedGeo = geo.clone();
   clonedGeo.setIndex(kept);
+  _armOnlyGeoCache.set(geo, clonedGeo);
   skinned.geometry = clonedGeo;
 }
 
@@ -169,9 +191,9 @@ function useHumanRigClone(
   variant: HumanModelVariant,
   hideHead = false,
   armsOnly = false,
-  mobileQuality = false
+  _mobileQuality = false
 ) {
-  const modelUrl = mobileQuality ? MOBILE_MODEL_URLS[variant] : MODEL_URLS[variant];
+  const modelUrl = MODEL_URLS[variant];
   const gltf = useLoader(GLTFLoader, modelUrl, configureLoader);
 
   return useMemo(() => {
@@ -211,8 +233,9 @@ function useHumanRigClone(
         mesh.morphTargetInfluences = undefined;
         mesh.morphTargetDictionary = undefined;
 
+        const isEyeMesh = /^h_[LR]_eye/i.test(mesh.name);
         const orig = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        const shared = orig.map((mat) => getSharedHumanMaterial(mat, armsOnly));
+        const shared = orig.map((mat) => getSharedHumanMaterial(mat, armsOnly, isEyeMesh));
         mesh.material = Array.isArray(mesh.material) ? shared : shared[0];
       }
     });
@@ -240,10 +263,12 @@ function useHumanRigClone(
       leftArm: get("LeftArm"),
       leftForeArm: get("LeftForeArm"),
       leftHand: get("LeftHand"),
+      leftFingerBase: get("LeftFingerBase"),
       rightShoulder: get("RightShoulder"),
       rightArm: get("RightArm"),
       rightForeArm: get("RightForeArm"),
       rightHand: get("RightHand"),
+      rightFingerBase: get("RightFingerBase"),
       leftUpLeg: get("LeftUpLeg"),
       leftLeg: get("LeftLeg"),
       leftFoot: get("LeftFoot"),
@@ -306,6 +331,16 @@ function getCharSpacePos(obj: THREE.Object3D, rootInvM: THREE.Matrix4, out: THRE
   return out.applyMatrix4(rootInvM);
 }
 
+/** Sinkronkan matrix lokal & world 1 tulang terhadap parent tanpa traversal subtree berulang */
+function syncSingleBoneWorld(bone: THREE.Object3D) {
+  bone.updateMatrix();
+  if (bone.parent) {
+    bone.matrixWorld.multiplyMatrices(bone.parent.matrixWorld, bone.matrix);
+  } else {
+    bone.matrixWorld.copy(bone.matrix);
+  }
+}
+
 /** Memutar tulang sebesar delta sudut pada ruang karakter dari pose rest, lalu menyinkronkan matrixWorld */
 function applyBoneCharDelta(
   bone: THREE.Object3D | null,
@@ -318,13 +353,13 @@ function applyBoneCharDelta(
   if (!bone || !bone.parent) return;
   const restWorld = bones.restWorldQ.get(bone);
   if (!restWorld) return;
-  bone.parent.updateMatrixWorld(true);
+  bone.parent.updateWorldMatrix(true, false);
   getCharSpaceWorldQuat(bone.parent, rootInvQ, _qParent);
   _eTmp.set(ex, ey, ez, "YXZ");
   _qDelta.setFromEuler(_eTmp);
   _qTarget.multiplyQuaternions(_qDelta, restWorld);
   bone.quaternion.copy(_qParent).invert().multiply(_qTarget);
-  bone.updateMatrixWorld(false);
+  syncSingleBoneWorld(bone);
 }
 
 /** Memasang orientasi tulang dari arah +Y tulang dan referensi sumbu +Z pada ruang karakter */
@@ -335,7 +370,7 @@ function setBoneBasisChar(
   desiredZRef: THREE.Vector3
 ) {
   if (!bone || !bone.parent) return;
-  bone.parent.updateMatrixWorld(true);
+  bone.parent.updateWorldMatrix(true, false);
   getCharSpaceWorldQuat(bone.parent, rootInvQ, _qParent);
 
   _vY.copy(desiredY).normalize();
@@ -351,7 +386,7 @@ function setBoneBasisChar(
   _qTarget.setFromRotationMatrix(_mBasis);
 
   bone.quaternion.copy(_qParent).invert().multiply(_qTarget);
-  bone.updateMatrixWorld(false);
+  syncSingleBoneWorld(bone);
 }
 
 /** Solver analitik 2-tulang (UpperArm + ForeArm) + Hand di koordinat karakter (+Z depan, +Y atas, +X kiri) */
@@ -370,18 +405,28 @@ function solveArmIK(
   const arm = side === "left" ? bones.leftArm : bones.rightArm;
   const fore = side === "left" ? bones.leftForeArm : bones.rightForeArm;
   const hand = side === "left" ? bones.leftHand : bones.rightHand;
+  const fingerBase = side === "left" ? bones.leftFingerBase : bones.rightFingerBase;
   const fingers = side === "left" ? bones.leftFingers : bones.rightFingers;
   const thumb = side === "left" ? bones.leftThumb : bones.rightThumb;
 
   if (!arm || !fore || !hand) return;
 
-  arm.parent?.updateMatrixWorld(true);
-  arm.updateMatrixWorld(false);
+  arm.updateWorldMatrix(true, false);
   getCharSpacePos(arm, rootInvM, _vShoulder);
+
+  // Jika tangan sedang menggenggam objek (fingerCurl > 0.5), mundurkan titik pergelangan (LeftHand/RightHand)
+  // sejauh ~6.4 cm dari pusat genggaman telapak agar telapak & jari-jari tepat membungkus batang/pelek kemudi
+  _vC.copy(wristTarget);
+  if (handAimDir && fingerCurl > 0.5) {
+    _vHandDir.copy(handAimDir).normalize();
+    _vPalm.copy(palmDir).normalize();
+    _vC.addScaledVector(_vHandDir, -0.064 * fingerCurl);
+    _vC.addScaledVector(_vPalm, -0.022 * fingerCurl);
+  }
 
   const l1 = bones.armLen;
   const l2 = bones.foreLen;
-  _vA.subVectors(wristTarget, _vShoulder);
+  _vA.subVectors(_vC, _vShoulder);
   const rawDist = _vA.length();
   const minD = Math.abs(l1 - l2) + 0.03;
   const maxD = l1 + l2 - 0.008;
@@ -437,14 +482,25 @@ function solveArmIK(
   _vPalm.copy(palmDir).normalize();
   setBoneBasisChar(hand, rootInvQ, _vHandDir, _vPalm);
 
-  // Tekuk semua jari & ibu jari dari pose istirahatnya agar menggenggam alami
-  for (const chain of fingers) {
+  // Tekuk tulang pangkal telapak (FingerBase) + keempat jari & ibu jari secara anatomis
+  if (fingerBase) {
+    const restBaseQ = bones.restLocalQ.get(fingerBase);
+    if (restBaseQ) {
+      _qTmp.setFromAxisAngle(_axisX, fingerCurl * 0.16);
+      fingerBase.quaternion.copy(restBaseQ).multiply(_qTmp);
+    }
+  }
+  for (let fIdx = 0; fIdx < fingers.length; fIdx++) {
+    const chain = fingers[fIdx];
+    const splaySign = side === "left" ? 1 : -1;
+    const convergenceZ = (1.5 - fIdx) * 0.035 * fingerCurl * splaySign;
     for (let j = 0; j < chain.length; j++) {
       const bone = chain[j];
       const restQ = bones.restLocalQ.get(bone);
       if (!restQ) continue;
-      const c = fingerCurl * (j === 0 ? 0.72 : j === 1 ? 1.05 : 0.85);
-      _qTmp.setFromAxisAngle(_axisX, c);
+      const c = fingerCurl * (j === 0 ? 0.78 : j === 1 ? 1.08 : 0.86);
+      _eTmp.set(c, 0, j === 0 ? convergenceZ : 0, "XYZ");
+      _qTmp.setFromEuler(_eTmp);
       bone.quaternion.copy(restQ).multiply(_qTmp);
     }
   }
@@ -452,9 +508,13 @@ function solveArmIK(
     const bone = thumb[j];
     const restQ = bones.restLocalQ.get(bone);
     if (!restQ) continue;
-    const axis = j === 0 ? _axisZ : _axisX;
-    const sign = j === 0 && side === "right" ? -1 : 1;
-    _qTmp.setFromAxisAngle(axis, sign * thumbCurl * (j === 0 ? 0.45 : 0.7));
+    const sign = side === "right" ? -1 : 1;
+    if (j === 0) {
+      _eTmp.set(thumbCurl * 0.35, sign * thumbCurl * 0.22, sign * thumbCurl * 0.42, "XYZ");
+      _qTmp.setFromEuler(_eTmp);
+    } else {
+      _qTmp.setFromAxisAngle(_axisX, thumbCurl * (j === 1 ? 0.68 : 0.76));
+    }
     bone.quaternion.copy(restQ).multiply(_qTmp);
   }
 }
@@ -576,6 +636,7 @@ export function RiggedHumanFigure({
   showRope = false,
   wheelAngleRef,
   mobileQuality = false,
+  active = true,
 }: {
   role: CrewRole;
   variant: HumanModelVariant;
@@ -584,6 +645,7 @@ export function RiggedHumanFigure({
   showRope?: boolean;
   wheelAngleRef?: React.MutableRefObject<number>;
   mobileQuality?: boolean;
+  active?: boolean;
 }) {
   const { root, bones } = useHumanRigClone(variant, false, false, mobileQuality);
   const rootWrapRef = useRef<THREE.Group>(null);
@@ -593,8 +655,9 @@ export function RiggedHumanFigure({
 
   useFrame(({ clock }) => {
     const wrap = rootWrapRef.current;
-    if (!wrap) return;
-    if (mobileQuality && clock.elapsedTime - lastPoseTime.current < 0.045) return;
+    if (!wrap || !active) return;
+    const minInterval = role === "captain" || role === "walk" ? 0.022 : 0.036;
+    if (clock.elapsedTime - lastPoseTime.current < minInterval) return;
     lastPoseTime.current = clock.elapsedTime;
     const t = clock.elapsedTime + phaseOffset;
 
@@ -635,8 +698,8 @@ export function RiggedHumanFigure({
       bodyYaw = Math.sin(t * 0.45) * 0.14;
     }
 
-    // Perbarui matrixWorld seluruh rantai parent (termasuk kapal & wrap berjalan) sebelum konversi karakter-lokal
-    root.updateWorldMatrix(true, true);
+    // Perbarui rantai ancestor root (tanpa turun ke anak tulang) sebelum konversi karakter-lokal
+    root.updateWorldMatrix(true, false);
     _mRootInv.copy(root.matrixWorld).invert();
     root.getWorldQuaternion(_qRootInv).invert();
 
@@ -652,9 +715,6 @@ export function RiggedHumanFigure({
     const headYaw = role === "captain" ? Math.sin(t * 0.5) * 0.12 : bodyYaw * 0.4;
     applyBoneCharDelta(bones.neck, bones, _qRootInv, headPitch * 0.4, headYaw * 0.4, 0);
     applyBoneCharDelta(bones.head, bones, _qRootInv, headPitch * 0.6, headYaw * 0.6, 0);
-
-    // Perbarui matrixWorld torso & bahu sebelum menghitung IK kaki & lengan
-    root.updateMatrixWorld(true);
 
     // 3. Terapkan pose kaki & IK lengan
     if (role === "walk") {
@@ -706,14 +766,15 @@ export function RiggedHumanFigure({
       poseLegForward("right", bones, _qRootInv, -0.05, 0.1, 0.07, 0);
 
       const wAng = wheelAngleRef ? wheelAngleRef.current : Math.sin(t * 1.3) * 0.28;
-      // Roda kemudi `ShipHelmStand` (R = 0.56) relatif terhadap badan Kapten (-6.58, scale 1.06)
+      // Roda kemudi `ShipHelmStand` (R = 0.54, 12 jari-jari) relatif terhadap badan Kapten (-6.46, scale 1.06)
+      // Mengunci tepat ke jari-jari pegangan #11 (-30 deg, tangan kiri) & #1 (+30 deg, tangan kanan)
       const rWheel = 0.51;
-      const wheelZCenter = 0.49;
-      const wheelYCenter = 0.98;
-      const thL = Math.PI * 0.68 + wAng;
-      const thR = Math.PI * 0.32 + wAng;
-      DECK_WHEEL_GRIP_LEFT.set(-Math.cos(thL) * rWheel, wheelYCenter + Math.sin(thL) * rWheel, wheelZCenter);
-      DECK_WHEEL_GRIP_RIGHT.set(-Math.cos(thR) * rWheel, wheelYCenter + Math.sin(thR) * rWheel, wheelZCenter);
+      const wheelZCenter = 0.395;
+      const wheelYCenter = 0.99;
+      const thL = -Math.PI / 6 + wAng;
+      const thR = Math.PI / 6 + wAng;
+      DECK_WHEEL_GRIP_LEFT.set(-Math.sin(thL) * rWheel, wheelYCenter + Math.cos(thL) * rWheel, wheelZCenter);
+      DECK_WHEEL_GRIP_RIGHT.set(-Math.sin(thR) * rWheel, wheelYCenter + Math.cos(thR) * rWheel, wheelZCenter);
 
       solveArmIK(
         "left",
@@ -723,8 +784,8 @@ export function RiggedHumanFigure({
         DECK_WHEEL_GRIP_LEFT,
         DECK_POLE_L,
         DECK_PALM_L,
-        _vHandDir.set(0.18, 0.55, 0.78).normalize(),
-        0.82
+        _vHandDir.set(0.14, 0.42, 0.89).normalize(),
+        0.92
       );
       solveArmIK(
         "right",
@@ -734,8 +795,8 @@ export function RiggedHumanFigure({
         DECK_WHEEL_GRIP_RIGHT,
         DECK_POLE_R,
         DECK_PALM_R,
-        _vHandDir.set(-0.18, 0.55, 0.78).normalize(),
-        0.82
+        _vHandDir.set(-0.14, 0.42, 0.89).normalize(),
+        0.92
       );
     } else if (role === "haul") {
       const pull = Math.sin(t * 2.15);
@@ -871,17 +932,17 @@ export function RiggedHumanFigure({
 }
 
 // Target koordinat roda kemudi POV pada koordinat dunia kapal (`CaptainPovHelmRig`)
-const POV_BODY_POS = new THREE.Vector3(-6.54, 5.72, 0);
-const POV_WHEEL_POS = new THREE.Vector3(-5.92, 7.14, 0);
+const POV_BODY_POS = new THREE.Vector3(-6.36, 5.72, 0);
+const POV_WHEEL_POS = new THREE.Vector3(-5.94, 7.12, 0);
 const POV_SCALE = 1.18;
 const POV_GRIP_L = new THREE.Vector3();
 const POV_GRIP_R = new THREE.Vector3();
-const POV_POLE_L = new THREE.Vector3(0.42, 1.05, -0.22);
-const POV_POLE_R = new THREE.Vector3(-0.42, 1.05, -0.22);
-const POV_PALM_L = new THREE.Vector3(-0.78, -0.45, 0.42).normalize();
-const POV_PALM_R = new THREE.Vector3(0.78, -0.45, 0.42).normalize();
-const POV_HDIR_L = new THREE.Vector3(0.24, 0.56, 0.78).normalize();
-const POV_HDIR_R = new THREE.Vector3(-0.24, 0.56, 0.78).normalize();
+const POV_POLE_L = new THREE.Vector3(0.44, 0.96, -0.24);
+const POV_POLE_R = new THREE.Vector3(-0.44, 0.96, -0.24);
+const POV_PALM_L = new THREE.Vector3(-0.68, -0.38, 0.62).normalize();
+const POV_PALM_R = new THREE.Vector3(0.68, -0.38, 0.62).normalize();
+const POV_HDIR_L = new THREE.Vector3(0.28, 0.44, 0.85).normalize();
+const POV_HDIR_R = new THREE.Vector3(-0.28, 0.44, 0.85).normalize();
 
 /**
  * Lengan & tangan manusia realistis Kapten (dari `human-captain.glb` asli — disaring hanya
@@ -890,10 +951,12 @@ const POV_HDIR_R = new THREE.Vector3(-0.24, 0.56, 0.78).normalize();
  */
 export function RiggedCaptainPovArms({
   wheelAngleRef,
-  gripRadius = 0.36,
+  gripRadius = 0.37,
+  active = true,
 }: {
   wheelAngleRef: React.MutableRefObject<number>;
   gripRadius?: number;
+  active?: boolean;
 }) {
   const { root, bones } = useHumanRigClone("captain", true, true);
   const bodyRef = useRef<THREE.Group>(null);
@@ -901,42 +964,41 @@ export function RiggedCaptainPovArms({
 
   useFrame(({ clock }) => {
     const body = bodyRef.current;
-    if (!body) return;
-    if (clock.elapsedTime - lastPoseTime.current < 0.032) return;
+    if (!body || !active) return;
+    if (clock.elapsedTime - lastPoseTime.current < 0.02) return;
     lastPoseTime.current = clock.elapsedTime;
     const t = clock.elapsedTime;
 
-    root.updateWorldMatrix(true, true);
+    root.updateWorldMatrix(true, false);
     _mRootInv.copy(root.matrixWorld).invert();
     root.getWorldQuaternion(_qRootInv).invert();
 
     // Posisi dasar & condong bahu lebih dulu sebelum menghitung IK
-    applyBoneCharDelta(bones.spine, bones, _qRootInv, 0.1, 0, 0);
-    applyBoneCharDelta(bones.spine1, bones, _qRootInv, 0.08, 0, 0);
-    applyBoneCharDelta(bones.spine2, bones, _qRootInv, 0.08, 0, Math.sin(t * 1.4) * 0.015);
-    root.updateMatrixWorld(true);
+    applyBoneCharDelta(bones.spine, bones, _qRootInv, 0.08, 0, 0);
+    applyBoneCharDelta(bones.spine1, bones, _qRootInv, 0.06, 0, 0);
+    applyBoneCharDelta(bones.spine2, bones, _qRootInv, 0.06, 0, Math.sin(t * 1.4) * 0.012);
 
     poseLegForward("left", bones, _qRootInv, 0.08, 0.14, 0.06, 0);
     poseLegForward("right", bones, _qRootInv, -0.06, 0.12, 0.06, 0);
 
-    // Hitung posisi genggaman kiri & kanan di pelek roda kemudi POV dalam unit unscaled `root`
+    // Hitung posisi genggaman kiri (spoke #10, -60 deg) & kanan (spoke #2, +60 deg)
+    // tepat terkunci pada jari-jari pegangan roda kemudi 12-spoke saat berputar
     const wAng = wheelAngleRef.current;
-    const thL = Math.PI * 0.72 + wAng;
-    const thR = Math.PI * 0.28 + wAng;
+    const thL = -Math.PI / 3 + wAng;
+    const thR = Math.PI / 3 + wAng;
     const wheelLocalZ = (POV_WHEEL_POS.x - POV_BODY_POS.x) / POV_SCALE;
     const wheelLocalY = (POV_WHEEL_POS.y - POV_BODY_POS.y) / POV_SCALE;
-    const scaledR = gripRadius / POV_SCALE;
-    const wristBack = 0.054;
+    const scaledR = (gripRadius + 0.025) / POV_SCALE;
 
     POV_GRIP_L.set(
-      -Math.cos(thL) * (scaledR - 0.012),
-      wheelLocalY + Math.sin(thL) * scaledR - 0.018,
-      wheelLocalZ - wristBack
+      -Math.sin(thL) * scaledR,
+      wheelLocalY + Math.cos(thL) * scaledR,
+      wheelLocalZ
     );
     POV_GRIP_R.set(
-      -Math.cos(thR) * (scaledR - 0.012),
-      wheelLocalY + Math.sin(thR) * scaledR - 0.018,
-      wheelLocalZ - wristBack
+      -Math.sin(thR) * scaledR,
+      wheelLocalY + Math.cos(thR) * scaledR,
+      wheelLocalZ
     );
 
     solveArmIK(
@@ -948,7 +1010,7 @@ export function RiggedCaptainPovArms({
       POV_POLE_L,
       POV_PALM_L,
       POV_HDIR_L,
-      0.92
+      0.96
     );
     solveArmIK(
       "right",
@@ -959,7 +1021,7 @@ export function RiggedCaptainPovArms({
       POV_POLE_R,
       POV_PALM_R,
       POV_HDIR_R,
-      0.92
+      0.96
     );
 
     root.updateMatrixWorld(true);

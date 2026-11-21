@@ -2,7 +2,8 @@
 
 /**
  * Pulau Tropis Realistis dengan Pantai Pasir Putih, Laguna Pirus,
- * Pohon Kelapa Melambai, Hutan Tropis, dan Huruf Besar 3D "JTT08" di Lereng Bukit.
+ * Mercusuar Pantai, Dermaga Kayu & Perahu, Air Terjun Tebing,
+ * Pohon Kelapa Melambai, Hutan Tropis, dan Huruf Besar 3D "LAST MILE" di Lereng Bukit.
  * Pulau menghadap ke arah -X (menyambut kapal yang melaju ke arah +X).
  */
 
@@ -318,145 +319,162 @@ function CoconutPalmTree({
   );
 }
 
-// ── Huruf 3D Raksasa "JTT08" di Lereng Bukit (Gaya Hollywood Sign) ──
+// ── Huruf 3D Raksasa "LAST MILE" di Lereng Bukit (Gaya Hollywood Sign) ──
 
-function createLetterShapes(): { char: string; shapes: THREE.Shape[]; width: number }[] {
-  const result: { char: string; shapes: THREE.Shape[]; width: number }[] = [];
-
-  // 1. Huruf "J"
-  {
-    const s = new THREE.Shape();
-    s.moveTo(1.2, 10);
-    s.lineTo(5.8, 10);
-    s.lineTo(5.8, 8.2);
-    s.lineTo(4.6, 8.2);
-    s.lineTo(4.6, 3.0);
-    s.quadraticCurveTo(4.6, 0, 2.2, 0);
-    s.quadraticCurveTo(0, 0, 0, 2.6);
-    s.lineTo(0, 3.8);
-    s.lineTo(1.8, 3.8);
-    s.lineTo(1.8, 2.7);
-    s.quadraticCurveTo(1.8, 1.8, 2.3, 1.8);
-    s.quadraticCurveTo(2.8, 1.8, 2.8, 2.8);
-    s.lineTo(2.8, 8.2);
-    s.lineTo(1.2, 8.2);
-    s.closePath();
-    result.push({ char: "J", shapes: [s], width: 5.8 });
-  }
-
-  // 2 & 3. Huruf "T"
-  const makeT = () => {
-    const s = new THREE.Shape();
-    s.moveTo(0, 10);
-    s.lineTo(6.2, 10);
-    s.lineTo(6.2, 8.1);
-    s.lineTo(4.05, 8.1);
-    s.lineTo(4.05, 0);
-    s.lineTo(2.15, 0);
-    s.lineTo(2.15, 8.1);
-    s.lineTo(0, 8.1);
-    s.closePath();
-    return s;
-  };
-  result.push({ char: "T", shapes: [makeT()], width: 6.2 });
-  result.push({ char: "T", shapes: [makeT()], width: 6.2 });
-
-  // 4. Angka "0"
-  {
-    const outer = new THREE.Shape();
-    outer.moveTo(1.4, 0);
-    outer.lineTo(4.8, 0);
-    outer.quadraticCurveTo(6.2, 0, 6.2, 1.5);
-    outer.lineTo(6.2, 8.5);
-    outer.quadraticCurveTo(6.2, 10, 4.8, 10);
-    outer.lineTo(1.4, 10);
-    outer.quadraticCurveTo(0, 10, 0, 8.5);
-    outer.lineTo(0, 1.5);
-    outer.quadraticCurveTo(0, 0, 1.4, 0);
-    outer.closePath();
-
-    const hole = new THREE.Path();
-    hole.moveTo(2.2, 1.8);
-    hole.lineTo(4.0, 1.8);
-    hole.quadraticCurveTo(4.4, 1.8, 4.4, 2.3);
-    hole.lineTo(4.4, 7.7);
-    hole.quadraticCurveTo(4.4, 8.2, 4.0, 8.2);
-    hole.lineTo(2.2, 8.2);
-    hole.quadraticCurveTo(1.8, 8.2, 1.8, 7.7);
-    hole.lineTo(1.8, 2.3);
-    hole.quadraticCurveTo(1.8, 1.8, 2.2, 1.8);
-    hole.closePath();
-    outer.holes.push(hole);
-
-    result.push({ char: "0", shapes: [outer], width: 6.2 });
-  }
-
-  // 5. Angka "8"
-  {
-    const outer = new THREE.Shape();
-    outer.moveTo(1.3, 0);
-    outer.lineTo(4.9, 0);
-    outer.quadraticCurveTo(6.2, 0, 6.2, 1.4);
-    outer.lineTo(6.2, 4.1);
-    outer.quadraticCurveTo(6.2, 5.0, 5.2, 5.1);
-    outer.quadraticCurveTo(6.0, 5.3, 6.0, 6.1);
-    outer.lineTo(6.0, 8.6);
-    outer.quadraticCurveTo(6.0, 10, 4.7, 10);
-    outer.lineTo(1.5, 10);
-    outer.quadraticCurveTo(0.2, 10, 0.2, 8.6);
-    outer.lineTo(0.2, 6.1);
-    outer.quadraticCurveTo(0.2, 5.3, 1.0, 5.1);
-    outer.quadraticCurveTo(0, 5.0, 0, 4.1);
-    outer.lineTo(0, 1.4);
-    outer.quadraticCurveTo(0, 0, 1.3, 0);
-    outer.closePath();
-
-    const botHole = new THREE.Path();
-    botHole.moveTo(2.1, 1.7);
-    botHole.lineTo(4.1, 1.7);
-    botHole.quadraticCurveTo(4.4, 1.7, 4.4, 2.1);
-    botHole.lineTo(4.4, 3.8);
-    botHole.quadraticCurveTo(4.4, 4.2, 4.1, 4.2);
-    botHole.lineTo(2.1, 4.2);
-    botHole.quadraticCurveTo(1.8, 4.2, 1.8, 3.8);
-    botHole.lineTo(1.8, 2.1);
-    botHole.quadraticCurveTo(1.8, 1.7, 2.1, 1.7);
-    botHole.closePath();
-
-    const topHole = new THREE.Path();
-    topHole.moveTo(2.2, 5.9);
-    topHole.lineTo(4.0, 5.9);
-    topHole.quadraticCurveTo(4.3, 5.9, 4.3, 6.3);
-    topHole.lineTo(4.3, 7.9);
-    topHole.quadraticCurveTo(4.3, 8.3, 4.0, 8.3);
-    topHole.lineTo(2.2, 8.3);
-    topHole.quadraticCurveTo(1.9, 8.3, 1.9, 7.9);
-    topHole.lineTo(1.9, 6.3);
-    topHole.quadraticCurveTo(1.9, 5.9, 2.2, 5.9);
-    topHole.closePath();
-
-    outer.holes.push(botHole, topHole);
-    result.push({ char: "8", shapes: [outer], width: 6.2 });
-  }
-
-  return result;
+interface LetterShapeDef {
+  char: string;
+  shapes: THREE.Shape[];
+  width: number;
+  extraGapBefore?: number;
+  strutXs: number[];
 }
 
-const SIGN_LOCAL_X = -5.5;
-const SIGN_SCALE = 0.96;
-const SIGN_GAP = 1.75;
+function makeL(): LetterShapeDef {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.lineTo(5.4, 0);
+  s.lineTo(5.4, 1.95);
+  s.lineTo(2.1, 1.95);
+  s.lineTo(2.1, 10);
+  s.lineTo(0, 10);
+  s.closePath();
+  return { char: "L", shapes: [s], width: 5.4, strutXs: [1.05, 4.1] };
+}
+
+function makeA(): LetterShapeDef {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.lineTo(2.05, 0);
+  s.lineTo(2.55, 2.25);
+  s.lineTo(4.25, 2.25);
+  s.lineTo(4.75, 0);
+  s.lineTo(6.8, 0);
+  s.lineTo(4.5, 10);
+  s.lineTo(2.3, 10);
+  s.closePath();
+
+  const hole = new THREE.Path();
+  hole.moveTo(2.88, 3.95);
+  hole.lineTo(3.92, 3.95);
+  hole.lineTo(3.4, 7.25);
+  hole.closePath();
+  s.holes.push(hole);
+
+  return { char: "A", shapes: [s], width: 6.8, strutXs: [1.8, 5.0] };
+}
+
+function makeS(): LetterShapeDef {
+  const s = new THREE.Shape();
+  s.moveTo(0.2, 2.2);
+  s.lineTo(2.15, 2.2);
+  s.quadraticCurveTo(2.2, 1.65, 3.05, 1.65);
+  s.quadraticCurveTo(4.05, 1.65, 4.05, 2.65);
+  s.quadraticCurveTo(4.05, 3.55, 2.75, 4.05);
+  s.quadraticCurveTo(0.25, 4.95, 0.25, 7.25);
+  s.quadraticCurveTo(0.25, 10, 3.0, 10);
+  s.quadraticCurveTo(5.85, 10, 5.95, 7.55);
+  s.lineTo(4.0, 7.55);
+  s.quadraticCurveTo(3.95, 8.35, 3.0, 8.35);
+  s.quadraticCurveTo(2.15, 8.35, 2.15, 7.4);
+  s.quadraticCurveTo(2.15, 6.55, 3.45, 6.05);
+  s.quadraticCurveTo(6.0, 5.05, 6.0, 2.75);
+  s.quadraticCurveTo(6.0, 0, 3.05, 0);
+  s.quadraticCurveTo(0.15, 0, 0.2, 2.2);
+  s.closePath();
+  return { char: "S", shapes: [s], width: 6.0, strutXs: [1.6, 4.4] };
+}
+
+function makeT(): LetterShapeDef {
+  const s = new THREE.Shape();
+  s.moveTo(0, 10);
+  s.lineTo(6.0, 10);
+  s.lineTo(6.0, 8.1);
+  s.lineTo(4.0, 8.1);
+  s.lineTo(4.0, 0);
+  s.lineTo(2.0, 0);
+  s.lineTo(2.0, 8.1);
+  s.lineTo(0, 8.1);
+  s.closePath();
+  return { char: "T", shapes: [s], width: 6.0, strutXs: [3.0] };
+}
+
+function makeM(extraGapBefore = 0): LetterShapeDef {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.lineTo(1.95, 0);
+  s.lineTo(1.95, 5.85);
+  s.lineTo(3.3, 2.0);
+  s.lineTo(4.5, 2.0);
+  s.lineTo(5.85, 5.85);
+  s.lineTo(5.85, 0);
+  s.lineTo(7.8, 0);
+  s.lineTo(7.8, 10);
+  s.lineTo(5.65, 10);
+  s.lineTo(3.9, 4.8);
+  s.lineTo(2.15, 10);
+  s.lineTo(0, 10);
+  s.closePath();
+  return { char: "M", shapes: [s], width: 7.8, extraGapBefore, strutXs: [1.0, 3.9, 6.8] };
+}
+
+function makeI(): LetterShapeDef {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.lineTo(2.2, 0);
+  s.lineTo(2.2, 10);
+  s.lineTo(0, 10);
+  s.closePath();
+  return { char: "I", shapes: [s], width: 2.2, strutXs: [1.1] };
+}
+
+function makeE(): LetterShapeDef {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.lineTo(5.8, 0);
+  s.lineTo(5.8, 1.9);
+  s.lineTo(2.05, 1.9);
+  s.lineTo(2.05, 4.15);
+  s.lineTo(5.15, 4.15);
+  s.lineTo(5.15, 5.95);
+  s.lineTo(2.05, 5.95);
+  s.lineTo(2.05, 8.1);
+  s.lineTo(5.8, 8.1);
+  s.lineTo(5.8, 10);
+  s.lineTo(0, 10);
+  s.closePath();
+  return { char: "E", shapes: [s], width: 5.8, strutXs: [1.05, 4.2] };
+}
+
+function createLetterShapes(): LetterShapeDef[] {
+  return [
+    makeL(),
+    makeA(),
+    makeS(),
+    makeT(),
+    makeM(3.0),
+    makeI(),
+    makeL(),
+    makeE(),
+  ];
+}
+
+const SIGN_LOCAL_X = -2.5;
+const SIGN_SCALE = 0.66;
+const SIGN_GAP = 1.15;
 
 function getUniformSignBaseY() {
-  return Math.max(18.0, getIslandHeight(SIGN_LOCAL_X, 0) - 2.4);
+  return Math.max(21.2, getIslandHeight(SIGN_LOCAL_X, 0) - 1.2);
 }
 
 /**
- * Titik tengah (koordinat lokal pulau) papan 3D "JTT08" agar animasi zoom kamera
+ * Titik tengah (koordinat lokal pulau) papan 3D "LAST MILE" agar animasi zoom kamera
  * tepat mengarah ke tulisan di lereng bukit pada berbagai rasio layar.
  */
 export function getIslandSignMetrics() {
   const defs = createLetterShapes();
-  const totalUnscaledW = defs.reduce((s, d) => s + d.width, 0) + SIGN_GAP * (defs.length - 1);
+  const totalUnscaledW =
+    defs.reduce((s, d) => s + d.width + (d.extraGapBefore || 0), 0) +
+    SIGN_GAP * (defs.length - 1);
   const baseY = getUniformSignBaseY();
 
   return {
@@ -467,41 +485,37 @@ export function getIslandSignMetrics() {
   };
 }
 
-function HillsideJtt08Sign({ isLowSpec = false }: { isLowSpec?: boolean }) {
+function HillsideLastMileSign({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const letters = useMemo(() => {
     const defs = createLetterShapes();
-    const totalW = defs.reduce((s, d) => s + d.width, 0) + SIGN_GAP * (defs.length - 1);
+    const totalW =
+      defs.reduce((s, d) => s + d.width + (d.extraGapBefore || 0), 0) +
+      SIGN_GAP * (defs.length - 1);
     let cursor = -totalW / 2;
     const baseY = getUniformSignBaseY();
 
     return defs.map((d) => {
+      cursor += d.extraGapBefore || 0;
       const geo = new THREE.ExtrudeGeometry(d.shapes, {
-        depth: 1.8,
-        bevelEnabled: !isLowSpec,
+        depth: 1.85,
+        bevelEnabled: true,
         bevelThickness: 0.24,
         bevelSize: 0.18,
-        bevelSegments: 1,
+        bevelSegments: 2,
       });
       const zStart = cursor * SIGN_SCALE;
       cursor += d.width + SIGN_GAP;
-      // Posisi horizontal penopang baja mengikuti batang solid masing-masing huruf
-      const strutXs =
-        d.char === "J"
-          ? [3.7]
-          : d.char === "T"
-          ? [3.1]
-          : [1.4, d.width - 1.4];
-      return { geo, char: d.char, zStart, width: d.width, baseY, strutXs };
+      return { geo, char: d.char, zStart, width: d.width, baseY, strutXs: d.strutXs };
     });
-  }, [isLowSpec]);
+  }, []);
 
   const frontMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#fffcf5",
+        color: "#fffdf7",
         emissive: "#ffd59c",
-        emissiveIntensity: 0.34,
-        roughness: 0.32,
+        emissiveIntensity: 0.42,
+        roughness: 0.28,
         metalness: 0.08,
       }),
     []
@@ -510,9 +524,11 @@ function HillsideJtt08Sign({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const sideMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#b88456",
-        roughness: 0.55,
-        metalness: 0.18,
+        color: "#c48c58",
+        emissive: "#5a3818",
+        emissiveIntensity: 0.18,
+        roughness: 0.48,
+        metalness: 0.22,
       }),
     []
   );
@@ -527,29 +543,311 @@ function HillsideJtt08Sign({ isLowSpec = false }: { isLowSpec?: boolean }) {
     []
   );
 
+  const terraceMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#574c42",
+        roughness: 0.85,
+        metalness: 0.08,
+      }),
+    []
+  );
+
   const letterMats = useMemo(() => [frontMat, sideMat], [frontMat, sideMat]);
+  const baseY = getUniformSignBaseY();
 
   return (
     /* Diputar menghadap -X (ke arah kapal yang mendekat):
        sumbu X lokal ExtrudeGeometry mengarah ke +Z dunia */
-    <group position={[SIGN_LOCAL_X, 0, 0]}>
-      {/* Lampu sorot senja tunggal menerangi permukaan huruf JTT08 (hanya pada mode normal) */}
+    <group position={[SIGN_LOCAL_X, 0, 6.5]}>
+      {/* Lampu sorot senja menerangi permukaan huruf LAST MILE */}
       {!isLowSpec && (
-        <pointLight position={[-18, 32, 0]} color="#ffd9a0" intensity={38} distance={95} decay={1} />
+        <pointLight position={[-18, 32, 0]} color="#ffd9a0" intensity={52} distance={110} decay={1} />
       )}
+
+      {/* Fondasi teras batu penopang di bawah barisan huruf LAST MILE */}
+      <mesh position={[0.4, baseY - 0.55, 0]} material={terraceMat}>
+        <boxGeometry args={[2.8, 1.1, 39.5]} />
+      </mesh>
 
       {letters.map((l, idx) => (
         <group key={idx} position={[0, l.baseY, l.zStart]} rotation={[0, -Math.PI / 2, 0]} scale={SIGN_SCALE}>
           <mesh geometry={l.geo} material={letterMats} />
-          {/* Tiang penyangga baja tersembunyi tepat di belakang batang huruf */}
-          {!isLowSpec &&
-            l.strutXs.map((sx, sIdx) => (
-              <mesh key={sIdx} position={[sx, 4.2, -1.3]} rotation={[0.28, 0, 0]} material={strutMat}>
-                <cylinderGeometry args={[0.14, 0.18, 12.5, 6]} />
-              </mesh>
-            ))}
+          {/* Tiang penyangga baja di belakang masing-masing batang huruf */}
+          {l.strutXs.map((sx, sIdx) => (
+            <mesh key={sIdx} position={[sx, 4.2, -1.3]} rotation={[0.28, 0, 0]} material={strutMat}>
+              <cylinderGeometry args={[0.14, 0.18, 12.5, 6]} />
+            </mesh>
+          ))}
         </group>
       ))}
+    </group>
+  );
+}
+
+// ── Mercusuar Tanjung Pantai (IslandLighthouse) ───────────────
+
+function IslandLighthouse() {
+  const beamRef = useRef<THREE.Group>(null);
+  const lx = -26;
+  const lz = -62;
+  const baseH = useMemo(() => Math.max(2.6, getIslandHeight(lx, lz)), [lx, lz]);
+
+  const mats = useMemo(() => {
+    const stone = new THREE.MeshStandardMaterial({ color: "#685e54", roughness: 0.88 });
+    const white = new THREE.MeshStandardMaterial({
+      color: "#faf5ec",
+      emissive: "#ffe4b8",
+      emissiveIntensity: 0.08,
+      roughness: 0.45,
+    });
+    const red = new THREE.MeshStandardMaterial({
+      color: "#b8332a",
+      emissive: "#5a1410",
+      emissiveIntensity: 0.08,
+      roughness: 0.48,
+    });
+    const darkIron = new THREE.MeshStandardMaterial({
+      color: "#22262c",
+      roughness: 0.42,
+      metalness: 0.72,
+    });
+    const glass = new THREE.MeshStandardMaterial({
+      color: "#fff5d6",
+      emissive: "#ffcf70",
+      emissiveIntensity: 1.4,
+      roughness: 0.15,
+    });
+    const beam = new THREE.MeshBasicMaterial({
+      color: "#ffe4a8",
+      transparent: true,
+      opacity: 0.2,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    return { stone, white, red, darkIron, glass, beam };
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (beamRef.current) {
+      beamRef.current.rotation.y = clock.elapsedTime * 0.75;
+    }
+  });
+
+  return (
+    <group position={[lx, baseH - 0.3, lz]}>
+      {/* Fondasi batu karang & podium oktagonal mercusuar */}
+      <mesh position={[0, 0.9, 0]} material={mats.stone}>
+        <cylinderGeometry args={[3.9, 4.8, 2.2, 10]} />
+      </mesh>
+      <mesh position={[0, 2.4, 0]} material={mats.white}>
+        <cylinderGeometry args={[2.7, 3.1, 1.2, 16]} />
+      </mesh>
+
+      {/* Menara belang merah-putih klasik (5 segmen bertingkat) */}
+      <mesh position={[0, 4.5, 0]} material={mats.red}>
+        <cylinderGeometry args={[2.38, 2.65, 3.2, 18]} />
+      </mesh>
+      <mesh position={[0, 7.6, 0]} material={mats.white}>
+        <cylinderGeometry args={[2.1, 2.38, 3.1, 18]} />
+      </mesh>
+      <mesh position={[0, 10.6, 0]} material={mats.red}>
+        <cylinderGeometry args={[1.84, 2.1, 3.0, 18]} />
+      </mesh>
+      <mesh position={[0, 13.5, 0]} material={mats.white}>
+        <cylinderGeometry args={[1.62, 1.84, 2.9, 18]} />
+      </mesh>
+      <mesh position={[0, 16.1, 0]} material={mats.red}>
+        <cylinderGeometry args={[1.48, 1.62, 2.4, 18]} />
+      </mesh>
+
+      {/* Balkon galeri besi & pagar */}
+      <mesh position={[0, 17.45, 0]} material={mats.darkIron}>
+        <cylinderGeometry args={[2.05, 1.72, 0.42, 18]} />
+      </mesh>
+      <mesh position={[0, 17.85, 0]} material={mats.darkIron}>
+        <torusGeometry args={[1.98, 0.07, 8, 24]} />
+      </mesh>
+
+      {/* Ruang lentera kaca bercahaya */}
+      <mesh position={[0, 18.75, 0]} material={mats.glass}>
+        <cylinderGeometry args={[1.32, 1.32, 2.2, 14]} />
+      </mesh>
+
+      {/* Kubah atap mercusuar & penangkal petir */}
+      <mesh position={[0, 20.1, 0]} material={mats.red}>
+        <coneGeometry args={[1.65, 1.6, 16]} />
+      </mesh>
+      <mesh position={[0, 21.3, 0]} material={mats.darkIron}>
+        <cylinderGeometry args={[0.04, 0.06, 1.2, 8]} />
+      </mesh>
+
+      {/* Sorot cahaya suar berputar ganda */}
+      <group ref={beamRef} position={[0, 18.8, 0]}>
+        <mesh position={[18, 0, 0]} rotation={[0, 0, Math.PI / 2]} material={mats.beam}>
+          <coneGeometry args={[4.6, 36, 16, 1, true]} />
+        </mesh>
+        <mesh position={[-18, 0, 0]} rotation={[0, 0, -Math.PI / 2]} material={mats.beam}>
+          <coneGeometry args={[4.6, 36, 16, 1, true]} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+// ── Dermaga Kayu Pelabuhan, Gudang Pantai & Perahu Berlabuh ───
+
+function IslandHarborDock() {
+  const boatRef = useRef<THREE.Group>(null);
+  const mats = useMemo(() => {
+    const woodDeck = new THREE.MeshStandardMaterial({ color: "#6e4b2e", roughness: 0.82 });
+    const darkPiling = new THREE.MeshStandardMaterial({ color: "#3d2716", roughness: 0.9 });
+    const cabinWall = new THREE.MeshStandardMaterial({ color: "#8c623d", roughness: 0.78 });
+    const cabinRoof = new THREE.MeshStandardMaterial({ color: "#7c2d1e", roughness: 0.72 });
+    const crateMat = new THREE.MeshStandardMaterial({ color: "#a67946", roughness: 0.8 });
+    const lanternGlow = new THREE.MeshStandardMaterial({
+      color: "#fff3c4",
+      emissive: "#ffba42",
+      emissiveIntensity: 1.75,
+      roughness: 0.2,
+    });
+    const hullMat = new THREE.MeshStandardMaterial({ color: "#4e2e18", roughness: 0.68 });
+    const sailTrim = new THREE.MeshStandardMaterial({ color: "#efe4cf", roughness: 0.75 });
+    return { woodDeck, darkPiling, cabinWall, cabinRoof, crateMat, lanternGlow, hullMat, sailTrim };
+  }, []);
+
+  useFrame(({ clock }) => {
+    if (boatRef.current) {
+      const t = clock.elapsedTime;
+      boatRef.current.position.y = 0.42 + Math.sin(t * 1.9) * 0.08;
+      boatRef.current.rotation.z = Math.sin(t * 1.5) * 0.04;
+      boatRef.current.rotation.x = Math.cos(t * 1.3) * 0.03;
+    }
+  });
+
+  const pilings = useMemo(() => [-38, -45, -52, -59, -66, -73], []);
+
+  return (
+    <group position={[0, 0, 7]}>
+      {/* Lantai utama dermaga kayu menjorok dari pantai pasir (-34) ke laut (-75) */}
+      <mesh position={[-54.5, 1.55, 0]} material={mats.woodDeck}>
+        <boxGeometry args={[41, 0.38, 4.6]} />
+      </mesh>
+      {/* Balok pembatas tepi kiri & kanan dermaga */}
+      <mesh position={[-54.5, 1.82, 2.15]} material={mats.darkPiling}>
+        <boxGeometry args={[41, 0.22, 0.26]} />
+      </mesh>
+      <mesh position={[-54.5, 1.82, -2.15]} material={mats.darkPiling}>
+        <boxGeometry args={[41, 0.22, 0.26]} />
+      </mesh>
+
+      {/* Tiang pancang kayu penyangga dermaga & lentera pelabuhan */}
+      {pilings.map((px, idx) => (
+        <group key={idx} position={[px, 0, 0]}>
+          <mesh position={[0, 0.85, 2.1]} material={mats.darkPiling}>
+            <cylinderGeometry args={[0.24, 0.28, 3.8, 8]} />
+          </mesh>
+          <mesh position={[0, 0.85, -2.1]} material={mats.darkPiling}>
+            <cylinderGeometry args={[0.24, 0.28, 3.8, 8]} />
+          </mesh>
+          {idx % 2 === 1 && (
+            <>
+              <mesh position={[0, 2.85, -2.1]} material={mats.darkPiling}>
+                <cylinderGeometry args={[0.1, 0.12, 2.3, 8]} />
+              </mesh>
+              <mesh position={[0, 4.02, -2.1]} material={mats.lanternGlow}>
+                <sphereGeometry args={[0.26, 10, 10]} />
+              </mesh>
+            </>
+          )}
+        </group>
+      ))}
+
+      {/* Bangunan Gudang Kayu / Pos Pelabuhan di Pangkal Dermaga */}
+      <group position={[-31.5, 2.2, 5.2]}>
+        <mesh position={[0, 1.6, 0]} material={mats.cabinWall}>
+          <boxGeometry args={[6.4, 3.2, 5.2]} />
+        </mesh>
+        <mesh position={[0, 3.95, 0]} rotation={[0, Math.PI / 4, 0]} material={mats.cabinRoof}>
+          <coneGeometry args={[5.2, 2.2, 4]} />
+        </mesh>
+        {/* Jendela gudang menyala hangat */}
+        <mesh position={[-3.22, 1.75, 0]} material={mats.lanternGlow}>
+          <boxGeometry args={[0.1, 0.95, 1.8]} />
+        </mesh>
+      </group>
+
+      {/* Tumpukan Peti Kargo di Dermaga */}
+      <mesh position={[-42, 2.15, 1.1]} material={mats.crateMat}>
+        <boxGeometry args={[1.1, 0.9, 1.1]} />
+      </mesh>
+      <mesh position={[-43.3, 2.05, 1.2]} material={mats.crateMat}>
+        <boxGeometry args={[0.9, 0.7, 0.9]} />
+      </mesh>
+
+      {/* Perahu Kayu Berlabuh di Samping Dermaga */}
+      <group ref={boatRef} position={[-63, 0.42, -4.4]}>
+        <mesh scale={[2.4, 0.55, 0.95]} material={mats.hullMat}>
+          <sphereGeometry args={[1.35, 14, 10]} />
+        </mesh>
+        <mesh position={[0, 0.48, 0]} scale={[2.1, 0.18, 0.78]} material={mats.sailTrim}>
+          <boxGeometry args={[1.2, 1, 1.2]} />
+        </mesh>
+        {/* Tiang perahu kecil & lentera haluan */}
+        <mesh position={[0.4, 2.1, 0]} material={mats.darkPiling}>
+          <cylinderGeometry args={[0.07, 0.1, 3.4, 8]} />
+        </mesh>
+        <mesh position={[-2.6, 0.75, 0]} material={mats.lanternGlow}>
+          <sphereGeometry args={[0.16, 8, 8]} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+// ── Air Terjun Tebing Tropis & Kolam Kabut (IslandCliffWaterfall) ──
+
+function IslandCliffWaterfall() {
+  const matWater = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#d9f7ff",
+        emissive: "#7fd8f0",
+        emissiveIntensity: 0.32,
+        roughness: 0.22,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.86,
+      }),
+    []
+  );
+  const matCliff = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: "#4a433c",
+        roughness: 0.92,
+      }),
+    []
+  );
+
+  return (
+    <group position={[6, 3.2, -31]} rotation={[0, -0.25, 0]}>
+      {/* Tebing batu pengapit aliran air terjun */}
+      <mesh position={[1.5, 8.5, -3.2]} scale={[3.4, 9.5, 2.8]} material={matCliff}>
+        <dodecahedronGeometry args={[1, 0]} />
+      </mesh>
+      <mesh position={[1.5, 8.2, 3.2]} scale={[3.2, 9.0, 2.6]} material={matCliff}>
+        <dodecahedronGeometry args={[1, 0]} />
+      </mesh>
+      {/* Aliran air terjun bertingkat */}
+      <mesh position={[-0.6, 8.8, 0]} rotation={[0, 0, 0.24]} material={matWater}>
+        <boxGeometry args={[0.45, 16.5, 3.1]} />
+      </mesh>
+      {/* Kolam pirus & buih dasar air terjun */}
+      <mesh position={[-4.5, 0.35, 0]} rotation={[-Math.PI / 2, 0, 0]} material={matWater}>
+        <circleGeometry args={[5.4, 18]} />
+      </mesh>
     </group>
   );
 }
@@ -562,23 +860,26 @@ function JungleCanopyInstanced({ isLowSpec = false }: { isLowSpec?: boolean }) {
 
   const bushes = useMemo(() => {
     const list: { pos: [number, number, number]; scale: [number, number, number]; color: THREE.Color }[] = [];
-    const palette = ["#244820", "#2f5726", "#39642c", "#1d3b1a", "#446e30"];
-    const maxBushes = isLowSpec ? 16 : 42;
-    for (let i = 0; i < maxBushes * 2.5; i++) {
+    const palette = ["#396428", "#447030", "#4e7c37", "#325923", "#56853d"];
+    const maxBushes = isLowSpec ? 28 : 42;
+    for (let i = 0; i < maxBushes * 3.5; i++) {
       if (list.length >= maxBushes) break;
       const a = hash2(i * 1.7, 9.1) * Math.PI * 2;
-      const rad = 14 + hash2(i * 3.3, 2.7) * 56;
-      const lx = Math.cos(a) * rad + 6;
-      const lz = Math.sin(a) * rad * 1.15;
-      // Jangan tutupi area di sekitar tulisan JTT08 (lx in -16..4, |lz| < 26)
-      if (lx > -16 && lx < 4 && Math.abs(lz) < 26) continue;
+      const rad = 10 + hash2(i * 3.3, 2.7) * 44;
+      const lx = Math.cos(a) * rad + 8;
+      const lz = Math.sin(a) * rad * 1.05;
+      // Jangan tutupi area di sekitar tulisan LAST MILE (lx in -16..8, |lz| < 26)
+      if (lx > -16 && lx < 8 && Math.abs(lz) < 26) continue;
       const h = getIslandHeight(lx, lz);
-      if (h < 4.5 || h > 29) continue;
-      const sx = 2.0 + hash2(i, 19.3) * 2.6;
+      if (h < 6.5 || h > 23) continue;
+      const dhX = Math.abs(getIslandHeight(lx + 2, lz) - getIslandHeight(lx - 2, lz));
+      const dhZ = Math.abs(getIslandHeight(lx, lz + 2) - getIslandHeight(lx, lz - 2));
+      if (dhX > 1.8 || dhZ > 1.8) continue;
+      const sx = 1.6 + hash2(i, 19.3) * 1.8;
       const col = new THREE.Color(palette[i % palette.length]);
       list.push({
-        pos: [lx, h + sx * 0.08, lz],
-        scale: [sx * 1.3, sx * 0.36, sx * 1.1],
+        pos: [lx, h - sx * 0.45, lz],
+        scale: [sx * 1.05, sx * 0.72, sx * 1.0],
         color: col,
       });
     }
@@ -617,9 +918,11 @@ function JungleCanopyInstanced({ isLowSpec = false }: { isLowSpec?: boolean }) {
 
 export function TropicalIsland({
   position = [340, 0, 0],
+  rotation = [0, 0, 0],
   isLowSpec = false,
 }: {
   position?: [number, number, number];
+  rotation?: [number, number, number];
   isLowSpec?: boolean;
 }) {
   const surfRingRef = useRef<THREE.Mesh>(null);
@@ -627,7 +930,7 @@ export function TropicalIsland({
 
   // 1. Geometri kontur pulau (pasir putih -> tebing batu -> bukit hijau tropis)
   const terrainGeo = useMemo(() => {
-    const segs = isLowSpec ? 24 : 44;
+    const segs = isLowSpec ? 36 : 48;
     const geo = new THREE.PlaneGeometry(190, 230, segs, segs);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
@@ -691,9 +994,9 @@ export function TropicalIsland({
     canvas.height = 256;
     const ctx = canvas.getContext("2d")!;
     const g = ctx.createRadialGradient(128, 128, 42, 128, 128, 126);
-    g.addColorStop(0, "rgba(255, 250, 240, 0.85)");
-    g.addColorStop(0.52, "rgba(64, 210, 195, 0.52)");
-    g.addColorStop(0.78, "rgba(28, 145, 155, 0.25)");
+    g.addColorStop(0, "rgba(255, 250, 240, 0.88)");
+    g.addColorStop(0.5, "rgba(64, 214, 198, 0.56)");
+    g.addColorStop(0.76, "rgba(28, 148, 158, 0.28)");
     g.addColorStop(1, "rgba(12, 60, 80, 0)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 256, 256);
@@ -712,10 +1015,7 @@ export function TropicalIsland({
       phase: number;
     }[] = [];
 
-    // Pilih koordinat Z strategis (jauh lebih sedikit pohon agar hemat draw calls)
-    const zCoords = isLowSpec
-      ? [-45, -28, -12, 4, 20, 36]
-      : [-55, -42, -30, -18, -6, 6, 18, 30, 44, 56];
+    const zCoords = [-62, -48, -36, -24, -14, -4, 8, 16, 30, 42, 54, 64];
 
     zCoords.forEach((lz, i) => {
       for (let lx = -60; lx <= -10; lx += 3.5) {
@@ -733,49 +1033,50 @@ export function TropicalIsland({
       }
     });
 
-    if (!isLowSpec) {
-      // Tambah pohon kelapa di punggung bukit hanya untuk mode standard/tinggi
-      for (let i = 0; i < 8; i++) {
-        const side = i % 2 === 0 ? -1 : 1;
-        const lz = side * (26 + hash2(i, 12.7) * 32);
-        const lx = -4 + hash2(i, 15.1) * 32;
-        const h = getIslandHeight(lx, lz);
-        if (h >= 7.0 && h <= 28.0) {
-          items.push({
-            pos: [lx, h - 0.25, lz],
-            scale: 0.9 + hash2(i, 17.9) * 0.35,
-            leanAngle: 0.1 + hash2(i, 13.4) * 0.15,
-            leanYaw: Math.PI + (hash2(i, 8.8) - 0.5) * 1.8,
-            phase: i * 0.9,
-          });
-        }
+    // Pohon kelapa di punggung bukit & sekitar teluk
+    for (let i = 0; i < 10; i++) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const lz = side * (28 + hash2(i, 12.7) * 34);
+      const lx = -6 + hash2(i, 15.1) * 34;
+      const h = getIslandHeight(lx, lz);
+      if (h >= 6.5 && h <= 28.0) {
+        items.push({
+          pos: [lx, h - 0.25, lz],
+          scale: 0.9 + hash2(i, 17.9) * 0.35,
+          leanAngle: 0.1 + hash2(i, 13.4) * 0.15,
+          leanYaw: Math.PI + (hash2(i, 8.8) - 0.5) * 1.8,
+          phase: i * 0.9,
+        });
       }
     }
 
     return items;
-  }, [isLowSpec]);
+  }, []);
 
-  // 4. Batu karang pantai
+  // 4. Batu karang pantai & gugusan tebing laut
   const rocks = useMemo(() => {
     const spots: { pos: [number, number, number]; scale: [number, number, number]; rot: number }[] = [
       { pos: [-44, 0.8, -52], scale: [5.0, 2.8, 4.2], rot: 0.4 },
       { pos: [-42, 0.9, 50], scale: [5.2, 3.0, 4.5], rot: 2.1 },
       { pos: [-38, 1.0, 28], scale: [2.8, 1.5, 2.4], rot: 1.7 },
+      { pos: [-52, 0.6, -34], scale: [3.6, 2.1, 3.1], rot: 0.9 },
+      { pos: [-48, 0.7, 38], scale: [3.8, 2.2, 3.2], rot: 2.6 },
+      { pos: [-33, 2.2, -62], scale: [6.2, 4.0, 5.4], rot: 1.2 },
     ];
-    return isLowSpec ? [spots[0], spots[1]] : spots;
-  }, [isLowSpec]);
+    return spots;
+  }, []);
 
   useFrame(({ clock }) => {
     if (surfRingRef.current) {
       const t = clock.elapsedTime;
-      const pulse = 1 + Math.sin(t * 1.6) * 0.012;
+      const pulse = 1 + Math.sin(t * 1.6) * 0.014;
       surfRingRef.current.scale.set(pulse, 1, pulse * 1.18);
     }
   });
 
   return (
-    <group position={position}>
-      {/* Pantulan hangat cahaya senja (hanya jika bukan low spec) */}
+    <group position={position} rotation={rotation}>
+      {/* Pantulan hangat cahaya senja di pantai pulau */}
       {!isLowSpec && (
         <pointLight position={[-65, 26, 0]} color="#ffd5a3" intensity={65} distance={160} decay={1} />
       )}
@@ -786,11 +1087,11 @@ export function TropicalIsland({
         position={[-6, 0.22, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
-        <planeGeometry args={[215, 245]} />
+        <planeGeometry args={[225, 255]} />
         <meshBasicMaterial
           map={lagoonTex}
           transparent
-          opacity={0.78}
+          opacity={0.82}
           depthWrite={false}
         />
       </mesh>
@@ -800,10 +1101,19 @@ export function TropicalIsland({
         <meshStandardMaterial
           vertexColors
           map={detailTex}
-          roughness={0.86}
+          roughness={0.84}
           metalness={0.02}
         />
       </mesh>
+
+      {/* Mercusuar Pantai dengan Sorot Cahaya Berputar */}
+      <IslandLighthouse />
+
+      {/* Dermaga Kayu Pelabuhan, Gudang Pantai & Perahu Berlabuh */}
+      <IslandHarborDock />
+
+      {/* Air Terjun Tebing Tropis */}
+      <IslandCliffWaterfall />
 
       {/* Batu Karang Pantai */}
       {rocks.map((r, idx) => (
@@ -835,12 +1145,12 @@ export function TropicalIsland({
           leanAngle={p.leanAngle}
           leanYaw={p.leanYaw}
           phase={p.phase}
-          isLowSpec={isLowSpec}
+          isLowSpec={false}
         />
       ))}
 
-      {/* Huruf 3D Raksasa "JTT08" di Lereng Bukit */}
-      <HillsideJtt08Sign isLowSpec={isLowSpec} />
+      {/* Huruf 3D Raksasa "LAST MILE" di Lereng Bukit */}
+      <HillsideLastMileSign isLowSpec={isLowSpec} />
     </group>
   );
 }

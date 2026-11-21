@@ -8,7 +8,6 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import {
   GalleonShip,
   SHIP_URL_HIGH,
-  SHIP_URL_LOW,
   SunsetFog,
   SunsetLights,
   SunsetOcean,
@@ -16,12 +15,13 @@ import {
   getSunDirection,
 } from "./SunsetOcean";
 import { preloadHumanModels } from "./RiggedHumanCrew";
-import { isLowSpecActive, subscribePerformanceMode } from "@/lib/hardwareDetection";
+import { TropicalIsland } from "./TropicalIsland";
+import { detectHardwareSpecs } from "@/lib/hardwareDetection";
 
 /** Pose kamera awal login (dipakai juga sebagai titik awal transisi zoom ke kapten) */
 export const LOGIN_CAMERA = {
-  position: new THREE.Vector3(3.2, 7.6, 26.5),
-  lookAt: new THREE.Vector3(1.5, 5.4, 0),
+  position: new THREE.Vector3(-1.4, 7.35, 22.2),
+  lookAt: new THREE.Vector3(2.2, 5.3, -1.0),
 };
 
 export const LOGIN_SHIP = {
@@ -30,6 +30,9 @@ export const LOGIN_SHIP = {
 };
 
 export const ISLAND_POSITION: [number, number, number] = [310, 0, -24];
+/** Posisi pulau di cakrawala halaman login agar tulisan 3D LAST MILE, mercusuar & dermaga menghadap tepat ke kamera */
+export const LOGIN_HORIZON_ISLAND_POS: [number, number, number] = [56, -0.4, -215];
+export const LOGIN_HORIZON_ISLAND_ROT: [number, number, number] = [0, 1.32, 0];
 
 function MobileFramerateDriver({ active }: { active: boolean }) {
   const invalidate = useThree((s) => s.invalidate);
@@ -46,7 +49,15 @@ function MobileFramerateDriver({ active }: { active: boolean }) {
   return null;
 }
 
-function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => void }) {
+function LoginScene({
+  isLowSpecDevice,
+  isCompactViewport,
+  onReady,
+}: {
+  isLowSpecDevice: boolean;
+  isCompactViewport: boolean;
+  onReady: () => void;
+}) {
   const sun = useMemo(() => getSunDirection(), []);
   const mouse = useRef({ x: 0, y: 0 });
   const look = useMemo(() => new THREE.Vector3(), []);
@@ -62,42 +73,48 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
 
   useFrame(({ camera, clock }) => {
     const t = clock.elapsedTime;
-    const baseX = isMobile ? 1.5 : LOGIN_CAMERA.position.x;
-    const baseY = isMobile ? 6.5 : LOGIN_CAMERA.position.y;
-    const baseZ = isMobile ? 33.0 : LOGIN_CAMERA.position.z;
+    const baseX = isCompactViewport ? 0.4 : LOGIN_CAMERA.position.x;
+    const baseY = isCompactViewport ? 6.9 : LOGIN_CAMERA.position.y;
+    const baseZ = isCompactViewport ? 27.5 : LOGIN_CAMERA.position.z;
 
-    const tx = baseX + (isMobile ? 0 : mouse.current.x * 1.4);
-    const ty = baseY + Math.sin(t * 0.6) * 0.16 - (isMobile ? 0 : mouse.current.y * 0.45);
+    const tx = baseX + (isCompactViewport ? 0 : mouse.current.x * 1.4);
+    const ty = baseY + Math.sin(t * 0.6) * 0.16 - (isCompactViewport ? 0 : mouse.current.y * 0.45);
     camera.position.x += (tx - camera.position.x) * 0.03;
     camera.position.y += (ty - camera.position.y) * 0.04;
     camera.position.z += (baseZ - camera.position.z) * 0.04;
 
     look.set(
-      (isMobile ? 0.5 : LOGIN_CAMERA.lookAt.x) + (isMobile ? 0 : mouse.current.x * 1.8),
+      (isCompactViewport ? 0.8 : LOGIN_CAMERA.lookAt.x) + (isCompactViewport ? 0 : mouse.current.x * 1.8),
       LOGIN_CAMERA.lookAt.y + Math.sin(t * 0.45) * 0.15,
       LOGIN_CAMERA.lookAt.z
     );
     camera.lookAt(look);
   });
 
-  const ship = isMobile ? LOGIN_SHIP.mobile : LOGIN_SHIP.desktop;
+  const ship = LOGIN_SHIP.desktop;
 
   return (
     <>
-      <SunsetFog />
-      <SunsetLights sun={sun} deckLightPosition={[-5.65, 7.53, 0.15]} />
+      <SunsetFog density={0.00014} />
+      <SunsetLights sun={sun} deckLightPosition={[-5.75, 7.62, 0.75]} />
       <SunsetSky sun={sun} />
-      <SunsetOcean sun={sun} quality={isMobile ? "low" : "high"} />
-      {/* Tampilkan kapal & kru bersama laut dalam 1 frame tanpa kedipan / pop-in */}
+      <SunsetOcean sun={sun} quality={isLowSpecDevice ? "low" : "high"} />
+      {/* Pulau Tropis dengan tulisan 3D "LAST MILE", mercusuar, dermaga & air terjun di cakrawala */}
+      <TropicalIsland
+        position={LOGIN_HORIZON_ISLAND_POS}
+        rotation={LOGIN_HORIZON_ISLAND_ROT}
+        isLowSpec={isLowSpecDevice}
+      />
+      {/* Tampilkan kapal & seluruh kru manusia kualitas tinggi bersama laut dalam 1 mode */}
       <Suspense fallback={null}>
         <GalleonShip
-          quality={isMobile ? "low" : "high"}
+          quality="high"
           position={ship.position}
           heading={ship.heading}
           speed={0}
           inPov={false}
           progressive
-          mobileCompact={isMobile}
+          mobileCompact={false}
           hasExternalDeckLight
           onShipReady={onReady}
         />
@@ -108,33 +125,29 @@ function LoginScene({ isMobile, onReady }: { isMobile: boolean; onReady: () => v
 
 export function SunsetLoginBackground() {
   const [mounted, setMounted] = useState(false);
-  const [isLowSpec, setIsLowSpec] = useState(false);
+  const [isLowSpecDevice, setIsLowSpecDevice] = useState(false);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [ready, setReady] = useState(false);
   const handleReady = useCallback(() => setReady(true), []);
 
   useEffect(() => {
     setMounted(true);
-    const low = isLowSpecActive();
-    setIsLowSpec(low);
+    const specs = detectHardwareSpecs();
+    setIsLowSpecDevice(specs.isLowSpec);
+    setIsCompactViewport(window.innerWidth < 768);
 
-    const unsub = subscribePerformanceMode((mode) => {
-      setIsLowSpec(mode === "light");
-    });
-
-    // Mulai preload model kapal aktif & awak secara paralel sejak awal agar tidak antre beruntun
-    useLoader.preload(GLTFLoader, low ? SHIP_URL_LOW : SHIP_URL_HIGH, (loader) => {
+    // Preload model kapal & seluruh awak manusia kualitas tinggi secara paralel
+    useLoader.preload(GLTFLoader, SHIP_URL_HIGH, (loader) => {
       (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
     });
-    preloadHumanModels(low);
+    preloadHumanModels(false);
 
-    // Fallback aman bila jaringan sangat lambat agar layar tidak tertahan
     const fallbackTimer = window.setTimeout(() => setReady(true), 2500);
-    const check = () => setIsLowSpec(isLowSpecActive());
-    window.addEventListener("resize", check);
+    const onResize = () => setIsCompactViewport(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
     return () => {
-      unsub();
       window.clearTimeout(fallbackTimer);
-      window.removeEventListener("resize", check);
+      window.removeEventListener("resize", onResize);
     };
   }, []);
 
@@ -142,28 +155,32 @@ export function SunsetLoginBackground() {
     <div className="fixed inset-0 overflow-hidden pointer-events-none select-none bg-[#120d1d]">
       {mounted && (
         <Canvas
-          frameloop={isLowSpec ? "demand" : "always"}
+          frameloop="always"
           camera={{
             position: LOGIN_CAMERA.position.toArray() as [number, number, number],
-            fov: isLowSpec ? 56 : 44,
+            fov: isCompactViewport ? 52 : 44,
             near: 0.28,
             far: 16000,
           }}
-          dpr={isLowSpec ? 1 : [1, 1.25]}
+          dpr={isLowSpecDevice ? [1, 1.15] : [1, 1.35]}
           gl={{
-            antialias: !isLowSpec,
+            antialias: true,
             alpha: false,
-            powerPreference: isLowSpec ? "default" : "high-performance",
+            powerPreference: "high-performance",
           }}
           onCreated={({ gl }) => {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 0.46;
+            gl.toneMappingExposure = 0.58;
             gl.debug.checkShaderErrors = false;
           }}
         >
           <color attach="background" args={["#181124"]} />
-          <MobileFramerateDriver active={isLowSpec} />
-          <LoginScene isMobile={isLowSpec} onReady={handleReady} />
+          <MobileFramerateDriver active={false} />
+          <LoginScene
+            isLowSpecDevice={isLowSpecDevice}
+            isCompactViewport={isCompactViewport}
+            onReady={handleReady}
+          />
         </Canvas>
       )}
 

@@ -315,8 +315,8 @@ export function SunsetOcean({
     initialNormals.wrapS = initialNormals.wrapT = THREE.RepeatWrapping;
     const geo =
       quality === "high"
-        ? buildPolarGrid(56, 72, 1.0, 1.08)
-        : buildPolarGrid(22, 32, 1.8, 1.15);
+        ? buildPolarGrid(48, 64, 1.0, 1.08)
+        : buildPolarGrid(36, 48, 1.15, 1.1);
 
     const w = new Water(geo, {
       textureWidth: quality === "high" ? 128 : 64,
@@ -325,7 +325,7 @@ export function SunsetOcean({
       sunDirection: sun.clone(),
       sunColor: new THREE.Color("#ffc08a"),
       waterColor: new THREE.Color("#0b2f42"),
-      distortionScale: quality === "high" ? 3.2 : 2.0,
+      distortionScale: quality === "high" ? 3.2 : 2.6,
       fog: true,
     });
     const mat = w.material as THREE.ShaderMaterial;
@@ -343,19 +343,15 @@ export function SunsetOcean({
       mirrorTex.minFilter = THREE.LinearFilter;
     }
 
-    if (quality === "low") {
-      // Matikan render pass mirror camera di mode hemat/low quality
-      // Menghilangkan re-render seluruh scene kedua kalinya sehingga performa melonjak 2x-3x lipat
-      w.onBeforeRender = function () {};
-    } else {
-      // Pada mode high, render mirror kamera setiap 2 frame agar tetap sangat ringan & halus
-      const origBeforeRender = w.onBeforeRender;
-      let reflTick = 0;
-      w.onBeforeRender = function (renderer, scene, cam, geometry, material, group) {
-        if (reflTick++ % 2 !== 0) return;
-        origBeforeRender.call(this, renderer, scene, cam, geometry, material, group);
-      };
-    }
+    // Throttle render pass mirror camera: setiap 2 frame di perangkat standar, setiap 4 frame di perangkat low-spec
+    // sehingga tampilan refleksi air tetap high-quality namun beban GPU sangat ringan di semua device
+    const origBeforeRender = w.onBeforeRender;
+    const skipInterval = quality === "low" ? 4 : 2;
+    let reflTick = 0;
+    w.onBeforeRender = function (renderer, scene, cam, geometry, material, group) {
+      if (reflTick++ % skipInterval !== 0) return;
+      origBeforeRender.call(this, renderer, scene, cam, geometry, material, group);
+    };
 
     w.rotation.x = -Math.PI / 2;
     w.frustumCulled = false;
@@ -418,7 +414,10 @@ function getSharedShipMaterial(mat: THREE.Material): THREE.Material {
   if (cached) return cached;
   const sm = mat as THREE.MeshStandardMaterial;
   if (sm.isMeshStandardMaterial) {
-    sm.envMapIntensity = 0.9;
+    sm.envMapIntensity = 1.15;
+    if (sm.map) {
+      sm.map.anisotropy = 4;
+    }
   }
   _shipMatCache.set(mat, mat);
   return mat;
@@ -458,7 +457,8 @@ export function GalleonShip({
   /** Dipanggil setelah model kapal + kru quarterdeck siap & tergambar pada frame pertama */
   onShipReady?: () => void;
 }) {
-  const gltf = useLoader(GLTFLoader, quality === "high" ? SHIP_URL_HIGH : SHIP_URL_LOW, (loader) => {
+  // Selalu gunakan model kapal kualitas tinggi (1 mode visual seragam di semua perangkat)
+  const gltf = useLoader(GLTFLoader, SHIP_URL_HIGH, (loader) => {
     (loader as GLTFLoader).setMeshoptDecoder(MeshoptDecoder);
   });
 
@@ -599,7 +599,7 @@ export function GalleonShip({
 
 export function SunsetLights({
   sun,
-  intensity = 2.8,
+  intensity = 2.9,
   deckLightPosition,
 }: {
   sun: THREE.Vector3;
@@ -609,11 +609,14 @@ export function SunsetLights({
   const pos = useMemo(() => sun.clone().multiplyScalar(500).toArray() as [number, number, number], [sun]);
   return (
     <>
-      <hemisphereLight args={["#ffe0be", "#223044", 0.78]} />
+      <hemisphereLight args={["#ffe8cc", "#2e4158", 1.08]} />
       <directionalLight position={pos} color={SUN_LIGHT_COLOR} intensity={intensity} />
+      {/* Cahaya fill hangat dari arah depan-kamera agar wajah, kulit, tangan kru & lambung kapal terlihat jelas dan realistis */}
+      <directionalLight position={[35, 38, 140]} color="#ffdcc2" intensity={1.38} />
       {deckLightPosition && (
-        <pointLight position={deckLightPosition} color="#ffcf87" intensity={2.6} distance={7.5} />
+        <pointLight position={deckLightPosition} color="#ffd494" intensity={4.2} distance={11.5} />
       )}
+      <pointLight position={[3.4, 5.2, 2.2]} color="#ffd8a8" intensity={3.0} distance={14} />
     </>
   );
 }
