@@ -768,6 +768,41 @@ function computeDailyActiveMetrics(
   };
 }
 
+function findLatestRawTimestamp(allRaw: CourierRecord[]): {
+  latestDataDate: string | null;
+  latestUploadAt: string | null;
+} {
+  let latestDataDate: string | null = null;
+  let latestUploadDateObj: Date | null = null;
+  for (const r of allRaw) {
+    const ymd = normalizeDateKey(r.date);
+    if (ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
+      if (!latestDataDate || ymd > latestDataDate) latestDataDate = ymd;
+    }
+    const ts = parseTimestamp(r.submitted_at);
+    if (ts && (!latestUploadDateObj || ts.getTime() > latestUploadDateObj.getTime())) {
+      latestUploadDateObj = ts;
+    }
+  }
+  return {
+    latestDataDate,
+    latestUploadAt: latestUploadDateObj ? nowWIBTimestamp(latestUploadDateObj) : null,
+  };
+}
+
+function computeCore2whAchievement(
+  dedicatedAch: number,
+  dedicatedShifts: number,
+  kurirPlusAch: number,
+  kurirPlusShifts: number
+): number {
+  if (dedicatedShifts > 0 && kurirPlusShifts > 0) {
+    return Math.round(((dedicatedAch + kurirPlusAch) / 2) * 10) / 10;
+  }
+  if (dedicatedShifts > 0) return dedicatedAch;
+  return kurirPlusAch;
+}
+
 export async function getKpiMetrics(
   hubName: string,
   dateRange: { start: Date; end: Date },
@@ -787,19 +822,7 @@ export async function getKpiMetrics(
   const firstJoinMap = buildCourierFirstJoinMap(allRaw);
 
   // Cari tanggal data terbaru & timestamp upload terbaru di seluruh database hub (RAW_<HUB>)
-  let latestDataDate: string | null = null;
-  let latestUploadDateObj: Date | null = null;
-  for (const r of allRaw) {
-    const ymd = normalizeDateKey(r.date);
-    if (ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
-      if (!latestDataDate || ymd > latestDataDate) latestDataDate = ymd;
-    }
-    const ts = parseTimestamp(r.submitted_at);
-    if (ts && (!latestUploadDateObj || ts.getTime() > latestUploadDateObj.getTime())) {
-      latestUploadDateObj = ts;
-    }
-  }
-  const latestUploadAt = latestUploadDateObj ? nowWIBTimestamp(latestUploadDateObj) : null;
+  const { latestDataDate, latestUploadAt } = findLatestRawTimestamp(allRaw);
 
   // Cek apakah record berada dalam Grace Period 14 hari
   const isGracePeriodRecord = (r: CourierRecord): boolean => {
@@ -947,12 +970,12 @@ export async function getKpiMetrics(
     (r) => r.contract_type === "Dedicated" && r.vehicle_type === "4WH"
   );
 
-  const kpi2wAchievement =
-    dedicated2wh.shifts > 0 && kurirPlus2wh.shifts > 0
-      ? Math.round(((dedicated2wh.achievement + kurirPlus2wh.achievement) / 2) * 10) / 10
-      : dedicated2wh.shifts > 0
-      ? dedicated2wh.achievement
-      : kurirPlus2wh.achievement;
+  const kpi2wAchievement = computeCore2whAchievement(
+    dedicated2wh.achievement,
+    dedicated2wh.shifts,
+    kurirPlus2wh.achievement,
+    kurirPlus2wh.shifts
+  );
 
   const riderMitra = buildWeeklyMitraSeg("2WH");
   const driverMitra = buildWeeklyMitraSeg("4WH");
@@ -1297,19 +1320,7 @@ export async function getMonthlyMetrics(
   const firstJoinMap = buildCourierFirstJoinMap(allRaw);
 
   // Cari tanggal data terbaru & timestamp upload terbaru di seluruh database hub (RAW_<HUB>)
-  let latestDataDate: string | null = null;
-  let latestUploadDateObj: Date | null = null;
-  for (const r of allRaw) {
-    const ymd = normalizeDateKey(r.date);
-    if (ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd)) {
-      if (!latestDataDate || ymd > latestDataDate) latestDataDate = ymd;
-    }
-    const ts = parseTimestamp(r.submitted_at);
-    if (ts && (!latestUploadDateObj || ts.getTime() > latestUploadDateObj.getTime())) {
-      latestUploadDateObj = ts;
-    }
-  }
-  const latestUploadAt = latestUploadDateObj ? nowWIBTimestamp(latestUploadDateObj) : null;
+  const { latestDataDate, latestUploadAt } = findLatestRawTimestamp(allRaw);
 
   const allMonthActive = dedup(filterActive(allRaw, { start: monthStart, end: monthEnd }));
 
@@ -1412,12 +1423,12 @@ export async function getMonthlyMetrics(
   const kurirPlus2wh = buildCoreSegment(kp2whRecords, "Kurir Plus", "2WH");
   const dedicated4wh = buildCoreSegment(ded4whRecords, "Dedicated", "4WH");
 
-  const core2whAchievement =
-    dedicated2wh.totalShifts > 0 && kurirPlus2wh.totalShifts > 0
-      ? Math.round(((dedicated2wh.achievement + kurirPlus2wh.achievement) / 2) * 10) / 10
-      : dedicated2wh.totalShifts > 0
-      ? dedicated2wh.achievement
-      : kurirPlus2wh.achievement;
+  const core2whAchievement = computeCore2whAchievement(
+    dedicated2wh.achievement,
+    dedicated2wh.totalShifts,
+    kurirPlus2wh.achievement,
+    kurirPlus2wh.totalShifts
+  );
 
   // Filter data sesuai pilihan Contract Type & Vehicle Type untuk Summary Cards & Daily Breakdown
   let active = prodMonthActive;
@@ -2079,4 +2090,312 @@ export async function getDailyProductivityByHubs(
   }
 
   return result;
+}
+
+// ── Ringkasan Produktivitas Seluruh Hub (Weekly + Monthly 2WH & 4WH KPI) ────
+
+export interface HubSegmentDetail {
+  shifts: number;
+  delivered: number;
+  avgProductivity: number;
+  target: number;
+  threshold75: number;
+  achievement: number;
+  activeDays: number;
+  avgCouriersPerDay: number;
+  shortfallPerCourier: number;
+  totalGapParcels: number;
+  catchUpTarget: number;
+}
+
+export interface HubPeriodProductivity {
+  kpi2wh: number;
+  kpi4wh: number;
+  dedicated2whAch: number;
+  kurirPlus2whAch: number;
+  dedicated4whAch: number;
+  shifts2wh: number;
+  shifts4wh: number;
+  segments: {
+    dedicated2wh: HubSegmentDetail;
+    kurirPlus2wh: HubSegmentDetail;
+    dedicated4wh: HubSegmentDetail;
+    mitra2wh: HubSegmentDetail;
+    mitra4wh: HubSegmentDetail;
+  };
+}
+
+export interface HubProductivitySummary {
+  namaHub: string;
+  lastDataDate: string | null;
+  lastUploadAt: string | null;
+  hasL15D: boolean;
+  weekly: HubPeriodProductivity;
+  monthly: HubPeriodProductivity;
+}
+
+function buildHubSegmentDetail(
+  segRecords: CourierRecord[],
+  segTarget: number
+): HubSegmentDetail {
+  const shifts = segRecords.length;
+  const delivered = segRecords.reduce((s, r) => s + (r.delivered || 0), 0);
+  const avg = shifts > 0 ? delivered / shifts : 0;
+  const dayKeys = new Set<string>();
+  for (const r of segRecords) {
+    const dk = normalizeDateKey(r.date);
+    if (dk) dayKeys.add(dk);
+  }
+  const activeDays = dayKeys.size;
+  const avgCouriersPerDay = activeDays > 0 ? Math.round(shifts / activeDays) : 0;
+  const rawShortfall = shifts > 0 ? Math.max(0, segTarget - avg) : 0;
+  const ach = shifts > 0 ? Math.round(calcThresholdAchievement(avg, segTarget) * 10) / 10 : 0;
+
+  return {
+    shifts,
+    delivered,
+    avgProductivity: Math.round(avg * 10) / 10,
+    target: Math.round(segTarget * 10) / 10,
+    threshold75: Math.round(segTarget * 0.75 * 10) / 10,
+    achievement: ach,
+    activeDays,
+    avgCouriersPerDay,
+    shortfallPerCourier: Math.round(rawShortfall * 10) / 10,
+    totalGapParcels: shifts > 0 ? Math.round(rawShortfall * shifts) : 0,
+    catchUpTarget: Math.round((segTarget + rawShortfall) * 10) / 10,
+  };
+}
+
+/**
+ * Menghitung capaian Weekly Productivity (2WH & 4WH KPI) dan Monthly Productivity
+ * (2WH & 4WH KPI) sekaligus tanggal update data terakhir untuk seluruh Hub
+ * menggunakan 1x panggilan batch Google Sheets.
+ */
+export async function getAllHubsProductivitySummary(
+  hubNames: string[],
+  weekStart: string,
+  year: number,
+  month: number,
+  options: { excludeNew?: boolean } = {}
+): Promise<HubProductivitySummary[]> {
+  if (hubNames.length === 0) return [];
+
+  const [wy, wm, wd] = weekStart.split("-").map(Number);
+  const weekRange = {
+    start: new Date(Date.UTC(wy, wm - 1, wd, 0, 0, 0)),
+    end: new Date(Date.UTC(wy, wm - 1, wd + 6, 23, 59, 59, 999)),
+  };
+  const monthStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+  const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+  const monthFallbackWeek = format(startOfWeek(monthStart, { weekStartsOn: 1 }), "yyyy-MM-dd");
+
+  const sheetNames: string[] = [];
+  for (const hub of hubNames) {
+    sheetNames.push(RAW_SHEET(hub));
+    sheetNames.push(TARGETS_SHEET(hub));
+  }
+
+  const batchData = await batchGetSheetData(sheetNames);
+
+  return hubNames.map((hub) => {
+    const rawRows = normalizeRawSheetRows(batchData.get(RAW_SHEET(hub)) || []);
+    const allRaw: CourierRecord[] = rawRows
+      .slice(1)
+      .filter((row) => row && row.length > 0 && row[COL.COURIER_ID])
+      .map((row) => rowToRecord(row, hub));
+
+    const targetRows = batchData.get(TARGETS_SHEET(hub)) || [];
+    const appeals: TargetAppeal[] = targetRows
+      .slice(1)
+      .filter((row) => row && row[TCOL.WEEK_START])
+      .map((row) => ({
+        week_start: row[TCOL.WEEK_START] || "",
+        nama_hub: hub,
+        contract_type: row[TCOL.CONTRACT] || "",
+        vehicle_type: row[TCOL.VEHICLE] || "",
+        target: parseFloat(row[TCOL.TARGET] || "0") || 0,
+      }));
+
+    const appealMap = buildAppealMap(appeals);
+    const mondayMap = buildMondayTargetMap(allRaw);
+    const { hasL15D } = checkHubL15D(allRaw);
+    const firstJoinMap = buildCourierFirstJoinMap(allRaw);
+    const { latestDataDate, latestUploadAt } = findLatestRawTimestamp(allRaw);
+
+    const shouldExcludeNew = Boolean(options.excludeNew && hasL15D);
+    const isGracePeriodRecord = (r: CourierRecord): boolean => {
+      if (!isEligibleNewCourierContract(r.contract_type, r.vehicle_type)) return false;
+      const firstDate = firstJoinMap.get(r.courier_id.trim()) || r.date;
+      return getDaysSinceJoin(r.date, firstDate) <= 14;
+    };
+
+    // 1. Weekly Productivity (Senin–Minggu)
+    const allWeekActive = dedup(filterActive(allRaw, weekRange));
+    const prodWeek = shouldExcludeNew
+      ? allWeekActive.filter((r) => !isGracePeriodRecord(r))
+      : allWeekActive;
+
+    const calcWeeklySeg = (
+      contractType: string,
+      vehicleType: string,
+      predicate: (r: CourierRecord) => boolean
+    ): HubSegmentDetail => {
+      const segRecords = prodWeek.filter(predicate);
+      const tgt = resolveTarget(
+        { contract_type: contractType, vehicle_type: vehicleType },
+        weekStart,
+        appealMap,
+        mondayMap
+      );
+      return buildHubSegmentDetail(segRecords, tgt);
+    };
+
+    const wDed2wh = calcWeeklySeg(
+      "Dedicated",
+      "2WH",
+      (r) => r.contract_type === "Dedicated" && r.vehicle_type === "2WH"
+    );
+    const wKp2wh = calcWeeklySeg(
+      "Kurir Plus",
+      "2WH",
+      (r) => r.contract_type.includes("Kurir Plus") && r.vehicle_type === "2WH"
+    );
+    const wDed4wh = calcWeeklySeg(
+      "Dedicated",
+      "4WH",
+      (r) => r.contract_type === "Dedicated" && r.vehicle_type === "4WH"
+    );
+    const wMitra2wh = calcWeeklySeg(
+      "Mitra",
+      "2WH",
+      (r) => r.contract_type === "Mitra" && r.vehicle_type === "2WH"
+    );
+    const wMitra4wh = calcWeeklySeg(
+      "Mitra",
+      "4WH",
+      (r) => r.contract_type === "Mitra" && r.vehicle_type === "4WH"
+    );
+
+    const weeklyKpi2wh = computeCore2whAchievement(
+      wDed2wh.achievement,
+      wDed2wh.shifts,
+      wKp2wh.achievement,
+      wKp2wh.shifts
+    );
+
+    // 2. Monthly Productivity (Tanggal 1..Akhir Bulan)
+    const allMonthActive = dedup(filterActive(allRaw, { start: monthStart, end: monthEnd }));
+    const prodMonth = shouldExcludeNew
+      ? allMonthActive.filter((r) => !isGracePeriodRecord(r))
+      : allMonthActive;
+
+    const getShiftTarget = (r: { date: string; contract_type: string; vehicle_type: string }): number => {
+      const d = parseDate(r.date);
+      const shiftWeekStart = d
+        ? format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd")
+        : monthFallbackWeek;
+      return resolveTarget(r, shiftWeekStart, appealMap, mondayMap);
+    };
+
+    const calcMonthlySeg = (
+      contractType: string,
+      vehicleType: string,
+      predicate: (r: CourierRecord) => boolean
+    ): HubSegmentDetail => {
+      const segRecords = prodMonth.filter(predicate);
+      const dayTargetMap = new Map<string, number>();
+      for (const r of segRecords) {
+        const dKey = normalizeDateKey(r.date);
+        if (dKey && !dayTargetMap.has(dKey)) {
+          dayTargetMap.set(
+            dKey,
+            getShiftTarget({ date: r.date, contract_type: contractType, vehicle_type: vehicleType })
+          );
+        }
+      }
+      const segTarget =
+        dayTargetMap.size > 0
+          ? Array.from(dayTargetMap.values()).reduce((s, v) => s + v, 0) / dayTargetMap.size
+          : resolveTarget(
+              { contract_type: contractType, vehicle_type: vehicleType },
+              monthFallbackWeek,
+              appealMap,
+              mondayMap
+            );
+
+      return buildHubSegmentDetail(segRecords, segTarget);
+    };
+
+    const mDed2wh = calcMonthlySeg(
+      "Dedicated",
+      "2WH",
+      (r) => r.contract_type === "Dedicated" && r.vehicle_type === "2WH"
+    );
+    const mKp2wh = calcMonthlySeg(
+      "Kurir Plus",
+      "2WH",
+      (r) => r.contract_type.includes("Kurir Plus") && r.vehicle_type === "2WH"
+    );
+    const mDed4wh = calcMonthlySeg(
+      "Dedicated",
+      "4WH",
+      (r) => r.contract_type === "Dedicated" && r.vehicle_type === "4WH"
+    );
+    const mMitra2wh = calcMonthlySeg(
+      "Mitra",
+      "2WH",
+      (r) => r.contract_type === "Mitra" && r.vehicle_type === "2WH"
+    );
+    const mMitra4wh = calcMonthlySeg(
+      "Mitra",
+      "4WH",
+      (r) => r.contract_type === "Mitra" && r.vehicle_type === "4WH"
+    );
+
+    const monthlyKpi2wh = computeCore2whAchievement(
+      mDed2wh.achievement,
+      mDed2wh.shifts,
+      mKp2wh.achievement,
+      mKp2wh.shifts
+    );
+
+    return {
+      namaHub: hub,
+      lastDataDate: latestDataDate,
+      lastUploadAt: latestUploadAt,
+      hasL15D,
+      weekly: {
+        kpi2wh: weeklyKpi2wh,
+        kpi4wh: wDed4wh.achievement,
+        dedicated2whAch: wDed2wh.achievement,
+        kurirPlus2whAch: wKp2wh.achievement,
+        dedicated4whAch: wDed4wh.achievement,
+        shifts2wh: wDed2wh.shifts + wKp2wh.shifts,
+        shifts4wh: wDed4wh.shifts,
+        segments: {
+          dedicated2wh: wDed2wh,
+          kurirPlus2wh: wKp2wh,
+          dedicated4wh: wDed4wh,
+          mitra2wh: wMitra2wh,
+          mitra4wh: wMitra4wh,
+        },
+      },
+      monthly: {
+        kpi2wh: monthlyKpi2wh,
+        kpi4wh: mDed4wh.achievement,
+        dedicated2whAch: mDed2wh.achievement,
+        kurirPlus2whAch: mKp2wh.achievement,
+        dedicated4whAch: mDed4wh.achievement,
+        shifts2wh: mDed2wh.shifts + mKp2wh.shifts,
+        shifts4wh: mDed4wh.shifts,
+        segments: {
+          dedicated2wh: mDed2wh,
+          kurirPlus2wh: mKp2wh,
+          dedicated4wh: mDed4wh,
+          mitra2wh: mMitra2wh,
+          mitra4wh: mMitra4wh,
+        },
+      },
+    };
+  });
 }

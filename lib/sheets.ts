@@ -78,6 +78,44 @@ export async function getSheetData(
 }
 
 /**
+ * Ambil range data dari spreadsheet eksternal (misal STD SD) menggunakan kredensial Service Account aplikasi,
+ * dilengkapi cache in-memory 30 detik agar respons cepat & hemat kuota API.
+ */
+export async function getExternalSheetValues(
+  spreadsheetId: string,
+  range: string,
+  options?: { skipCache?: boolean; valueRenderOption?: "FORMATTED_VALUE" | "UNFORMATTED_VALUE" }
+): Promise<string[][]> {
+  const cacheKey = `ext::${spreadsheetId}::${range}`;
+  if (!options?.skipCache) {
+    const cached = sheetCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+  }
+
+  const sheets = getSheetsClient();
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range,
+    valueRenderOption: options?.valueRenderOption || "FORMATTED_VALUE",
+    dateTimeRenderOption: "FORMATTED_STRING",
+  });
+
+  const rawRows = (response.data.values as unknown[][]) || [];
+  const normalized: string[][] = rawRows.map((row) =>
+    (row || []).map((cell) => (cell === null || cell === undefined ? "" : String(cell)))
+  );
+
+  sheetCache.set(cacheKey, {
+    data: normalized,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+
+  return normalized;
+}
+
+/**
  * Append satu row ke sheet (lewat appendRows agar selalu ditulis tepat setelah baris terakhir terisi).
  */
 export async function appendRow(

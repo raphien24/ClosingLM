@@ -34,6 +34,7 @@ interface NavItem {
 const mainLinks: NavItem[] = [
   { href: "/dashboard", label: "Dashboard Closing", iconId: "dashboard" },
   { href: "/input", label: "Input Data", iconId: "input" },
+  { href: "/monitor-sameday", label: "Monitor Sameday", iconId: "sameday" },
 ];
 
 const guideLink: NavItem = {
@@ -43,6 +44,7 @@ const guideLink: NavItem = {
 };
 
 const productivityLinks: NavItem[] = [
+  { href: "/productivity/all-hubs", label: "Productivity All Hub", iconId: "hubs" },
   { href: "/productivity/weekly", label: "Weekly Productivity", iconId: "weekly" },
   { href: "/productivity/monthly", label: "Monthly Productivity", iconId: "monthly" },
   { href: "/input?tab=productivity", label: "Input Productivity", iconId: "prod-input" },

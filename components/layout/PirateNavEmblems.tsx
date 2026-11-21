@@ -7,6 +7,7 @@ export type PirateNavIconId =
   | "dashboard"
   | "input"
   | "productivity"
+  | "sameday"
   | "guide"
   | "weekly"
   | "monthly"
@@ -243,6 +244,16 @@ export function PirateNavIcon({
         <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <path d="M9.5 6.5h5l1.5 13h-8z" fill="currentColor" fillOpacity="0.16" />
           <path d="M12 3 9 6.5h6zM7 19.5h10M9.8 11h4.4M9.3 15h5.4" />
+        </svg>
+      );
+
+    case "sameday":
+      // Kronometer Cepat Sameday
+      return (
+        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="13" r="7.5" fill="currentColor" fillOpacity="0.14" />
+          <path d="M10 3h4M12 3v2.5M12 9.5v3.5l2.5 1.8" />
+          <path d="M18.2 6.8 19.6 5.4" />
         </svg>
       );
   }
