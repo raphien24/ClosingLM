@@ -7,6 +7,7 @@ import {
   SailorHelmVesselIcon,
 } from "@/components/productivity/MaritimeAnimations";
 import { SamedayHubDetailModal } from "@/components/sameday/SamedayHubDetailModal";
+import { SamedayProgressCharts } from "@/components/sameday/SamedayProgressCharts";
 import type { MonitorSamedayData, SamedayHubRow } from "@/lib/samedayService";
 import {
   Anchor,
@@ -397,6 +398,16 @@ export default function MonitorSamedayPage() {
             </div>
           </div>
         </div>
+
+        {/* Charts Progres Sameday */}
+        {data && (
+          <SamedayProgressCharts
+            rows={filteredRows}
+            deliveringDailyCols={data.deliveringDailyCols}
+            deliveredDailyCols={data.deliveredDailyCols}
+            onSelectHub={setSelectedHub}
+          />
+        )}
 
         {/* Main Table */}
         <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-[#134074] dark:border-t-blue-500 shadow-sm p-5 sm:p-6">
