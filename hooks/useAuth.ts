@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { isSuperAdminEmail } from "@/lib/authConstants";
+import { isOwnerAdminEmail, isSuperAdminEmail } from "@/lib/authConstants";
 
 export interface AuthUser {
   name: string | null | undefined;
@@ -12,6 +12,7 @@ export interface AuthUser {
   hubUser: string | null;
   isAuthorized: boolean;
   isSuperAdmin?: boolean;
+  isOwnerAdmin?: boolean;
 }
 
 export function useAuth() {
@@ -25,6 +26,7 @@ export function useAuth() {
     isAuthenticated: status === "authenticated",
     isAuthorized: user?.isAuthorized ?? false,
     isSuperAdmin: user?.isSuperAdmin ?? isSuperAdminEmail(user?.email),
+    isOwnerAdmin: user?.isOwnerAdmin ?? isOwnerAdminEmail(user?.email),
     hubName: user?.hubName ?? null,
     hubUser: user?.hubUser ?? null,
     refreshSession: update,
@@ -32,17 +34,20 @@ export function useAuth() {
 }
 
 /**
- * Mengambil nama tampilan & avatar profil terbaru (disinkronkan dengan /api/profile
- * dan event "jtt08-profile-updated") untuk dipakai konsisten di Navbar & Dashboard.
+ * Mengambil nama tampilan, avatar profil, & status admin live terbaru
+ * (disinkronkan dengan /api/profile dan event "jtt08-profile-updated")
+ * untuk dipakai konsisten di Navbar & Dashboard.
  */
 export function useUserProfileDisplay() {
   const auth = useAuth();
   const [customAvatar, setCustomAvatar] = useState<string>("");
   const [customName, setCustomName] = useState<string | null>(null);
+  const [liveIsAdmin, setLiveIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
     setCustomAvatar("");
     setCustomName(null);
+    setLiveIsAdmin(null);
     if (!auth.user?.email) return;
     let active = true;
     fetch("/api/profile")
@@ -51,6 +56,7 @@ export function useUserProfileDisplay() {
         if (!active || !json?.profile) return;
         setCustomAvatar(json.profile.avatar_url || "");
         if (json.profile.nama_user) setCustomName(json.profile.nama_user);
+        if (typeof json.isAdmin === "boolean") setLiveIsAdmin(json.isAdmin);
       })
       .catch(() => {});
 
@@ -72,6 +78,7 @@ export function useUserProfileDisplay() {
 
   return {
     ...auth,
+    isSuperAdmin: liveIsAdmin ?? auth.isSuperAdmin,
     displayName,
     avatarSrc,
   };

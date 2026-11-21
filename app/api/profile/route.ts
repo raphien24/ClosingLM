@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isAdminEmail } from "@/lib/adminService";
+import { isOwnerAdminEmail } from "@/lib/authConstants";
 import {
   getUserProfile,
   updateUserProfile,
@@ -14,6 +16,8 @@ export async function GET() {
 
   const user = session.user as typeof session.user & {
     isAuthorized: boolean;
+    hubName?: string | null;
+    hubUser?: string | null;
   };
   const email = String(user.email ?? "").trim().toLowerCase();
   if (!user.isAuthorized || !email) {
@@ -21,11 +25,26 @@ export async function GET() {
   }
 
   try {
-    const profile = await getUserProfile(email);
+    const [rawProfile, isAdmin] = await Promise.all([
+      getUserProfile(email),
+      isAdminEmail(email),
+    ]);
+    const isOwner = isOwnerAdminEmail(email);
+    const profile =
+      rawProfile ||
+      (isAdmin
+        ? {
+            email,
+            nama_hub: user.hubName || "Soko Hub",
+            nama_user: user.hubUser || user.name || email.split("@")[0],
+            status: "active" as const,
+            avatar_url: "",
+          }
+        : null);
     if (!profile) {
       return NextResponse.json({ error: "Profil tidak ditemukan" }, { status: 404 });
     }
-    return NextResponse.json({ success: true, profile });
+    return NextResponse.json({ success: true, profile, isAdmin, isOwner });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Gagal memuat profil" },

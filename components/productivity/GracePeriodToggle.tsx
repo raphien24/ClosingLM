@@ -36,10 +36,10 @@ export function GracePeriodToggle({
     <div
       className={`inline-flex items-center gap-2 px-2.5 py-1.5 rounded-xl border text-xs transition-all select-none ${
         !isAvailable
-          ? "bg-slate-100/90 border-slate-200 text-slate-400 cursor-not-allowed opacity-80"
+          ? "bg-slate-100 dark:bg-slate-800/85 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed opacity-85"
           : enabled
-          ? "bg-emerald-50/90 border-emerald-300 text-emerald-900 shadow-2xs cursor-pointer hover:bg-emerald-100/70"
-          : "bg-white border-slate-200 text-slate-600 shadow-2xs cursor-pointer hover:bg-slate-50"
+          ? "bg-[#ecfdf5] dark:bg-[#0b3328] border-emerald-300 dark:border-emerald-500/50 text-emerald-900 dark:text-emerald-100 shadow-2xs cursor-pointer hover:bg-[#d1fae5] dark:hover:bg-[#0f4032]"
+          : "bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-600/80 text-slate-700 dark:text-slate-200 shadow-2xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/80"
       } ${className}`}
       onClick={handleToggle}
       title={tooltipText}
@@ -48,30 +48,38 @@ export function GracePeriodToggle({
       {isAvailable ? (
         <UserCheck
           className={`h-4 w-4 flex-shrink-0 ${
-            enabled ? "text-emerald-600" : "text-slate-400"
+            enabled
+              ? "text-emerald-600 dark:text-emerald-300"
+              : "text-slate-400 dark:text-slate-300"
           }`}
         />
       ) : (
-        <ShieldAlert className="h-4 w-4 flex-shrink-0 text-slate-400" />
+        <ShieldAlert className="h-4 w-4 flex-shrink-0 text-slate-400 dark:text-slate-400" />
       )}
 
       {/* Label & Status */}
       <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="font-semibold text-[11px] whitespace-nowrap">
+        <span
+          className={`font-semibold text-[11px] whitespace-nowrap ${
+            enabled && isAvailable
+              ? "text-emerald-900 dark:text-emerald-100"
+              : ""
+          }`}
+        >
           Grace Period 14H
         </span>
 
         {/* L15D Status Badge */}
         {!isAvailable ? (
-          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 border border-slate-300">
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600">
             L15D ({dataDaysCount}/15 hari)
           </span>
         ) : (
           <span
-            className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider ${
+            className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
               enabled
-                ? "bg-emerald-200/80 text-emerald-800 dark:bg-emerald-500/25 dark:text-emerald-300"
-                : "bg-slate-100 text-slate-500 border border-slate-200"
+                ? "bg-[#a7f3d0] text-emerald-900 dark:bg-emerald-500/30 dark:text-emerald-200 border border-emerald-400/50 dark:border-emerald-400/40"
+                : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600"
             }`}
           >
             L15D Ready
@@ -80,7 +88,7 @@ export function GracePeriodToggle({
 
         {/* Count of excluded couriers if enabled */}
         {isAvailable && enabled && typeof excludedCount === "number" && excludedCount > 0 && (
-          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-600 text-white">
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 dark:bg-emerald-500 text-white">
             {excludedCount} kurir
           </span>
         )}

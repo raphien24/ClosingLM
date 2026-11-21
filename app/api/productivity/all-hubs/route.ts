@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { isAdminEmail } from "@/lib/adminService";
 import { getAllHubs } from "@/lib/userMapping";
 import { getAllHubsProductivitySummary } from "@/lib/productivityService";
 import { format, startOfWeek } from "date-fns";
@@ -15,8 +16,11 @@ export async function GET(req: NextRequest) {
     hubName: string | null;
     isAuthorized: boolean;
   };
-  if (!user.isAuthorized) {
-    return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  if (!user.isAuthorized || !(await isAdminEmail(user.email))) {
+    return NextResponse.json(
+      { error: "Akses ditolak. Menu Productivity All Hub khusus Admin." },
+      { status: 403 }
+    );
   }
 
   const { searchParams } = new URL(req.url);

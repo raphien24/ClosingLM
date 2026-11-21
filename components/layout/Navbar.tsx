@@ -190,7 +190,8 @@ function DrawerNavSection({
  */
 export function Navbar() {
   const pathname = usePathname();
-  const { user, hubName, isSuperAdmin, displayName, avatarSrc } = useUserProfileDisplay();
+  const { user, hubName, isSuperAdmin, isOwnerAdmin, displayName, avatarSrc } =
+    useUserProfileDisplay();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [prodMenuOpen, setProdMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -231,11 +232,18 @@ export function Navbar() {
 
   const isProdActive = pathname.startsWith("/productivity");
 
+  const visibleProductivityLinks = productivityLinks.filter(
+    (item) => item.href !== "/productivity/all-hubs" || isSuperAdmin
+  );
+
   const accessLinks: NavItem[] = [
     { href: "/profile", label: "Edit Profil", iconId: "profile" },
     { href: "/users", label: "Tambahkan Pengguna", iconId: "users" },
     ...(isSuperAdmin
       ? [{ href: "/hubs/new", label: "Tambahkan Hub Baru", iconId: "hubs" as const, badge: "Admin" }]
+      : []),
+    ...(isOwnerAdmin
+      ? [{ href: "/admin/manage", label: "Manage Admin", iconId: "admin" as const, badge: "Owner" }]
       : []),
   ];
 
@@ -340,7 +348,7 @@ export function Navbar() {
                     </span>
                   </div>
                   <div className="py-1.5 px-1.5 space-y-0.5">
-                    {productivityLinks.map(({ href, label, iconId }) => {
+                    {visibleProductivityLinks.map(({ href, label, iconId }) => {
                       const active = pathname === href;
                       return (
                         <Link
@@ -465,7 +473,7 @@ export function Navbar() {
                   <div className="py-1.5 px-1.5 border-b border-amber-400/15 space-y-0.5">
                     {accessLinks.map(({ href, label, iconId, badge }) => {
                       const active = pathname === href;
-                      const isHubs = iconId === "hubs";
+                      const isHubs = iconId === "hubs" || iconId === "admin";
                       return (
                         <Link
                           key={href}
@@ -610,7 +618,7 @@ export function Navbar() {
                 />
                 <DrawerNavSection
                   title="Fleet Productivity"
-                  items={productivityLinks}
+                  items={visibleProductivityLinks}
                   pathname={pathname}
                   isDark={isDark}
                   exact

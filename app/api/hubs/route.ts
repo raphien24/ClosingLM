@@ -3,23 +3,23 @@ import type { Session } from "next-auth";
 import { auth } from "@/lib/auth";
 import {
   INVALID_HUB_NAME_CHARS,
-  isSuperAdminEmail,
   isValidEmail,
 } from "@/lib/authConstants";
+import { isAdminEmail } from "@/lib/adminService";
 import {
   createNewHub,
   getAllHubSummaries,
   UserMappingError,
 } from "@/lib/userMapping";
 
-function requireSuperAdmin(session: Session | null) {
+async function requireSuperAdmin(session: Session | null) {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const user = session.user as typeof session.user & { isAuthorized: boolean };
-  if (!user.isAuthorized || !isSuperAdminEmail(user.email)) {
+  if (!user.isAuthorized || !(await isAdminEmail(user.email))) {
     return NextResponse.json(
-      { error: "Akses ditolak. Menu ini khusus Super Admin." },
+      { error: "Akses ditolak. Menu ini khusus Admin." },
       { status: 403 }
     );
   }
@@ -28,7 +28,7 @@ function requireSuperAdmin(session: Session | null) {
 
 export async function GET() {
   const session = await auth();
-  const denied = requireSuperAdmin(session);
+  const denied = await requireSuperAdmin(session);
   if (denied) return denied;
 
   try {
@@ -44,7 +44,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  const denied = requireSuperAdmin(session);
+  const denied = await requireSuperAdmin(session);
   if (denied) return denied;
 
   let body: { nama_hub?: string; pic_email?: string; pic_name?: string };

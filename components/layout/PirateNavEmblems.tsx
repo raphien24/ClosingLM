@@ -15,7 +15,8 @@ export type PirateNavIconId =
   | "targets"
   | "profile"
   | "users"
-  | "hubs";
+  | "hubs"
+  | "admin";
 
 /**
  * Medali logo JTT08 berbingkai kemudi kapal bajak laut (ship's helm) dengan aksen kuningan antik.
@@ -254,6 +255,15 @@ export function PirateNavIcon({
           <circle cx="12" cy="13" r="7.5" fill="currentColor" fillOpacity="0.14" />
           <path d="M10 3h4M12 3v2.5M12 9.5v3.5l2.5 1.8" />
           <path d="M18.2 6.8 19.6 5.4" />
+        </svg>
+      );
+
+    case "admin":
+      // Perisai Mahkota Manage Admin
+      return (
+        <svg viewBox="0 0 24 24" className={cls} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3 4.5 6.2v5.4c0 4.9 3.2 8.9 7.5 10.2 4.3-1.3 7.5-5.3 7.5-10.2V6.2z" fill="currentColor" fillOpacity="0.16" />
+          <path d="m8.8 13.5.9-3.6 2.3 1.8 2.3-1.8.9 3.6z" />
         </svg>
       );
   }

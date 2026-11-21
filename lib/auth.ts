@@ -1,7 +1,8 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { getUserHub } from "./userMapping";
-import { isSuperAdminEmail } from "./authConstants";
+import { isOwnerAdminEmail, isSuperAdminEmail } from "./authConstants";
+import { isAdminEmail } from "./adminService";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -34,13 +35,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           isAuthorized: boolean;
           isExpired: boolean;
           isSuperAdmin: boolean;
+          isOwnerAdmin: boolean;
         };
+        const userEmail = (session.user.email || token.email) as string | undefined;
         extendedUser.hubName = (token.hubName as string | null) ?? null;
         extendedUser.hubUser = (token.hubUser as string | null) ?? null;
         extendedUser.isAuthorized = !isExpired && ((token.isAuthorized as boolean) ?? false);
         extendedUser.isExpired = isExpired;
         extendedUser.isSuperAdmin =
-          !isExpired && isSuperAdminEmail((session.user.email || token.email) as string | undefined);
+          !isExpired &&
+          (typeof token.isAdmin === "boolean"
+            ? token.isAdmin
+            : isSuperAdminEmail(userEmail));
+        extendedUser.isOwnerAdmin = !isExpired && isOwnerAdminEmail(userEmail);
       }
       return session;
     },
@@ -68,24 +75,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         now - Number(token.checkedAt) > RECHECK_MS;
 
       if (email && shouldCheck) {
-        const isSuper = isSuperAdminEmail(email);
+        const isSuper = await isAdminEmail(email);
         try {
           const hubInfo = await getUserHub(email);
           token.hubName = hubInfo?.nama_hub ?? (isSuper ? "Soko Hub" : null);
-          token.hubUser = hubInfo?.nama_user ?? (isSuper ? (user?.name || "Rafi Admin") : null);
+          token.hubUser = hubInfo?.nama_user ?? (isSuper ? (user?.name || "Admin") : null);
           token.isAuthorized = !!hubInfo || isSuper;
+          token.isAdmin = isSuper;
           token.checkedAt = now;
         } catch (error) {
           console.error("Error looking up user hub:", error);
           if (isSuper) {
             token.hubName = "Soko Hub";
-            token.hubUser = user?.name || "Rafi Admin";
+            token.hubUser = user?.name || "Admin";
             token.isAuthorized = true;
+            token.isAdmin = true;
             token.checkedAt = now;
           } else if (user) {
             token.hubName = null;
             token.hubUser = null;
             token.isAuthorized = false;
+            token.isAdmin = false;
           }
         }
       }
@@ -111,6 +121,7 @@ declare module "next-auth" {
       isAuthorized: boolean;
       isExpired?: boolean;
       isSuperAdmin?: boolean;
+      isOwnerAdmin?: boolean;
     };
   }
 }

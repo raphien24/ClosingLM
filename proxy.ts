@@ -1,8 +1,9 @@
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
-import { isSuperAdminEmail } from "@/lib/authConstants";
+import { isOwnerAdminEmail } from "@/lib/authConstants";
+import { isAdminEmail } from "@/lib/adminService";
 
-export const proxy = auth((req) => {
+export const proxy = auth(async (req) => {
   const { pathname } = req.nextUrl;
   const session = req.auth;
 
@@ -52,9 +53,20 @@ export const proxy = auth((req) => {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
 
-  // Halaman manajemen Hub Baru khusus Super Admin
-  if (pathname.startsWith("/hubs") && !isSuperAdminEmail(session.user?.email)) {
+  // Halaman Manage Admin khusus akun Owner (rafi.alvian@spxexpress.com)
+  if (pathname.startsWith("/admin") && !isOwnerAdminEmail(session.user?.email)) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
+
+  // Halaman manajemen Hub Baru & Productivity All Hub khusus Admin aktif
+  if (
+    pathname.startsWith("/hubs") ||
+    pathname.startsWith("/productivity/all-hubs")
+  ) {
+    const isAdmin = await isAdminEmail(session.user?.email);
+    if (!isAdmin) {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
   }
 
   return NextResponse.next();

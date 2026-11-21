@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { GracePeriodToggle } from "@/components/productivity/GracePeriodToggle";
 import {
   HubProductivityDetailModal,
@@ -26,6 +26,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  ShieldAlert,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -141,7 +142,7 @@ function SortIcon({
 }
 
 export default function AllHubsProductivityPage() {
-  const { hubName } = useAuth();
+  const { hubName, isLoading: authLoading, isSuperAdmin } = useUserProfileDisplay();
   const now = new Date();
 
   const [weekStart, setWeekStart] = useState(getMonday(now));
@@ -199,8 +200,10 @@ export default function AllHubsProductivityPage() {
   }, [weekStart, selectedMonth, excludeNew]);
 
   useEffect(() => {
-    fetchAllHubs();
-  }, [fetchAllHubs]);
+    if (!authLoading && isSuperAdmin) {
+      fetchAllHubs();
+    }
+  }, [authLoading, isSuperAdmin, fetchAllHubs]);
 
   const prevWeek = () => setWeekStart(getMonday(subWeeks(new Date(weekStart + "T00:00:00"), 1)));
   const nextWeek = () => {
@@ -283,6 +286,22 @@ export default function AllHubsProductivityPage() {
       avgMonthly4wh: avgOf(hubs.filter((h) => h.monthly.shifts4wh > 0).map((h) => h.monthly.kpi4wh)),
     };
   }, [hubs]);
+
+  if (!authLoading && !isSuperAdmin) {
+    return (
+      <div className="w-full px-3 sm:px-6 py-12 flex justify-center">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-rose-200 dark:border-rose-500/35 p-6 text-center space-y-3 shadow-sm">
+          <div className="w-11 h-11 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+            <ShieldAlert className="h-5 w-5" />
+          </div>
+          <h1 className="text-lg font-bold text-gray-900">Akses Dibatasi</h1>
+          <p className="text-sm text-gray-500">
+            Halaman Dashboard Productivity All Hub hanya tersedia untuk akun Admin.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#e8eef5] dark:bg-transparent pb-12">

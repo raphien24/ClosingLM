@@ -1,10 +1,17 @@
+export const OWNER_ADMIN_EMAIL = "rafi.alvian@spxexpress.com";
+
 export const SUPER_ADMIN_EMAILS = [
   "rafi.alvian@spxexpress.com",
   "rafiagusalvian@gmail.com",
   "raphien24@gmail.com",
 ];
 
-export const SUPER_ADMIN_EMAIL = SUPER_ADMIN_EMAILS[0];
+export const SUPER_ADMIN_EMAIL = OWNER_ADMIN_EMAIL;
+
+export function isOwnerAdminEmail(email?: string | null): boolean {
+  if (!email) return false;
+  return String(email).trim().toLowerCase() === OWNER_ADMIN_EMAIL;
+}
 
 export function isSuperAdminEmail(email?: string | null): boolean {
   if (!email) return false;
