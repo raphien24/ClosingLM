@@ -58,6 +58,8 @@ export function useAuth() {
 
 export interface HubConsistencyStatus {
   isConsistent: boolean;
+  isEligible?: boolean;
+  borderDisabled?: boolean;
   reason: string;
   currentStreakDays: number;
   completedMonthLabel: string | null;
@@ -65,6 +67,8 @@ export interface HubConsistencyStatus {
 
 const DEFAULT_CONSISTENCY: HubConsistencyStatus = {
   isConsistent: false,
+  isEligible: false,
+  borderDisabled: false,
   reason: "",
   currentStreakDays: 0,
   completedMonthLabel: null,
@@ -109,6 +113,10 @@ export function useUserProfileDisplay() {
         if (json.consistency && typeof json.consistency.isConsistent === "boolean") {
           setConsistency({
             isConsistent: json.consistency.isConsistent,
+            isEligible: Boolean(
+              json.consistency.isEligible ?? json.consistency.isConsistent
+            ),
+            borderDisabled: Boolean(json.consistency.borderDisabled),
             reason: json.consistency.reason || "",
             currentStreakDays: Number(json.consistency.currentStreakDays) || 0,
             completedMonthLabel: json.consistency.completedMonthLabel ?? null,
@@ -118,10 +126,24 @@ export function useUserProfileDisplay() {
       .catch(() => {});
 
     const onProfileUpdated = (ev: Event) => {
-      const detail = (ev as CustomEvent<{ nama_user?: string; avatar_url?: string }>).detail;
+      const detail = (
+        ev as CustomEvent<{
+          nama_user?: string;
+          avatar_url?: string;
+          consistency_border_disabled?: boolean;
+        }>
+      ).detail;
       if (!detail) return;
       if (typeof detail.avatar_url === "string") setCustomAvatar(detail.avatar_url);
       if (typeof detail.nama_user === "string") setCustomName(detail.nama_user);
+      if (typeof detail.consistency_border_disabled === "boolean") {
+        const disabled = detail.consistency_border_disabled;
+        setConsistency((prev) => ({
+          ...prev,
+          borderDisabled: disabled,
+          isConsistent: Boolean(prev.isEligible) && !disabled,
+        }));
+      }
     };
     window.addEventListener("jtt08-profile-updated", onProfileUpdated);
     return () => {

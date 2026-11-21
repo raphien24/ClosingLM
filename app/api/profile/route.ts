@@ -49,6 +49,14 @@ export async function GET() {
     if (!profile) {
       return NextResponse.json({ error: "Profil tidak ditemukan" }, { status: 404 });
     }
+    const borderDisabled = Boolean(profile.consistency_border_disabled);
+    const effectiveConsistency = {
+      ...consistency,
+      isEligible: consistency.isConsistent,
+      borderDisabled,
+      isConsistent: consistency.isConsistent && !borderDisabled,
+    };
+
     return NextResponse.json({
       success: true,
       profile,
@@ -56,7 +64,7 @@ export async function GET() {
       isOwner,
       activeHub,
       hubs: allowedHubs,
-      consistency,
+      consistency: effectiveConsistency,
     });
   } catch (err) {
     return NextResponse.json(
@@ -80,7 +88,11 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
   }
 
-  let body: { nama_user?: string; avatar_url?: string };
+  let body: {
+    nama_user?: string;
+    avatar_url?: string;
+    consistency_border_disabled?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
@@ -89,6 +101,10 @@ export async function PATCH(req: NextRequest) {
 
   const namaUser = String(body.nama_user ?? "").trim();
   const avatarUrl = typeof body.avatar_url === "string" ? body.avatar_url : "";
+  const consistencyBorderDisabled =
+    typeof body.consistency_border_disabled === "boolean"
+      ? body.consistency_border_disabled
+      : undefined;
 
   if (namaUser.length < 2 || namaUser.length > 80) {
     return NextResponse.json(
@@ -102,6 +118,7 @@ export async function PATCH(req: NextRequest) {
       email,
       namaUser,
       avatarUrl,
+      consistencyBorderDisabled,
     });
     return NextResponse.json({
       success: true,

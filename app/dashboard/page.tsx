@@ -12,14 +12,12 @@ import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { useUserProfileDisplay } from "@/hooks/useAuth";
-import {
-  ConsistentBadgePill,
-  ProfileAvatarFrame,
-} from "@/components/ui/ProfileAvatarFrame";
+import { ConsistentBadgePill } from "@/components/ui/ProfileAvatarFrame";
 import { SunsetSailTransition } from "@/components/ocean/SunsetSailTransition";
 import { DashboardShipWipeOverlay } from "@/components/ocean/DashboardShipWipeOverlay";
 import {
   NauticalChartBackdrop,
+  LighthouseBeaconIcon,
   SailorCompassIcon,
 } from "@/components/productivity/MaritimeAnimations";
 
@@ -63,7 +61,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, displayName, avatarSrc, consistency } = useUserProfileDisplay();
+  const { user, displayName, consistency } = useUserProfileDisplay();
 
   const today = todayWIB();
   const [selectedDate, setSelectedDate] = useState(
@@ -225,14 +223,7 @@ function DashboardContent() {
 
               <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3.5">
-                  <ProfileAvatarFrame
-                    src={avatarSrc}
-                    fallbackLetter={(displayName || user?.email || "U")[0].toUpperCase()}
-                    size="lg"
-                    isConsistent={consistency.isConsistent}
-                    consistencyReason={consistency.reason}
-                    showPlaque={consistency.isConsistent}
-                  />
+                  <LighthouseBeaconIcon />
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">

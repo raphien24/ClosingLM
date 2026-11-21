@@ -96,8 +96,12 @@ export default function EditProfilePage() {
 
   const [namaUser, setNamaUser] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [disableBorder, setDisableBorder] = useState(false);
+  const [isTogglingBorder, setIsTogglingBorder] = useState(false);
   const [consistency, setConsistency] = useState<HubConsistencyStatus>({
     isConsistent: false,
+    isEligible: false,
+    borderDisabled: false,
     reason: "",
     currentStreakDays: 0,
     completedMonthLabel: null,
@@ -121,9 +125,18 @@ export default function EditProfilePage() {
         if (active && json.profile) {
           setNamaUser(json.profile.nama_user || "");
           setAvatarUrl(json.profile.avatar_url || "");
+          const isBorderDisabled = Boolean(
+            json.profile.consistency_border_disabled ??
+              json.consistency?.borderDisabled
+          );
+          setDisableBorder(isBorderDisabled);
           if (json.consistency) {
             setConsistency({
               isConsistent: Boolean(json.consistency.isConsistent),
+              isEligible: Boolean(
+                json.consistency.isEligible ?? json.consistency.isConsistent
+              ),
+              borderDisabled: isBorderDisabled,
               reason: json.consistency.reason || "",
               currentStreakDays: Number(json.consistency.currentStreakDays) || 0,
               completedMonthLabel: json.consistency.completedMonthLabel ?? null,
@@ -174,6 +187,7 @@ export default function EditProfilePage() {
         body: JSON.stringify({
           nama_user: namaUser.trim(),
           avatar_url: avatarUrl,
+          consistency_border_disabled: disableBorder,
         }),
       });
       const json = await res.json();
@@ -185,6 +199,8 @@ export default function EditProfilePage() {
           detail: {
             nama_user: json.profile?.nama_user ?? namaUser.trim(),
             avatar_url: json.profile?.avatar_url ?? avatarUrl,
+            consistency_border_disabled:
+              json.profile?.consistency_border_disabled ?? disableBorder,
           },
         })
       );
@@ -203,6 +219,55 @@ export default function EditProfilePage() {
       setIsSaving(false);
     }
   };
+
+  const handleToggleDisableBorder = async () => {
+    if (isTogglingBorder || isSaving) return;
+    const prevVal = disableBorder;
+    const nextVal = !prevVal;
+    const effectiveName = (namaUser || hubUser || user?.name || "").trim();
+
+    setDisableBorder(nextVal);
+    if (effectiveName.length < 2) return;
+
+    setIsTogglingBorder(true);
+    try {
+      const res = await fetch("/api/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nama_user: effectiveName,
+          avatar_url: avatarUrl,
+          consistency_border_disabled: nextVal,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Gagal menyimpan pengaturan border");
+
+      window.dispatchEvent(
+        new CustomEvent("jtt08-profile-updated", {
+          detail: {
+            consistency_border_disabled:
+              json.profile?.consistency_border_disabled ?? nextVal,
+          },
+        })
+      );
+      toast.success(
+        nextVal
+          ? "Border profil spesial dinonaktifkan."
+          : "Border profil spesial diaktifkan."
+      );
+    } catch (err) {
+      setDisableBorder(prevVal);
+      toast.error(
+        err instanceof Error ? err.message : "Gagal mengubah pengaturan border"
+      );
+    } finally {
+      setIsTogglingBorder(false);
+    }
+  };
+
+  const isEligible = Boolean(consistency.isEligible ?? consistency.isConsistent);
+  const showSpecialBorder = isEligible && !disableBorder;
 
   const displayAvatar = avatarUrl || user?.image || "";
   const initialLetter = (namaUser || hubUser || user?.name || user?.email || "U")[0].toUpperCase();
@@ -235,7 +300,7 @@ export default function EditProfilePage() {
                   alt="Foto Profil"
                   fallbackLetter={initialLetter}
                   size="xl"
-                  isConsistent={consistency.isConsistent}
+                  isConsistent={showSpecialBorder}
                   consistencyReason={consistency.reason}
                   showPlaque
                   ringClassName="ring-4 ring-blue-500/20 shadow-sm"
@@ -247,7 +312,7 @@ export default function EditProfilePage() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-sm font-semibold text-gray-900">Foto Profil</h2>
-                    {consistency.isConsistent && (
+                    {showSpecialBorder && (
                       <ConsistentBadgePill reason={consistency.reason} />
                     )}
                   </div>
@@ -258,9 +323,13 @@ export default function EditProfilePage() {
                       ? "Saat ini menggunakan foto default dari akun Google Anda."
                       : "Belum ada foto — menampilkan inisial nama Anda."}
                   </p>
-                  {consistency.isConsistent ? (
+                  {showSpecialBorder ? (
                     <p className="text-[11px] font-semibold text-amber-700 mt-1">
-                      Bingkai spesial aktif: {consistency.reason || "Closing konsisten 1 bulan penuh"}
+                      Bingkai spesial aktif: {consistency.reason || "Closing & Productivity konsisten 1 bulan penuh"}
+                    </p>
+                  ) : isEligible && disableBorder ? (
+                    <p className="text-[11px] font-medium text-slate-500 mt-1">
+                      Anda memenuhi syarat <span className="font-semibold text-amber-600">&ldquo;Si Paling Konsisten&rdquo;</span>, namun border saat ini sedang dinonaktifkan.
                     </p>
                   ) : (
                     <p className="text-[11px] text-gray-400 mt-1">
@@ -352,6 +421,35 @@ export default function EditProfilePage() {
                   className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+            </div>
+
+            {/* Toggle Nonaktifkan Border Spesial */}
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-3.5">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900">
+                  Nonaktifkan Border Profil Spesial
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Sembunyikan bingkai animasi &ldquo;Si Paling Konsisten&rdquo; pada foto profil Anda di seluruh aplikasi.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={disableBorder}
+                aria-label="Nonaktifkan border profil spesial"
+                disabled={isTogglingBorder}
+                onClick={handleToggleDisableBorder}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer disabled:opacity-60 ${
+                  disableBorder ? "bg-blue-600" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                    disableBorder ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
             </div>
 
             {statusBanner && (

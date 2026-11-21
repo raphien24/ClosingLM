@@ -74,6 +74,7 @@ export interface UserMapping {
   nama_user: string;
   status: "active" | "inactive";
   avatar_url?: string;
+  consistency_border_disabled?: boolean;
 }
 
 export interface KpiSummary {

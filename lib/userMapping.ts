@@ -4,12 +4,13 @@ import { UserMapping } from "@/types/closing";
 const USER_MAPPING_SHEET = "USER_MAPPING";
 
 // Kolom index di sheet USER_MAPPING (0-indexed)
-// email | nama_hub | nama_user | status | foto_profil
+// email | nama_hub | nama_user | status | foto_profil | nonaktifkan_border
 const COL_EMAIL = 0;
 const COL_NAMA_HUB = 1;
 const COL_NAMA_USER = 2;
 const COL_STATUS = 3;
 const COL_AVATAR = 4;
+const COL_BORDER_DISABLED = 5;
 
 const MAX_AVATAR_DATA_URI_CHARS = 45_000;
 const SAFE_DATA_URI_REGEX = /^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
@@ -67,6 +68,8 @@ function parseRowsToIndexedMappings(data: string[][]): IndexedUserMapping[] {
         | "active"
         | "inactive",
       avatar_url: row[COL_AVATAR]?.trim() || "",
+      consistency_border_disabled:
+        String(row[COL_BORDER_DISABLED] ?? "").trim().toLowerCase() === "true",
     });
   }
   return result;
@@ -275,6 +278,7 @@ export async function setUserStatusInHub(params: {
     target.nama_user,
     params.status,
     target.avatar_url || "",
+    target.consistency_border_disabled ? "true" : "",
   ]);
 }
 
@@ -300,6 +304,7 @@ export async function updateUserProfile(params: {
   email: string;
   namaUser: string;
   avatarUrl: string;
+  consistencyBorderDisabled?: boolean;
 }): Promise<UserMapping> {
   const normalizedEmail = params.email.trim().toLowerCase();
   const cleanName = params.namaUser.trim();
@@ -314,19 +319,29 @@ export async function updateUserProfile(params: {
     throw new UserMappingError("Akun Anda tidak ditemukan atau tidak aktif.", 404);
   }
 
-  // Pastikan header kolom E ("foto_profil") terisi jika belum ada
+  const first = targets[0];
+  const nextBorderDisabled =
+    typeof params.consistencyBorderDisabled === "boolean"
+      ? params.consistencyBorderDisabled
+      : Boolean(first.consistency_border_disabled);
+
+  // Pastikan header kolom E ("foto_profil") & F ("nonaktifkan_border") terisi jika belum ada
   const headerRow = data[0] || [];
-  if (cleanAvatar && !String(headerRow[COL_AVATAR] ?? "").trim()) {
+  const needAvatarHeader = cleanAvatar && !String(headerRow[COL_AVATAR] ?? "").trim();
+  const needBorderHeader =
+    nextBorderDisabled && !String(headerRow[COL_BORDER_DISABLED] ?? "").trim();
+  if (needAvatarHeader || needBorderHeader) {
     await updateRow(USER_MAPPING_SHEET, 1, [
       headerRow[COL_EMAIL] || "email",
       headerRow[COL_NAMA_HUB] || "nama_hub",
       headerRow[COL_NAMA_USER] || "nama_user",
       headerRow[COL_STATUS] || "status",
-      "foto_profil",
+      headerRow[COL_AVATAR] || "foto_profil",
+      headerRow[COL_BORDER_DISABLED] || "nonaktifkan_border",
     ]);
   }
 
-  // Sinkronkan nama & avatar ke semua baris hub aktif milik email tersebut
+  // Sinkronkan nama, avatar, & preferensi border ke semua baris hub aktif milik email tersebut
   for (const target of targets) {
     await updateRow(USER_MAPPING_SHEET, target.rowIndex, [
       target.email,
@@ -334,16 +349,17 @@ export async function updateUserProfile(params: {
       cleanName,
       target.status,
       cleanAvatar,
+      nextBorderDisabled ? "true" : "",
     ]);
   }
 
-  const first = targets[0];
   return {
     email: first.email,
     nama_hub: splitHubList(first.nama_hub)[0] || first.nama_hub,
     nama_user: cleanName,
     status: first.status,
     avatar_url: cleanAvatar,
+    consistency_border_disabled: nextBorderDisabled,
   };
 }
 

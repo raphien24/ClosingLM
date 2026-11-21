@@ -242,10 +242,10 @@ export async function getActiveUsers(
       ? await getConsistentHubsMap(activeHubs).catch(() => new Map())
       : new Map();
 
-  // Indeks profil terbaru dari USER_MAPPING (nama_user & foto custom)
+  // Indeks profil terbaru dari USER_MAPPING (nama_user, foto custom, & preferensi border)
   const profileByEmail = new Map<
     string,
-    { nama_user: string; avatar_url: string }
+    { nama_user: string; avatar_url: string; borderDisabled: boolean }
   >();
   for (const m of mappings) {
     if (m.status !== "active") continue;
@@ -253,6 +253,8 @@ export async function getActiveUsers(
     profileByEmail.set(m.email, {
       nama_user: m.nama_user || prev?.nama_user || "",
       avatar_url: m.avatar_url || prev?.avatar_url || "",
+      borderDisabled:
+        Boolean(m.consistency_border_disabled) || Boolean(prev?.borderDisabled),
     });
   }
 
@@ -278,7 +280,8 @@ export async function getActiveUsers(
         avatar_url: avatarUrl,
         last_seen_ms: row.last_seen_ms,
         isCurrentUser: Boolean(normalizedCurrent && row.email === normalizedCurrent),
-        isConsistent: Boolean(hubConsistency?.isConsistent),
+        isConsistent:
+          Boolean(hubConsistency?.isConsistent) && !mapped?.borderDisabled,
         consistencyReason: hubConsistency?.reason || undefined,
       });
     }
