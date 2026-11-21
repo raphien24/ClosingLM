@@ -109,7 +109,7 @@ function setupSeatalkScheduleTriggers() {
 }`;
 
   const handleRunCronJob = async (
-    endpoint: "auto-confirm-soko" | "reminder-closing" | "daily-summary" | "std-report",
+    endpoint: "reminder-closing" | "daily-summary" | "std-report",
     dryRun: boolean
   ) => {
     const key = `${endpoint}-${dryRun ? "preview" : "send"}`;
@@ -121,9 +121,7 @@ function setupSeatalkScheduleTriggers() {
       if (!res.ok) throw new Error(json.error || "Gagal menjalankan jadwal");
       if (json.preview) {
         const previewTitle =
-          endpoint === "auto-confirm-soko"
-            ? `Preview Auto Confirm Soko Hub 23:19 WIB (${json.targetDate})`
-            : endpoint === "reminder-closing"
+          endpoint === "reminder-closing"
             ? `Preview Reminder 23:20 WIB (${json.targetDate})`
             : endpoint === "daily-summary"
             ? `Preview Daily Summary 00:05 WIB (${json.targetDate})`
@@ -134,17 +132,10 @@ function setupSeatalkScheduleTriggers() {
           imageDataUrl: json.previewImageDataUrl,
         });
       }
-      if (json.blocked && Array.isArray(json.issues)) {
-        toast.error(
-          `Auto Confirm Soko Hub diblokir (${json.targetDate}): ${json.issues.join(" ")}`,
-          { duration: 6000 }
-        );
-        return;
-      }
       toast.success(
         dryRun
           ? "Preview berhasil dimuat."
-          : endpoint === "daily-summary" || endpoint === "std-report" || endpoint === "auto-confirm-soko"
+          : endpoint === "daily-summary" || endpoint === "std-report"
           ? "Gambar report & caption berhasil dikirim ke SeaTalk!"
           : `Pesan berhasil dikirim ke SeaTalk (${json.mentionedCount || 0} PIC tercantum)!`
       );
@@ -427,44 +418,7 @@ function setupSeatalkScheduleTriggers() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Card 23:19 WIB Auto Confirm Soko Hub */}
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-emerald-900">
-                <CheckCircle className="h-4 w-4 text-emerald-600" />
-                Auto Confirm Soko Hub
-              </span>
-              <Badge variant="green">23:19 WIB</Badge>
-            </div>
-            <p className="text-xs text-gray-600">
-              Otomatis mengirim screenshot Summary Today Soko Hub + caption Confirm Closing ke Webhook Closing jika report Closing &amp; Productivity hari H sudah lengkap.
-            </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                loading={runningCron === "auto-confirm-soko-preview"}
-                disabled={!!runningCron}
-                onClick={() => handleRunCronJob("auto-confirm-soko", true)}
-              >
-                <Eye className="h-3.5 w-3.5" />
-                Preview
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                loading={runningCron === "auto-confirm-soko-send"}
-                disabled={!!runningCron || !webhookUrl.trim()}
-                onClick={() => handleRunCronJob("auto-confirm-soko", false)}
-              >
-                <Send className="h-3.5 w-3.5" />
-                Kirim Sekarang
-              </Button>
-            </div>
-          </div>
-
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Card 23:20 WIB Reminder */}
           <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
