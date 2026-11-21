@@ -6,17 +6,20 @@ import { getDailyProductivityByHubs, HubDailyProductivity } from "./productivity
 import { getSeaTalkWebhookUrl, getSetting, setSetting } from "./settingsService";
 import { getSheetData } from "./sheets";
 import { getAllHubs, getAllUserMappings, splitHubList } from "./userMapping";
-import { detectAnomalies, formatDate, formatNumber, rowToClosingData } from "./utils";
+import { detectAnomalies, evaluateReportCompleteness, formatDate, formatNumber, rowToClosingData } from "./utils";
 import {
   DailySummaryHubRow,
   generateDailySummaryImageBase64,
 } from "./seatalkSummaryImage";
+import { generateHubConfirmImageBase64 } from "./seatalkHubConfirmImage";
 import { ClosingData } from "@/types/closing";
 
 const DATA_CLOSING_SHEET = "DATA_CLOSING";
 const SEATALK_MAX_TEXT_BYTES = 3800;
 const LAST_REMINDER_KEY = "seatalk_last_reminder_ymd";
 const LAST_SUMMARY_KEY = "seatalk_last_summary_ymd";
+const LAST_SOKO_CONFIRM_KEY = "seatalk_last_soko_confirm_ymd";
+const AUTO_CONFIRM_SOKO_HUB = "Soko Hub";
 
 const EXPECTED_API_KEY =
   process.env.AUTO_UPLOAD_API_KEY || "spx-soko-jtt08-secure-2026";
@@ -444,12 +447,24 @@ export async function runDailySummaryJob(options?: {
       ohVol: row.fleet_oh_volume || 0,
       backlog: row.backlog_total || 0,
     });
+    const completeness = evaluateReportCompleteness({
+      ...row,
+      prod_2w_dedicated: prod?.prod_2w_dedicated ?? null,
+      prod_2w_kurir_plus: prod?.prod_2w_kurir_plus ?? null,
+      prod_4w_dedicated: prod?.prod_4w_dedicated ?? null,
+      prod_2w_mitra: prod?.prod_2w_mitra ?? null,
+      prod_4w_mitra: prod?.prod_4w_mitra ?? null,
+    });
     const missingNotes: string[] = [];
     if (anomalies.length > 0) {
       missingNotes.push(`Closing belum lengkap (${anomalies.length} kolom)`);
     }
     if (!hasProd) {
       missingNotes.push("Productivity kosong");
+    } else if (completeness.missingProductivityLabels.length > 0) {
+      missingNotes.push(
+        `Productivity belum lengkap (${completeness.missingProductivityLabels.join(", ")})`
+      );
     }
     if (missingNotes.length > 0) {
       addHubPics(key);
@@ -573,6 +588,266 @@ export async function runDailySummaryJob(options?: {
     preview: messageText,
     ...(options?.dryRun
       ? { previewImageDataUrl: `data:image/png;base64,${summaryImage.base64}` }
+      : {}),
+  };
+}
+
+function formatWibTime(rawTimestamp: string | undefined): string {
+  if (!rawTimestamp) return "";
+  const dt = parseTimestamp(rawTimestamp);
+  if (!dt) return rawTimestamp;
+  return (
+    dt.toLocaleTimeString("id-ID", {
+      timeZone: "Asia/Jakarta",
+      hour: "2-digit",
+      minute: "2-digit",
+    }) + " WIB"
+  );
+}
+
+/**
+ * Helper terpusat untuk memvalidasi kelengkapan Closing + Productivity suatu Hub dan menyusun caption
+ * Confirm Closing (dipakai baik oleh tombol manual Confirm Closing maupun Auto Confirm Soko 23:19 WIB).
+ */
+export async function prepareConfirmClosingForHub(params: {
+  hubName: string;
+  targetDate: string;
+  confirmedByLabel: string;
+}) {
+  const { hubName, targetDate, confirmedByLabel } = params;
+  const targetKey = hubName.toLowerCase().trim();
+
+  const [sheetData, allHubs, prodMap] = await Promise.all([
+    getSheetData(DATA_CLOSING_SHEET, { skipCache: true }),
+    getAllHubs(),
+    getDailyProductivityByHubs([hubName], targetDate).catch(
+      () => new Map<string, HubDailyProductivity>()
+    ),
+  ]);
+
+  const latestByHub = new Map<string, ClosingData>();
+  for (let i = 1; i < sheetData.length; i++) {
+    const r = sheetData[i];
+    if (!r || r.length < 2) continue;
+    if (normalizeToYMD(r[0]) !== targetDate) continue;
+    const parsed = rowToClosingData(r);
+    const key = parsed.nama_hub.toLowerCase().trim();
+    if (!key) continue;
+
+    const prev = latestByHub.get(key);
+    if (
+      !prev ||
+      (parseTimestamp(parsed.submitted_at)?.getTime() ?? 0) >=
+        (parseTimestamp(prev.submitted_at)?.getTime() ?? 0)
+    ) {
+      latestByHub.set(key, parsed);
+    }
+  }
+
+  const hubNamesByKey = new Map<string, string>();
+  for (const h of allHubs) {
+    const k = h.toLowerCase().trim();
+    if (k && !hubNamesByKey.has(k)) hubNamesByKey.set(k, h.trim());
+  }
+  for (const [k, row] of latestByHub.entries()) {
+    if (!hubNamesByKey.has(k)) hubNamesByKey.set(k, row.nama_hub.trim());
+  }
+
+  const hubDisplayName = hubNamesByKey.get(targetKey) || hubName;
+  const activeClosing = latestByHub.get(targetKey);
+  const activeProd = prodMap.get(targetKey);
+
+  const hasAnyVolumeField = activeClosing
+    ? activeClosing.in_hub_transported !== null ||
+      activeClosing.in_hub_received !== null ||
+      activeClosing.in_hub_assigning !== null ||
+      activeClosing.in_hub_assigned !== null ||
+      activeClosing.fleet_delivering !== null ||
+      activeClosing.fleet_delivered !== null ||
+      activeClosing.fleet_oh_volume !== null
+    : false;
+
+  const totalVolume =
+    activeClosing && hasAnyVolumeField
+      ? (activeClosing.in_hub_transported || 0) +
+        (activeClosing.in_hub_received || 0) +
+        (activeClosing.in_hub_assigning || 0) +
+        (activeClosing.in_hub_assigned || 0) +
+        (activeClosing.fleet_delivering || 0) +
+        (activeClosing.fleet_delivered || 0) +
+        (activeClosing.fleet_oh_volume || 0)
+      : null;
+
+  const backlogPct =
+    totalVolume &&
+    totalVolume > 0 &&
+    activeClosing?.backlog_total !== null &&
+    activeClosing?.backlog_total !== undefined
+      ? Math.round((activeClosing.backlog_total / totalVolume) * 1000) / 10
+      : null;
+
+  const combinedRow: ClosingData = {
+    tanggal: targetDate,
+    nama_hub: activeClosing?.nama_hub || hubDisplayName,
+    in_hub_transported: activeClosing?.in_hub_transported ?? null,
+    in_hub_received: activeClosing?.in_hub_received ?? null,
+    in_hub_assigning: activeClosing?.in_hub_assigning ?? null,
+    in_hub_assigned: activeClosing?.in_hub_assigned ?? null,
+    fleet_delivering: activeClosing?.fleet_delivering ?? null,
+    fleet_delivered: activeClosing?.fleet_delivered ?? null,
+    fleet_oh_volume: activeClosing?.fleet_oh_volume ?? null,
+    fleet_oh_total: activeClosing?.fleet_oh_total ?? null,
+    dedicated_actual_2wh: activeClosing?.dedicated_actual_2wh ?? null,
+    kurir_plus_actual_2wh: activeClosing?.kurir_plus_actual_2wh ?? null,
+    dedicated_actual_4wh: activeClosing?.dedicated_actual_4wh ?? null,
+    mitra_actual_2wh: activeClosing?.mitra_actual_2wh ?? null,
+    mitra_actual_4wh: activeClosing?.mitra_actual_4wh ?? null,
+    backlog_total: activeClosing?.backlog_total ?? null,
+    total_expedite: activeClosing?.total_expedite ?? null,
+    parcel_sweeper_total: activeClosing?.parcel_sweeper_total ?? null,
+    parcel_sweeper_scanned_pct: activeClosing?.parcel_sweeper_scanned_pct ?? null,
+    submitted_at: activeClosing?.submitted_at || "",
+    submitted_by: activeClosing?.submitted_by || "",
+    manual_fields: activeClosing?.manual_fields || [],
+    total_volume: totalVolume,
+    backlog_pct: backlogPct,
+    prod_2w_dedicated: activeProd?.prod_2w_dedicated ?? null,
+    prod_2w_kurir_plus: activeProd?.prod_2w_kurir_plus ?? null,
+    prod_4w_dedicated: activeProd?.prod_4w_dedicated ?? null,
+    prod_2w_mitra: activeProd?.prod_2w_mitra ?? null,
+    prod_4w_mitra: activeProd?.prod_4w_mitra ?? null,
+    target_2w_dedicated: activeProd?.target_2w_dedicated ?? null,
+    target_2w_kurir_plus: activeProd?.target_2w_kurir_plus ?? null,
+    target_4w_dedicated: activeProd?.target_4w_dedicated ?? null,
+    target_2w_mitra: activeProd?.target_2w_mitra ?? null,
+    target_4w_mitra: activeProd?.target_4w_mitra ?? null,
+  };
+
+  const completeness = evaluateReportCompleteness(combinedRow);
+
+  const submittedList: { name: string; time: string }[] = [];
+  const missingList: string[] = [];
+
+  for (const [key, displayHub] of hubNamesByKey.entries()) {
+    const closing = latestByHub.get(key);
+    if (closing && closing.submitted_at) {
+      submittedList.push({
+        name: closing.nama_hub || displayHub,
+        time: formatWibTime(closing.submitted_at),
+      });
+    } else {
+      missingList.push(displayHub);
+    }
+  }
+
+  submittedList.sort((a, b) => a.name.localeCompare(b.name, "id"));
+  missingList.sort((a, b) => a.localeCompare(b, "id"));
+
+  const lines: string[] = [
+    `📊 CONFIRM CLOSING REPORT — JTT08`,
+    `Tanggal: ${formatDate(targetDate)}`,
+    `Dikonfirmasi oleh: ${confirmedByLabel} (${hubDisplayName})`,
+    `Ringkasan: ${submittedList.length}/${hubNamesByKey.size} Hub Sudah Closing • ${missingList.length} Belum Closing`,
+    "",
+    `✅ SUDAH CLOSING (${submittedList.length} Hub):`,
+    ...(submittedList.length > 0
+      ? submittedList.map(
+          (h, idx) => `${idx + 1}. ${h.name}${h.time ? ` (${h.time})` : ""}`
+        )
+      : ["- Belum ada Hub yang closing -"]),
+    "",
+    `⏳ BELUM CLOSING (${missingList.length} Hub):`,
+    ...(missingList.length > 0
+      ? missingList.map((name, idx) => `${idx + 1}. ${name}`)
+      : ["- Semua Hub sudah closing! -"]),
+  ];
+
+  return {
+    hubDisplayName,
+    combinedRow,
+    completeness,
+    caption: lines.join("\n"),
+    submittedCount: submittedList.length,
+    missingCount: missingList.length,
+    totalHubs: hubNamesByKey.size,
+  };
+}
+
+/**
+ * Job 4 (23:19 WIB): Auto Confirm Closing khusus Soko Hub hari ini (Hari H).
+ * Memblokir pengiriman bila Report Closing & Daily Productivity Soko Hub belum lengkap.
+ */
+export async function runAutoConfirmSokoJob(options?: {
+  force?: boolean;
+  dryRun?: boolean;
+}) {
+  const targetDate = todayWIB();
+
+  if (!options?.force && !options?.dryRun) {
+    const lastSent = await getSetting(LAST_SOKO_CONFIRM_KEY, { skipCache: true });
+    if (lastSent?.value === targetDate) {
+      return {
+        skipped: true,
+        reason: `Auto Confirm Closing Soko Hub untuk tanggal ${targetDate} sudah pernah dikirim.`,
+        targetDate,
+        hub: AUTO_CONFIRM_SOKO_HUB,
+      };
+    }
+  }
+
+  const webhookUrl = await getSeaTalkWebhookUrl({ skipCache: true });
+  if (!webhookUrl && !options?.dryRun) {
+    throw new Error("Webhook SeaTalk belum dikonfigurasi di menu Settings.");
+  }
+
+  const prepared = await prepareConfirmClosingForHub({
+    hubName: AUTO_CONFIRM_SOKO_HUB,
+    targetDate,
+    confirmedByLabel: "Auto Confirm 23:19 WIB",
+  });
+
+  const hubImage = await generateHubConfirmImageBase64(prepared.combinedRow);
+
+  if (!prepared.completeness.isComplete) {
+    return {
+      skipped: false,
+      blocked: true,
+      targetDate,
+      hub: prepared.hubDisplayName,
+      issues: prepared.completeness.issues,
+      submittedCount: prepared.submittedCount,
+      missingCount: prepared.missingCount,
+      totalHubs: prepared.totalHubs,
+      imageSent: false,
+      preview: prepared.caption,
+      ...(options?.dryRun
+        ? { previewImageDataUrl: `data:image/png;base64,${hubImage.base64}` }
+        : {}),
+    };
+  }
+
+  if (!options?.dryRun) {
+    await sendSeaTalkImageMessage(webhookUrl, hubImage.base64);
+    await sendSeaTalkTextMessage(webhookUrl, prepared.caption);
+    await setSetting({
+      key: LAST_SOKO_CONFIRM_KEY,
+      value: targetDate,
+      updatedBy: "cron-soko-confirm-2319",
+    });
+  }
+
+  return {
+    skipped: false,
+    blocked: false,
+    targetDate,
+    hub: prepared.hubDisplayName,
+    submittedCount: prepared.submittedCount,
+    missingCount: prepared.missingCount,
+    totalHubs: prepared.totalHubs,
+    imageSent: !options?.dryRun,
+    preview: prepared.caption,
+    ...(options?.dryRun
+      ? { previewImageDataUrl: `data:image/png;base64,${hubImage.base64}` }
       : {}),
   };
 }

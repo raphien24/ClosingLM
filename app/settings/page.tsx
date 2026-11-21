@@ -45,9 +45,18 @@ export default function SettingsPage() {
   } | null>(null);
 
   const gasScheduleSnippet = `// Jalankan fungsi setupSeatalkScheduleTriggers() sekali di Google Apps Script
-// agar jadwal berjalan tepat pada 23:20 WIB, 00:05 WIB, & 09:00 WIB (zona Asia/Jakarta).
+// agar jadwal berjalan tepat pada 23:19, 23:20, 00:05, & 09:00 WIB (zona Asia/Jakarta).
 const CLOSING_LM_URL = "https://closing-lm.vercel.app";
 const CLOSING_LM_API_KEY = "spx-soko-jtt08-secure-2026";
+
+function runSeaTalkAutoConfirmSoko2319() {
+  const res = UrlFetchApp.fetch(CLOSING_LM_URL + "/api/cron/auto-confirm-soko", {
+    method: "POST",
+    headers: { "x-api-key": CLOSING_LM_API_KEY },
+    muteHttpExceptions: true,
+  });
+  Logger.log("Auto Confirm Soko 23:19 (" + res.getResponseCode() + "): " + res.getContentText());
+}
 
 function runSeaTalkReminder2320() {
   const res = UrlFetchApp.fetch(CLOSING_LM_URL + "/api/cron/reminder-closing", {
@@ -80,6 +89,7 @@ function setupSeatalkScheduleTriggers() {
   ScriptApp.getProjectTriggers().forEach((t) => {
     const fn = t.getHandlerFunction();
     if (
+      fn === "runSeaTalkAutoConfirmSoko2319" ||
       fn === "runSeaTalkReminder2320" ||
       fn === "runSeaTalkSummary0005" ||
       fn === "runSeaTalkStd0900"
@@ -87,17 +97,19 @@ function setupSeatalkScheduleTriggers() {
       ScriptApp.deleteTrigger(t);
     }
   });
+  ScriptApp.newTrigger("runSeaTalkAutoConfirmSoko2319")
+    .timeBased().atHour(23).nearMinute(19).everyDays(1).inTimezone("Asia/Jakarta").create();
   ScriptApp.newTrigger("runSeaTalkReminder2320")
     .timeBased().atHour(23).nearMinute(20).everyDays(1).inTimezone("Asia/Jakarta").create();
   ScriptApp.newTrigger("runSeaTalkSummary0005")
     .timeBased().atHour(0).nearMinute(5).everyDays(1).inTimezone("Asia/Jakarta").create();
   ScriptApp.newTrigger("runSeaTalkStd0900")
     .timeBased().atHour(9).nearMinute(0).everyDays(1).inTimezone("Asia/Jakarta").create();
-  Logger.log("Trigger SeaTalk 23:20, 00:05 & 09:00 WIB berhasil dibuat!");
+  Logger.log("Trigger SeaTalk 23:19, 23:20, 00:05 & 09:00 WIB berhasil dibuat!");
 }`;
 
   const handleRunCronJob = async (
-    endpoint: "reminder-closing" | "daily-summary" | "std-report",
+    endpoint: "auto-confirm-soko" | "reminder-closing" | "daily-summary" | "std-report",
     dryRun: boolean
   ) => {
     const key = `${endpoint}-${dryRun ? "preview" : "send"}`;
@@ -109,7 +121,9 @@ function setupSeatalkScheduleTriggers() {
       if (!res.ok) throw new Error(json.error || "Gagal menjalankan jadwal");
       if (json.preview) {
         const previewTitle =
-          endpoint === "reminder-closing"
+          endpoint === "auto-confirm-soko"
+            ? `Preview Auto Confirm Soko Hub 23:19 WIB (${json.targetDate})`
+            : endpoint === "reminder-closing"
             ? `Preview Reminder 23:20 WIB (${json.targetDate})`
             : endpoint === "daily-summary"
             ? `Preview Daily Summary 00:05 WIB (${json.targetDate})`
@@ -120,10 +134,17 @@ function setupSeatalkScheduleTriggers() {
           imageDataUrl: json.previewImageDataUrl,
         });
       }
+      if (json.blocked && Array.isArray(json.issues)) {
+        toast.error(
+          `Auto Confirm Soko Hub diblokir (${json.targetDate}): ${json.issues.join(" ")}`,
+          { duration: 6000 }
+        );
+        return;
+      }
       toast.success(
         dryRun
           ? "Preview berhasil dimuat."
-          : endpoint === "daily-summary" || endpoint === "std-report"
+          : endpoint === "daily-summary" || endpoint === "std-report" || endpoint === "auto-confirm-soko"
           ? "Gambar report & caption berhasil dikirim ke SeaTalk!"
           : `Pesan berhasil dikirim ke SeaTalk (${json.mentionedCount || 0} PIC tercantum)!`
       );
@@ -406,7 +427,44 @@ function setupSeatalkScheduleTriggers() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Card 23:19 WIB Auto Confirm Soko Hub */}
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-emerald-900">
+                <CheckCircle className="h-4 w-4 text-emerald-600" />
+                Auto Confirm Soko Hub
+              </span>
+              <Badge variant="green">23:19 WIB</Badge>
+            </div>
+            <p className="text-xs text-gray-600">
+              Otomatis mengirim screenshot Summary Today Soko Hub + caption Confirm Closing ke Webhook Closing jika report Closing &amp; Productivity hari H sudah lengkap.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={runningCron === "auto-confirm-soko-preview"}
+                disabled={!!runningCron}
+                onClick={() => handleRunCronJob("auto-confirm-soko", true)}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                loading={runningCron === "auto-confirm-soko-send"}
+                disabled={!!runningCron || !webhookUrl.trim()}
+                onClick={() => handleRunCronJob("auto-confirm-soko", false)}
+              >
+                <Send className="h-3.5 w-3.5" />
+                Kirim Sekarang
+              </Button>
+            </div>
+          </div>
+
           {/* Card 23:20 WIB Reminder */}
           <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -550,7 +608,7 @@ function setupSeatalkScheduleTriggers() {
         <div className="pt-3 border-t border-gray-100 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-gray-700">
-              Opsional — Script Trigger Google Apps Script (23:20, 00:05 &amp; 09:00 WIB)
+              Opsional — Script Trigger Google Apps Script (23:19, 23:20, 00:05 &amp; 09:00 WIB)
             </p>
             <Button
               type="button"

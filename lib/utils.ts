@@ -112,6 +112,92 @@ export function addAnomaliesToRows(
   return rows.map((row) => ({ ...row, anomalies: detectAnomalies(row) }));
 }
 
+export interface ReportCompletenessResult {
+  isComplete: boolean;
+  closingSubmitted: boolean;
+  closingAnomalies: AnomalyField[];
+  hasAnyProductivity: boolean;
+  missingProductivityLabels: string[];
+  issues: string[];
+}
+
+/**
+ * Validasi terpusat kelengkapan Report Closing & Daily Productivity untuk sebuah Hub.
+ * Digunakan sebagai guard sebelum Confirm Closing & pemberitahuan di Summary Report.
+ */
+export function evaluateReportCompleteness(
+  row: Partial<ClosingData> | null | undefined
+): ReportCompletenessResult {
+  if (!row) {
+    return {
+      isComplete: false,
+      closingSubmitted: false,
+      closingAnomalies: [],
+      hasAnyProductivity: false,
+      missingProductivityLabels: [],
+      issues: ["Data Closing & Daily Productivity untuk Hub ini belum tersedia."],
+    };
+  }
+
+  const issues: string[] = [];
+  const closingSubmitted = Boolean(row.submitted_at && String(row.submitted_at).trim());
+  const closingAnomalies = detectAnomalies(row);
+
+  if (!closingSubmitted) {
+    issues.push("Report Closing belum disubmit untuk tanggal ini.");
+  } else if (closingAnomalies.length > 0) {
+    const previewReasons = closingAnomalies
+      .slice(0, 3)
+      .map((a) => a.reason)
+      .join(", ");
+    issues.push(
+      `Data Closing belum lengkap (${closingAnomalies.length} kolom: ${previewReasons}${closingAnomalies.length > 3 ? ", ..." : ""}).`
+    );
+  }
+
+  const prodPairs: {
+    prod: number | null | undefined;
+    actual: number | null | undefined;
+    label: string;
+  }[] = [
+    { prod: row.prod_2w_dedicated, actual: row.dedicated_actual_2wh, label: "2W Dedicated" },
+    { prod: row.prod_2w_kurir_plus, actual: row.kurir_plus_actual_2wh, label: "2W Kurir Plus" },
+    { prod: row.prod_4w_dedicated, actual: row.dedicated_actual_4wh, label: "4W Dedicated" },
+    { prod: row.prod_2w_mitra, actual: row.mitra_actual_2wh, label: "2W Mitra" },
+    { prod: row.prod_4w_mitra, actual: row.mitra_actual_4wh, label: "4W Mitra" },
+  ];
+
+  const hasAnyProductivity = prodPairs.some(
+    (p) => p.prod !== null && p.prod !== undefined
+  );
+  const missingProductivityLabels = prodPairs
+    .filter((p) => (p.actual ?? 0) > 0 && (p.prod === null || p.prod === undefined))
+    .map((p) => p.label);
+
+  if (!hasAnyProductivity) {
+    issues.push("Daily Productivity belum diupload / masih kosong.");
+  } else if (missingProductivityLabels.length > 0) {
+    issues.push(
+      `Daily Productivity belum lengkap untuk fleet aktif: ${missingProductivityLabels.join(", ")}.`
+    );
+  }
+
+  const isComplete =
+    closingSubmitted &&
+    closingAnomalies.length === 0 &&
+    hasAnyProductivity &&
+    missingProductivityLabels.length === 0;
+
+  return {
+    isComplete,
+    closingSubmitted,
+    closingAnomalies,
+    hasAnyProductivity,
+    missingProductivityLabels,
+    issues,
+  };
+}
+
 // ── Konversi ClosingData ↔ Sheets row ───────────────────────
 // Urutan WAJIB sama persis dengan header DATA_CLOSING (22 kolom)
 export function closingDataToRow(

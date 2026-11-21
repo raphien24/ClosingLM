@@ -16,7 +16,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { ClosingData } from "@/types/closing";
-import { formatDate, formatNumber } from "@/lib/utils";
+import { evaluateReportCompleteness, formatDate, formatNumber } from "@/lib/utils";
 import { parseTimestamp } from "@/lib/dateUtils";
 
 interface HubClosingDetailModalProps {
@@ -127,6 +127,7 @@ export function HubSummaryReportCard({
   onClose?: () => void;
 }) {
   const hasData = !!row.submitted_at;
+  const completeness = evaluateReportCompleteness(row);
   const manualSet = new Set(row.manual_fields || []);
   const manualCount = manualSet.size;
   const updateTime = row.submitted_at
@@ -243,13 +244,22 @@ export function HubSummaryReportCard({
 
       {/* Body */}
       <div className={`p-5 space-y-5 ${isModal ? "overflow-y-auto" : ""}`}>
-          {!hasData && (
-            <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-xs text-orange-800 flex items-center gap-2.5">
-              <AlertTriangle className="h-4 w-4 text-orange-600 flex-shrink-0" />
-              <span>
-                <strong>{row.nama_hub}</strong> belum mengirimkan laporan closing untuk tanggal{" "}
-                <strong>{formatDate(row.tanggal)}</strong>.
-              </span>
+          {!completeness.isComplete && (
+            <div className="rounded-xl border border-red-200 dark:border-red-500/40 bg-red-50 dark:bg-red-950/50 px-4 py-3 text-xs text-red-800 dark:text-red-200 flex items-start gap-2.5">
+              <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-extrabold text-red-900 dark:text-red-100">
+                  Pemberitahuan: Report Closing &amp; Productivity Belum Lengkap (Confirm Closing Diblokir)
+                </p>
+                <p className="text-[11px] text-red-700 dark:text-red-300">
+                  Lengkapi kekurangan berikut untuk tanggal <strong>{formatDate(row.tanggal)}</strong> sebelum melakukan <strong>Confirm Closing &amp; Send Seatalk</strong>:
+                </p>
+                <ul className="list-disc pl-4 space-y-0.5 text-[11px] font-medium">
+                  {completeness.issues.map((issue, i) => (
+                    <li key={i}>{issue}</li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
 

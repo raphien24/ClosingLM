@@ -12,9 +12,9 @@ import {
 import { FilterBar } from "@/components/dashboard/FilterBar";
 import { ClosingData } from "@/types/closing";
 import { todayWIB } from "@/lib/dateUtils";
-import { formatDate } from "@/lib/utils";
+import { evaluateReportCompleteness, formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
-import { ClipboardList, Loader2, Send } from "lucide-react";
+import { ClipboardList, Loader2, Lock, Send } from "lucide-react";
 import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { ConsistentBadgePill } from "@/components/ui/ProfileAvatarFrame";
 import { SunsetSailTransition } from "@/components/ocean/SunsetSailTransition";
@@ -230,13 +230,40 @@ function DashboardContent() {
     }
   }, [hubName, resolveUserSummaryRow]);
 
+  const loadedUserClosingRow = hubName
+    ? closingData.find(
+        (d) => d.nama_hub.toLowerCase().trim() === hubName.toLowerCase().trim()
+      )
+    : undefined;
+  const loadedUserCompleteness = loadedUserClosingRow
+    ? evaluateReportCompleteness(loadedUserClosingRow)
+    : null;
+  const isConfirmBlocked = Boolean(loadedUserCompleteness && !loadedUserCompleteness.isComplete);
+
   const handleConfirmAndSendSeaTalk = useCallback(async () => {
     if (isSendingSeaTalk) return;
+    if (!isToday) {
+      toast.error("Confirm Closing hanya tersedia untuk tanggal hari ini (Hari H).");
+      return;
+    }
     setIsSendingSeaTalk(true);
-    const toastId = toast.loading("Mengambil screenshot Summary Today & mengirim ke SeaTalk...");
+    const toastId = toast.loading("Memeriksa kelengkapan report Closing & Productivity...");
 
     try {
       const summaryRow = await resolveUserSummaryRow();
+      const completeness = evaluateReportCompleteness(summaryRow);
+      if (!completeness.isComplete) {
+        toast.error(
+          `Confirm Closing diblokir: ${completeness.issues.join(" ")}`,
+          { id: toastId, duration: 6000 }
+        );
+        setSelectedHubDetail(summaryRow);
+        return;
+      }
+
+      toast.loading("Mengambil screenshot Summary Today & mengirim ke SeaTalk...", {
+        id: toastId,
+      });
       setCaptureSummaryRow(summaryRow);
 
       // Tunggu render offscreen card Summary Today selesai
@@ -284,7 +311,7 @@ function DashboardContent() {
       setCaptureSummaryRow(null);
       setIsSendingSeaTalk(false);
     }
-  }, [isSendingSeaTalk, resolveUserSummaryRow, selectedDate]);
+  }, [isSendingSeaTalk, isToday, resolveUserSummaryRow, selectedDate]);
 
   return (
     <>
@@ -384,22 +411,45 @@ function DashboardContent() {
                           <span>Summary Today</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={handleConfirmAndSendSeaTalk}
-                          disabled={isSendingSeaTalk || isLoading}
-                          title={`Ambil screenshot Summary Today ${hubName} (${formatDate(selectedDate)}) & kirim ke grup SeaTalk`}
-                          className="group inline-flex items-center gap-2.5 pl-2 pr-3.5 py-1.5 rounded-xl text-sm font-bold bg-gradient-to-b from-[#1a2b46] to-[#0f1b2e] hover:from-[#213659] hover:to-[#132238] text-amber-50 border border-amber-400/55 hover:border-amber-300/85 shadow-[0_4px_12px_-4px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(253,230,138,0.2)] transition-all duration-150 cursor-pointer disabled:opacity-60"
-                        >
-                          <span className="w-7 h-7 rounded-lg bg-amber-400/15 border border-amber-300/40 text-amber-300 flex items-center justify-center flex-shrink-0">
-                            {isSendingSeaTalk ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Send className="h-3.5 w-3.5" />
+                        {isToday && (
+                          <button
+                            type="button"
+                            onClick={handleConfirmAndSendSeaTalk}
+                            disabled={isSendingSeaTalk || isLoading}
+                            title={
+                              isConfirmBlocked && loadedUserCompleteness
+                                ? `Confirm Closing diblokir: ${loadedUserCompleteness.issues.join(" ")}`
+                                : `Ambil screenshot Summary Today ${hubName} (${formatDate(selectedDate)}) & kirim ke grup SeaTalk`
+                            }
+                            className={`group inline-flex items-center gap-2.5 pl-2 pr-3.5 py-1.5 rounded-xl text-sm font-bold border transition-all duration-150 cursor-pointer disabled:opacity-60 ${
+                              isConfirmBlocked
+                                ? "bg-gradient-to-b from-rose-950/90 to-red-950 hover:from-rose-900 hover:to-red-900 text-rose-50 border-rose-400/60 hover:border-rose-300 shadow-[0_4px_12px_-4px_rgba(190,18,60,0.45)]"
+                                : "bg-gradient-to-b from-[#1a2b46] to-[#0f1b2e] hover:from-[#213659] hover:to-[#132238] text-amber-50 border-amber-400/55 hover:border-amber-300/85 shadow-[0_4px_12px_-4px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(253,230,138,0.2)]"
+                            }`}
+                          >
+                            <span
+                              className={`w-7 h-7 rounded-lg border flex items-center justify-center flex-shrink-0 ${
+                                isConfirmBlocked
+                                  ? "bg-rose-500/20 border-rose-300/45 text-rose-200"
+                                  : "bg-amber-400/15 border-amber-300/40 text-amber-300"
+                              }`}
+                            >
+                              {isSendingSeaTalk ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : isConfirmBlocked ? (
+                                <Lock className="h-3.5 w-3.5" />
+                              ) : (
+                                <Send className="h-3.5 w-3.5" />
+                              )}
+                            </span>
+                            <span>Confirm Closing &amp; Send Seatalk</span>
+                            {isConfirmBlocked && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/25 border border-rose-300/40 text-rose-100">
+                                Belum Lengkap
+                              </span>
                             )}
-                          </span>
-                          <span>Confirm Closing &amp; Send Seatalk</span>
-                        </button>
+                          </button>
+                        )}
                       </div>
                     </>
                   )}

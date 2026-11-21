@@ -2,6 +2,8 @@ name: SeaTalk Scheduled Closing Reports
 
 on:
   schedule:
+    # 23:19 WIB = 16:19 UTC -> Auto Confirm Closing Soko Hub
+    - cron: "19 16 * * *"
     # 23:20 WIB = 16:20 UTC -> Reminder Closing Harian
     - cron: "20 16 * * *"
     # 00:05 WIB = 17:05 UTC -> Daily Summary Keseluruhan Hub + PIC
@@ -16,6 +18,7 @@ on:
         default: "all"
         type: choice
         options:
+          - auto-confirm-soko
           - reminder-closing
           - daily-summary
           - std-report
@@ -28,6 +31,16 @@ jobs:
       BASE_URL: ${{ vars.APP_BASE_URL || 'https://closing-lm.vercel.app' }}
       API_KEY: ${{ secrets.AUTO_UPLOAD_API_KEY }}
     steps:
+      - name: Run 23:19 WIB Auto Confirm Closing Soko Hub
+        if: github.event.schedule == '19 16 * * *' || github.event.inputs.job == 'auto-confirm-soko' || github.event.inputs.job == 'all'
+        run: |
+          KEY="${API_KEY:-spx-soko-jtt08-secure-2026}"
+          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/auto-confirm-soko")
+          BODY=$(echo "$RES" | sed '$d')
+          CODE=$(echo "$RES" | tail -n1)
+          echo "HTTP $CODE: $BODY"
+          test "$CODE" -ge 200 && test "$CODE" -lt 300
+
       - name: Run 23:20 WIB Reminder Closing
         if: github.event.schedule == '20 16 * * *' || github.event.inputs.job == 'reminder-closing' || github.event.inputs.job == 'all'
         run: |
