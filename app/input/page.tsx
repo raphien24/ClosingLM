@@ -175,20 +175,21 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     pageState === "done" ||
     recentHistory.some((item) => item.tanggal === todayWIB());
 
-  // Gabungkan hasil baru ke ocrRow yang sudah ada
+  // Gabungkan hasil baru ke ocrRow yang sudah ada (angka baru selalu menimpa data lama untuk kolom yang sama)
   const mergeIntoOcrRow = useCallback(
     (incoming: Partial<ClosingData>, dateDetected?: string | null) => {
       const nextDate = dateDetected || detectedDate;
       if (dateDetected) setDetectedDate(dateDetected);
 
-      const autoKeys: string[] = [];
+      const autoEntries = Object.entries(incoming).filter(
+        ([, v]) => v !== null && v !== undefined && v !== ""
+      );
+      const autoKeys = autoEntries.map(([k]) => k);
+
       setOcrRow((prev) => {
         const merged: Record<string, unknown> = { ...(prev || {}) };
-        for (const [k, v] of Object.entries(incoming)) {
-          if (v !== null && v !== undefined && v !== "") {
-            merged[k] = v;
-            autoKeys.push(k);
-          }
+        for (const [k, v] of autoEntries) {
+          merged[k] = v;
         }
         merged.nama_hub = hubName || (merged.nama_hub as string) || "";
         merged.tanggal = nextDate;
@@ -198,6 +199,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       if (autoKeys.length > 0) {
         setManualFields((prev) => prev.filter((f) => !autoKeys.includes(f)));
       }
+      setPendingData(null);
       setPageState("preview");
     },
     [detectedDate, hubName]
@@ -274,8 +276,16 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
     if (activeTab !== "closing") return;
 
     const handler = (e: ClipboardEvent) => {
-      const activeTag = (document.activeElement as HTMLElement | null)?.tagName;
-      if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
+      const activeEl = document.activeElement as HTMLElement | null;
+      const activeTag = activeEl?.tagName;
+      const activeInputType =
+        activeTag === "INPUT"
+          ? ((activeEl as HTMLInputElement).type || "text").toLowerCase()
+          : "";
+      const isTextEditorFocused =
+        activeTag === "TEXTAREA" ||
+        (activeTag === "INPUT" &&
+          ["text", "search", "url", "email", "password"].includes(activeInputType));
 
       const items = Array.from(e.clipboardData?.items || []).filter((i) =>
         i.type.startsWith("image/")
@@ -310,6 +320,8 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
         return;
       }
 
+      if (isTextEditorFocused) return;
+
       const plainText = e.clipboardData?.getData("text/plain") || "";
       const htmlText = e.clipboardData?.getData("text/html") || "";
       const strippedHtml = htmlText
@@ -342,10 +354,18 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
           return;
         }
 
-        const countFields = Object.values(parsed.row).filter(
-          (v) => v != null
-        ).length;
+        const extractedEntries = Object.entries(parsed.row).filter(
+          ([, v]) => v !== null && v !== undefined
+        );
+        const countFields = extractedEntries.length;
         if (countFields > 0) {
+          setFieldConfidence((prev) => {
+            const next = { ...prev };
+            for (const [k] of extractedEntries) {
+              next[k] = 100;
+            }
+            return next;
+          });
           mergeIntoOcrRow(parsed.row);
           if (
             /To\s+Expedite/i.test(plainText) &&
@@ -648,7 +668,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
               isPass1Only: pass1OnlyKeys.has(k),
             }
           );
-          fieldConf[k] = Math.max(fieldConf[k] ?? 0, score);
+          fieldConf[k] = score;
         }
 
         if (isPs && psDates.length === 0) {
@@ -671,17 +691,24 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
 
       const merged = mergeOcrBatches(batches);
       const mergedRec = (merged.row || {}) as Record<string, unknown>;
-      const nextFieldConf: Record<string, number> = ocrRow ? { ...fieldConfidence } : {};
+      const replacedFieldConfs: Record<string, number> = {};
       for (const [k, v] of Object.entries(fieldConf)) {
-        if (mergedRec[k] != null) nextFieldConf[k] = v;
+        if (mergedRec[k] != null) replacedFieldConfs[k] = v;
       }
+      const nextFieldConf: Record<string, number> = {
+        ...(ocrRow ? fieldConfidence : {}),
+        ...replacedFieldConfs,
+      };
       const populatedConfs = Object.values(nextFieldConf);
       const avgConf =
         populatedConfs.length > 0
           ? Math.round(populatedConfs.reduce((sum, v) => sum + v, 0) / populatedConfs.length)
           : Math.round(totalConf / texts.length);
       setOcrConfidence(avgConf);
-      setFieldConfidence(nextFieldConf);
+      setFieldConfidence((prev) => ({
+        ...(ocrRow ? prev : {}),
+        ...replacedFieldConfs,
+      }));
       setOcrEngine("tesseract");
       mergeIntoOcrRow(merged.row || {});
       setScreenshots([]);
