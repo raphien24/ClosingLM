@@ -1,0 +1,46 @@
+name: SeaTalk Scheduled Closing Reports
+
+on:
+  schedule:
+    # 23:20 WIB = 16:20 UTC -> Reminder Closing Harian
+    - cron: "20 16 * * *"
+    # 00:05 WIB = 17:05 UTC -> Daily Summary Keseluruhan Hub + Tag PIC
+    - cron: "5 17 * * *"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "Pilih job yang ingin dijalankan"
+        required: true
+        default: "both"
+        type: choice
+        options:
+          - reminder-closing
+          - daily-summary
+          - both
+
+jobs:
+  trigger-seatalk-report:
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ vars.APP_BASE_URL || 'https://closing-lm.vercel.app' }}
+      API_KEY: ${{ secrets.AUTO_UPLOAD_API_KEY }}
+    steps:
+      - name: Run 23:20 WIB Reminder Closing
+        if: github.event.schedule == '20 16 * * *' || github.event.inputs.job == 'reminder-closing' || github.event.inputs.job == 'both'
+        run: |
+          KEY="${API_KEY:-spx-soko-jtt08-secure-2026}"
+          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/reminder-closing")
+          BODY=$(echo "$RES" | sed '$d')
+          CODE=$(echo "$RES" | tail -n1)
+          echo "HTTP $CODE: $BODY"
+          test "$CODE" -ge 200 && test "$CODE" -lt 300
+
+      - name: Run 00:05 WIB Daily Summary Report
+        if: github.event.schedule == '5 17 * * *' || github.event.inputs.job == 'daily-summary' || github.event.inputs.job == 'both'
+        run: |
+          KEY="${API_KEY:-spx-soko-jtt08-secure-2026}"
+          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/daily-summary")
+          BODY=$(echo "$RES" | sed '$d')
+          CODE=$(echo "$RES" | tail -n1)
+          echo "HTTP $CODE: $BODY"
+          test "$CODE" -ge 200 && test "$CODE" -lt 300

@@ -21,6 +21,7 @@ export const proxy = auth(async (req) => {
     "/api/auth",
     "/api/productivity/auto-upload",
     "/api/closing/auto-upload",
+    "/api/cron",
     "/api/ocr/warmup",
   ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
@@ -53,8 +54,11 @@ export const proxy = auth(async (req) => {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
 
-  // Halaman Manage Admin khusus akun Owner (rafi.alvian@spxexpress.com)
-  if (pathname.startsWith("/admin") && !isOwnerAdminEmail(session.user?.email)) {
+  // Halaman Manage Admin & Settings khusus akun Owner (rafi.alvian@spxexpress.com)
+  if (
+    (pathname.startsWith("/admin") || pathname.startsWith("/settings")) &&
+    !isOwnerAdminEmail(session.user?.email)
+  ) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 

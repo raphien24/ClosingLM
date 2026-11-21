@@ -5,12 +5,16 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ClosingInsightCards } from "@/components/dashboard/ClosingInsightCards";
 import { HubTable } from "@/components/dashboard/HubTable";
-import { HubClosingDetailModal } from "@/components/dashboard/HubClosingDetailModal";
+import {
+  HubClosingDetailModal,
+  HubSummaryReportCard,
+} from "@/components/dashboard/HubClosingDetailModal";
 import { FilterBar } from "@/components/dashboard/FilterBar";
 import { ClosingData } from "@/types/closing";
 import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { ClipboardList, Loader2, Send } from "lucide-react";
 import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { ConsistentBadgePill } from "@/components/ui/ProfileAvatarFrame";
 import { SunsetSailTransition } from "@/components/ocean/SunsetSailTransition";
@@ -61,7 +65,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, displayName, consistency } = useUserProfileDisplay();
+  const { user, displayName, hubName, consistency } = useUserProfileDisplay();
 
   const today = todayWIB();
   const [selectedDate, setSelectedDate] = useState(
@@ -75,6 +79,10 @@ function DashboardContent() {
   const [allHubs, setAllHubs] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedHubDetail, setSelectedHubDetail] = useState<ClosingData | null>(null);
+  const [isLoadingSummaryToday, setIsLoadingSummaryToday] = useState(false);
+  const [isSendingSeaTalk, setIsSendingSeaTalk] = useState(false);
+  const [captureSummaryRow, setCaptureSummaryRow] = useState<ClosingData | null>(null);
+  const summaryCaptureRef = useRef<HTMLDivElement>(null);
 
   // Animasi 3D POV Kapten hanya berjalan saat sudah BENAR-BENAR BERHASIL LOGIN (?sail=1)
   // dan belum pernah diputar pada sesi ini
@@ -181,6 +189,103 @@ function DashboardContent() {
 
   const isToday = selectedDate === today;
 
+  const resolveUserSummaryRow = useCallback(async (): Promise<ClosingData> => {
+    if (!hubName) {
+      throw new Error("Hub user belum terdeteksi.");
+    }
+    const targetKey = hubName.toLowerCase().trim();
+    const alreadyLoaded = !isLoading
+      ? closingData.find((d) => d.nama_hub.toLowerCase().trim() === targetKey)
+      : undefined;
+    if (alreadyLoaded) return alreadyLoaded;
+
+    const params = new URLSearchParams({ date: selectedDate, hub: hubName });
+    const res = await fetch(`/api/dashboard?${params.toString()}`);
+    if (!res.ok) throw new Error("Gagal mengambil data summary hub.");
+    const json = await res.json();
+    const rows: ClosingData[] = json.closingData || [];
+    const match =
+      rows.find((d) => d.nama_hub.toLowerCase().trim() === targetKey) || rows[0];
+    if (!match) {
+      throw new Error(
+        `Data summary ${hubName} untuk tanggal ${formatDate(selectedDate)} tidak ditemukan.`
+      );
+    }
+    return match;
+  }, [hubName, selectedDate, isLoading, closingData]);
+
+  const handleOpenSummaryToday = useCallback(async () => {
+    if (!hubName) {
+      toast.error("Hub user belum terdeteksi.");
+      return;
+    }
+    setIsLoadingSummaryToday(true);
+    try {
+      const row = await resolveUserSummaryRow();
+      setSelectedHubDetail(row);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal memuat summary hub. Coba lagi.");
+    } finally {
+      setIsLoadingSummaryToday(false);
+    }
+  }, [hubName, resolveUserSummaryRow]);
+
+  const handleConfirmAndSendSeaTalk = useCallback(async () => {
+    if (isSendingSeaTalk) return;
+    setIsSendingSeaTalk(true);
+    const toastId = toast.loading("Mengambil screenshot Summary Today & mengirim ke SeaTalk...");
+
+    try {
+      const summaryRow = await resolveUserSummaryRow();
+      setCaptureSummaryRow(summaryRow);
+
+      // Tunggu render offscreen card Summary Today selesai
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      );
+
+      const targetEl = summaryCaptureRef.current;
+      if (!targetEl) {
+        throw new Error("Kartu Summary Today gagal dirender untuk screenshot.");
+      }
+
+      const { domToPng, domToJpeg } = await import("modern-screenshot");
+      let imageDataUrl = await domToPng(targetEl, {
+        scale: 2,
+      });
+
+      if (imageDataUrl.length > 2_600_000) {
+        imageDataUrl = await domToJpeg(targetEl, {
+          scale: 1.5,
+          quality: 0.92,
+        });
+      }
+
+      const res = await fetch("/api/seatalk/confirm-closing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: selectedDate,
+          imageDataUrl,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Gagal mengirim ke SeaTalk");
+      }
+
+      toast.success(json.message || "Berhasil dikirim ke SeaTalk!", { id: toastId });
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Gagal mengirim Confirm Closing ke SeaTalk",
+        { id: toastId }
+      );
+    } finally {
+      setCaptureSummaryRow(null);
+      setIsSendingSeaTalk(false);
+    }
+  }, [isSendingSeaTalk, resolveUserSummaryRow, selectedDate]);
+
   return (
     <>
       {showSail && (
@@ -221,37 +326,83 @@ function DashboardContent() {
               <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-500/75 via-amber-300/60 to-transparent" />
               <NauticalChartBackdrop />
 
-              <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3.5">
-                  <LighthouseBeaconIcon />
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                        Welcome Back Sailor
-                        {displayName && (
-                          <>
-                            {" "}
-                            <span className="text-amber-700 dark:text-amber-300">{displayName}</span>
-                          </>
+              <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3.5 sm:gap-5">
+                  <div className="flex items-center gap-3.5">
+                    <LighthouseBeaconIcon />
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                          Welcome Back Sailor
+                          {displayName && (
+                            <>
+                              {" "}
+                              <span className="text-amber-700 dark:text-amber-300">{displayName}</span>
+                            </>
+                          )}
+                        </h1>
+                        {consistency.isConsistent && (
+                          <ConsistentBadgePill reason={consistency.reason} />
                         )}
-                      </h1>
-                      {consistency.isConsistent && (
-                        <ConsistentBadgePill reason={consistency.reason} />
-                      )}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap font-medium">
+                        <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-semibold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
+                          Live Monitoring
+                        </span>
+                        <span className="text-slate-300 dark:text-slate-600">•</span>
+                        <span>
+                          {isToday
+                            ? "Hari ini — " + formatDate(selectedDate)
+                            : formatDate(selectedDate)}
+                        </span>
+                      </p>
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap font-medium">
-                      <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-                        Live Monitoring
-                      </span>
-                      <span className="text-slate-300 dark:text-slate-600">•</span>
-                      <span>
-                        {isToday
-                          ? "Hari ini — " + formatDate(selectedDate)
-                          : formatDate(selectedDate)}
-                      </span>
-                    </p>
                   </div>
+
+                  {hubName && (
+                    <>
+                      <div
+                        aria-hidden="true"
+                        className="hidden sm:block h-10 w-[1.5px] bg-gradient-to-b from-transparent via-amber-500/60 dark:via-amber-400/50 to-transparent"
+                      />
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={handleOpenSummaryToday}
+                          disabled={isLoadingSummaryToday}
+                          title={`Lihat summary closing & productivity ${hubName} (${formatDate(selectedDate)})`}
+                          className="group inline-flex items-center gap-2.5 pl-2 pr-3.5 py-1.5 rounded-xl text-sm font-bold bg-gradient-to-b from-white to-[#fcf7ec] hover:from-[#fffdf7] hover:to-[#faeecd] text-slate-800 border border-amber-300/80 hover:border-amber-500/85 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.1),inset_0_1px_0_rgba(255,255,255,0.9)] dark:from-[#16263f] dark:to-[#101c2f] dark:hover:from-[#1c304f] dark:hover:to-[#14233b] dark:text-amber-50 dark:border-amber-400/40 dark:hover:border-amber-300/80 dark:shadow-[inset_0_1px_0_rgba(253,230,138,0.12)] transition-all duration-150 cursor-pointer disabled:opacity-60"
+                        >
+                          <span className="w-7 h-7 rounded-lg bg-amber-100/90 dark:bg-amber-400/15 border border-amber-300/70 dark:border-amber-400/35 text-amber-700 dark:text-amber-300 flex items-center justify-center flex-shrink-0">
+                            {isLoadingSummaryToday ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <ClipboardList className="h-3.5 w-3.5" />
+                            )}
+                          </span>
+                          <span>Summary Today</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleConfirmAndSendSeaTalk}
+                          disabled={isSendingSeaTalk || isLoading}
+                          title={`Ambil screenshot Summary Today ${hubName} (${formatDate(selectedDate)}) & kirim ke grup SeaTalk`}
+                          className="group inline-flex items-center gap-2.5 pl-2 pr-3.5 py-1.5 rounded-xl text-sm font-bold bg-gradient-to-b from-[#1a2b46] to-[#0f1b2e] hover:from-[#213659] hover:to-[#132238] text-amber-50 border border-amber-400/55 hover:border-amber-300/85 shadow-[0_4px_12px_-4px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(253,230,138,0.2)] transition-all duration-150 cursor-pointer disabled:opacity-60"
+                        >
+                          <span className="w-7 h-7 rounded-lg bg-amber-400/15 border border-amber-300/40 text-amber-300 flex items-center justify-center flex-shrink-0">
+                            {isSendingSeaTalk ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Send className="h-3.5 w-3.5" />
+                            )}
+                          </span>
+                          <span>Confirm Closing &amp; Send Seatalk</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -305,6 +456,21 @@ function DashboardContent() {
             row={selectedHubDetail}
             onClose={() => setSelectedHubDetail(null)}
           />
+
+          {/* Offscreen Container untuk Screenshot Summary Today -> SeaTalk */}
+          {captureSummaryRow && (
+            <div
+              aria-hidden="true"
+              className="fixed -left-[99999px] top-0 pointer-events-none"
+            >
+              <div
+                ref={summaryCaptureRef}
+                className="w-[896px] p-3 bg-[#e8eef5] dark:bg-[#0b1120]"
+              >
+                <HubSummaryReportCard row={captureSummaryRow} />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </>

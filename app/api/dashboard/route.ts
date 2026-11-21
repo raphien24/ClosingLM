@@ -143,8 +143,11 @@ export async function GET(req: NextRequest) {
     };
 
     return NextResponse.json({
-      success: true, date: dateParam,
-      closingData: allData, kpi, allHubs: allHubsList,
+      success: true,
+      date: dateParam,
+      closingData: allData,
+      kpi,
+      allHubs: allHubsList,
     });
   } catch (err) {
     console.error("Dashboard error:", err);

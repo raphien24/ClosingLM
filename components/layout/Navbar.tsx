@@ -294,7 +294,10 @@ export function Navbar() {
       ? [{ href: "/hubs/new", label: "Tambahkan Hub Baru", iconId: "hubs" as const, badge: "Admin" }]
       : []),
     ...(isOwnerAdmin
-      ? [{ href: "/admin/manage", label: "Manage Admin", iconId: "admin" as const, badge: "Owner" }]
+      ? [
+          { href: "/admin/manage", label: "Manage Admin", iconId: "admin" as const, badge: "Owner" },
+          { href: "/settings", label: "Settings", iconId: "settings" as const, badge: "Owner" },
+        ]
       : []),
   ];
 
@@ -592,7 +595,7 @@ export function Navbar() {
                   <div className="py-1.5 px-1.5 border-b border-amber-400/15 space-y-0.5">
                     {accessLinks.map(({ href, label, iconId, badge }) => {
                       const active = pathname === href;
-                      const isHubs = iconId === "hubs" || iconId === "admin";
+                      const isHubs = iconId === "hubs" || iconId === "admin" || iconId === "settings";
                       return (
                         <Link
                           key={href}

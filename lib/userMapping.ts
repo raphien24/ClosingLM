@@ -83,7 +83,7 @@ export async function getAllUserMappings(): Promise<UserMapping[]> {
   return parseRowsToIndexedMappings(data).map(({ rowIndex: _rowIndex, ...rest }) => rest);
 }
 
-function splitHubList(rawHub: string): string[] {
+export function splitHubList(rawHub: string): string[] {
   return String(rawHub ?? "")
     .split(",")
     .map((h) => h.trim())

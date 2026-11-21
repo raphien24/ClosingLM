@@ -50,13 +50,13 @@ function MetricRow({
     <div
       className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border text-xs ${
         isManual
-          ? "bg-purple-50/70 border-purple-200"
-          : "bg-gray-50/80 border-gray-100"
+          ? "bg-purple-50/70 dark:bg-purple-950/50 border-purple-200 dark:border-purple-500/40"
+          : "bg-gray-50/80 dark:bg-slate-800/75 border-gray-100 dark:border-slate-700/70"
       }`}
     >
-      <span className="text-gray-600 font-medium">{label}</span>
+      <span className="text-gray-600 dark:text-slate-300 font-medium">{label}</span>
       <span className="inline-flex items-center gap-1.5">
-        <span className={`font-bold tabular-nums ${value === null || value === undefined ? "text-gray-400" : valueClass}`}>
+        <span className={`font-bold tabular-nums ${value === null || value === undefined ? "text-gray-400 dark:text-slate-500" : valueClass}`}>
           {formatted}
         </span>
         {isManual && (
@@ -93,11 +93,11 @@ function ProdRow({
       : true;
 
   return (
-    <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-gray-50/80 border border-gray-100 text-xs">
+    <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-gray-50/80 dark:bg-slate-800/75 border border-gray-100 dark:border-slate-700/70 text-xs">
       <div className="min-w-0">
-        <span className="text-gray-700 font-medium">{label}</span>
+        <span className="text-gray-700 dark:text-slate-200 font-medium">{label}</span>
         {hasTarget && (
-          <span className="ml-1.5 text-[10px] text-gray-400">
+          <span className="ml-1.5 text-[10px] text-gray-400 dark:text-slate-400">
             (Target {invertTarget ? "≤" : "≥"} {target})
           </span>
         )}
@@ -119,24 +119,13 @@ function ProdRow({
   );
 }
 
-export function HubClosingDetailModal({ row, onClose }: HubClosingDetailModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!row) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [row, onClose]);
-
-  if (!mounted || !row) return null;
-
+export function HubSummaryReportCard({
+  row,
+  onClose,
+}: {
+  row: ClosingData;
+  onClose?: () => void;
+}) {
   const hasData = !!row.submitted_at;
   const manualSet = new Set(row.manual_fields || []);
   const manualCount = manualSet.size;
@@ -148,99 +137,97 @@ export function HubClosingDetailModal({ row, onClose }: HubClosingDetailModalPro
       }) ?? row.submitted_at
     : null;
 
-  const deliveryRate =
-    row.fleet_delivered != null && row.in_hub_transported && row.in_hub_transported > 0
-      ? (row.fleet_delivered / row.in_hub_transported) * 100
-      : null;
+  const isModal = typeof onClose === "function";
 
-  const rateBadgeClass =
-    deliveryRate === null
-      ? "bg-gray-100 text-gray-600"
-      : deliveryRate >= 98
-      ? "bg-emerald-100 text-emerald-800"
-      : deliveryRate >= 95
-      ? "bg-amber-100 text-amber-800"
-      : "bg-rose-100 text-rose-700";
-
-  return createPortal(
+  return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="hub-detail-modal-title"
+      className={`bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden ${
+        isModal ? "max-h-[90vh] animate-dropdown" : ""
+      }`}
+      onClick={isModal ? (e) => e.stopPropagation() : undefined}
     >
-      <div
-        className="bg-white rounded-2xl border border-gray-200 shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-dropdown"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
-              <Building2 className="h-5 w-5 text-sky-700" />
+      {/* Header */}
+      <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3.5 min-w-0">
+          <div className="w-11 h-11 rounded-xl bg-sky-100 flex items-center justify-center flex-shrink-0">
+            <Building2 className="h-5 w-5 text-sky-700" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2
+                id="hub-detail-modal-title"
+                className="text-base sm:text-lg font-extrabold text-gray-900 truncate"
+              >
+                {row.nama_hub}
+              </h2>
+              {hasData ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Sudah Closing
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
+                  <AlertTriangle className="h-3 w-3" />
+                  Belum Submit
+                </span>
+              )}
+              {manualCount > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800">
+                  {manualCount} Input Manual
+                </span>
+              )}
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2
-                  id="hub-detail-modal-title"
-                  className="text-base sm:text-lg font-extrabold text-gray-900 truncate"
-                >
-                  {row.nama_hub}
-                </h2>
-                {hasData ? (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Sudah Closing
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
-                    <AlertTriangle className="h-3 w-3" />
-                    Belum Submit
-                  </span>
-                )}
-                {deliveryRate !== null && (
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${rateBadgeClass}`}>
-                    Delivery {deliveryRate.toFixed(1)}%
-                  </span>
-                )}
-                {manualCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800">
-                    {manualCount} Input Manual
-                  </span>
-                )}
-              </div>
 
-              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-                <span>Tanggal: <strong className="text-gray-700">{formatDate(row.tanggal)}</strong></span>
-                {updateTime && (
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5 text-gray-400" />
-                    Update {updateTime} WIB
-                  </span>
-                )}
-                {row.submitted_by && (
-                  <span className="inline-flex items-center gap-1">
-                    <UserCheck className="h-3.5 w-3.5 text-gray-400" />
-                    {row.submitted_by}
-                  </span>
-                )}
-              </div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+              <span>Tanggal: <strong className="text-gray-700">{formatDate(row.tanggal)}</strong></span>
+              {updateTime && (
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5 text-gray-400" />
+                  Update {updateTime} WIB
+                </span>
+              )}
+              {row.submitted_by && (
+                <span className="inline-flex items-center gap-1">
+                  <UserCheck className="h-3.5 w-3.5 text-gray-400" />
+                  {row.submitted_by}
+                </span>
+              )}
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Tutup detail closing"
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200/70 transition-colors cursor-pointer flex-shrink-0"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
 
-        {/* Body */}
-        <div className="p-5 overflow-y-auto space-y-5">
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {hasData && (
+            <div
+              aria-label="Original Report Approved"
+              className="select-none pointer-events-none -rotate-6 rounded-lg border-2 border-emerald-600/80 dark:border-emerald-400/80 p-[2px] bg-emerald-500/[0.06] dark:bg-emerald-400/10 shadow-[0_2px_10px_-2px_rgba(16,185,129,0.28)]"
+            >
+              <div className="rounded-[5px] border border-dashed border-emerald-600/70 dark:border-emerald-400/70 px-2.5 py-1 text-center text-emerald-700 dark:text-emerald-300">
+                <p className="text-[7px] sm:text-[8px] font-black tracking-[0.18em] uppercase leading-tight">
+                  ★ ORIGINAL REPORT ★
+                </p>
+                <p className="text-[11px] sm:text-xs font-black tracking-[0.2em] uppercase leading-tight mt-0.5">
+                  APPROVED
+                </p>
+              </div>
+            </div>
+          )}
+
+          {isModal && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Tutup detail closing"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-200/70 transition-colors cursor-pointer flex-shrink-0"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className={`p-5 space-y-5 ${isModal ? "overflow-y-auto" : ""}`}>
           {!hasData && (
             <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3 text-xs text-orange-800 flex items-center gap-2.5">
               <AlertTriangle className="h-4 w-4 text-orange-600 flex-shrink-0" />
@@ -253,32 +240,40 @@ export function HubClosingDetailModal({ row, onClose }: HubClosingDetailModalPro
 
           {/* Ringkasan Cepat */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/50 p-3">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase">Total Volume</p>
-              <p className="mt-1 text-xl font-extrabold text-indigo-700 tabular-nums">
+            <div className="rounded-xl border border-indigo-200 border-t-[3px] border-t-indigo-500 bg-indigo-50 p-3.5 shadow-2xs">
+              <p className="text-[11px] font-bold text-indigo-700/80 dark:text-indigo-200 uppercase tracking-wide">
+                Total Volume
+              </p>
+              <p className="mt-1 text-xl font-extrabold text-indigo-700 dark:text-indigo-300 tabular-nums">
                 {formatNumber(row.total_volume)}
               </p>
             </div>
-            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-3">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase">Fleet Delivered</p>
-              <p className="mt-1 text-xl font-extrabold text-emerald-700 tabular-nums">
+            <div className="rounded-xl border border-emerald-200 border-t-[3px] border-t-emerald-500 bg-emerald-50 p-3.5 shadow-2xs">
+              <p className="text-[11px] font-bold text-emerald-700/80 dark:text-emerald-200 uppercase tracking-wide">
+                Fleet Delivered
+              </p>
+              <p className="mt-1 text-xl font-extrabold text-emerald-700 dark:text-emerald-300 tabular-nums">
                 {formatNumber(row.fleet_delivered)}
               </p>
             </div>
-            <div className="rounded-xl border border-rose-200/80 bg-rose-50/50 p-3">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase">Total Backlog</p>
-              <p className="mt-1 text-xl font-extrabold text-rose-700 tabular-nums">
+            <div className="rounded-xl border border-rose-200 border-t-[3px] border-t-rose-500 bg-rose-50 p-3.5 shadow-2xs">
+              <p className="text-[11px] font-bold text-rose-700/80 dark:text-rose-200 uppercase tracking-wide">
+                Total Backlog
+              </p>
+              <p className="mt-1 text-xl font-extrabold text-rose-700 dark:text-rose-300 tabular-nums">
                 {formatNumber(row.backlog_total)}
                 {row.backlog_pct != null && (
-                  <span className="ml-1.5 text-xs font-bold text-rose-600">
+                  <span className="ml-1.5 text-xs font-bold text-rose-600 dark:text-rose-300">
                     ({row.backlog_pct.toFixed(1)}%)
                   </span>
                 )}
               </p>
             </div>
-            <div className="rounded-xl border border-orange-200/80 bg-orange-50/50 p-3">
-              <p className="text-[11px] font-semibold text-gray-500 uppercase">Total Expedite</p>
-              <p className="mt-1 text-xl font-extrabold text-orange-700 tabular-nums">
+            <div className="rounded-xl border border-amber-200 border-t-[3px] border-t-amber-500 bg-amber-50 p-3.5 shadow-2xs">
+              <p className="text-[11px] font-bold text-orange-700/80 dark:text-amber-200 uppercase tracking-wide">
+                Total Expedite
+              </p>
+              <p className="mt-1 text-xl font-extrabold text-orange-700 dark:text-amber-300 tabular-nums">
                 {formatNumber(row.total_expedite)}
               </p>
             </div>
@@ -354,17 +349,49 @@ export function HubClosingDetailModal({ row, onClose }: HubClosingDetailModalPro
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-3 text-xs text-gray-500">
-          <span>Tekan <kbd className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 font-mono text-[10px]">Esc</kbd> atau klik di luar jendela untuk menutup</span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
-          >
-            Tutup
-          </button>
-        </div>
+        {isModal && (
+          <div className="px-5 py-3 border-t border-gray-200 bg-gray-50 flex items-center justify-between gap-3 text-xs text-gray-500">
+            <span>Tekan <kbd className="px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 font-mono text-[10px]">Esc</kbd> atau klik di luar jendela untuk menutup</span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-1.5 rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        )}
       </div>
+  );
+}
+
+export function HubClosingDetailModal({ row, onClose }: HubClosingDetailModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!row) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [row, onClose]);
+
+  if (!mounted || !row) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-xs animate-fadeIn"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="hub-detail-modal-title"
+    >
+      <HubSummaryReportCard row={row} onClose={onClose} />
     </div>,
     document.body
   );
