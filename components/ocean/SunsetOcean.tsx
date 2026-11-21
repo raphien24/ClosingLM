@@ -307,20 +307,21 @@ export function SunsetOcean({
   const initialNormals = useMemo(() => _loadedWaterNormals ?? getFallbackWaterNormals(), []);
 
   useEffect(() => {
-    // Layer 1 dipakai untuk awak manusia agar terlihat di kamera utama tetapi dilewati mirrorCamera refleksi air
+    // Layer 1 (awak manusia) & Layer 2 (detail halus pulau) tampil di kamera utama tetapi dilewati mirrorCamera refleksi air
     camera.layers.enable(1);
+    camera.layers.enable(2);
   }, [camera]);
 
   const water = useMemo(() => {
     initialNormals.wrapS = initialNormals.wrapT = THREE.RepeatWrapping;
     const geo =
       quality === "high"
-        ? buildPolarGrid(48, 64, 1.0, 1.08)
-        : buildPolarGrid(36, 48, 1.15, 1.1);
+        ? buildPolarGrid(44, 60, 1.0, 1.09)
+        : buildPolarGrid(32, 42, 1.2, 1.12);
 
     const w = new Water(geo, {
-      textureWidth: quality === "high" ? 128 : 64,
-      textureHeight: quality === "high" ? 128 : 64,
+      textureWidth: quality === "high" ? 96 : 64,
+      textureHeight: quality === "high" ? 96 : 64,
       waterNormals: initialNormals,
       sunDirection: sun.clone(),
       sunColor: new THREE.Color("#ffc08a"),
@@ -429,7 +430,9 @@ export function GalleonShip({
   heading,
   speed = 0,
   travelOffset = 0,
+  travelOffsetRef,
   inPov = false,
+  enablePovRig = false,
   shipPoseRef,
   progressive = false,
   mobileCompact = false,
@@ -444,8 +447,12 @@ export function GalleonShip({
   speed?: number;
   /** Jarak maju tambahan yang dikendalikan dari luar (mis. saat akselerasi ke pulau) */
   travelOffset?: number;
+  /** Ref opsional agar perpindahan kapal selama transisi tidak memicu re-render React setiap frame */
+  travelOffsetRef?: React.MutableRefObject<number>;
   /** Mode First-Person POV Kapten */
   inPov?: boolean;
+  /** Pre-mount tangan POV Kapten sejak awal agar pergantian ke POV 0ms tanpa hitch */
+  enablePovRig?: boolean;
   /** Ref opsional agar kamera luar dapat mengikuti posisi & oleng kapal secara presisi */
   shipPoseRef?: React.MutableRefObject<ShipPose>;
   /** Kompilasi shader asinkron & tampilkan dek bertahap agar animasi ombak tidak macet saat login */
@@ -523,7 +530,7 @@ export function GalleonShip({
       Math.sin(t * (inPov ? 1.85 : 1.35)) * (inPov ? 0.22 : 0.34) +
       Math.sin(t * 0.85) * (inPov ? 0.08 : 0.14);
 
-    const totalDist = travel.current + travelOffset;
+    const totalDist = travel.current + (travelOffsetRef ? travelOffsetRef.current : travelOffset);
     const fx = Math.cos(heading);
     const fz = -Math.sin(heading);
     const px = position[0] + fx * totalDist;
@@ -575,7 +582,7 @@ export function GalleonShip({
     <group ref={headingRef}>
       <group ref={tiltRef}>
         {!hasExternalDeckLight && (
-          <pointLight position={[-5.65, 7.53, 0.15]} color="#ffcf87" intensity={2.6} distance={7.5} />
+          <pointLight position={[-5.75, 7.52, 0.28]} color="#ffdba0" intensity={3.8} distance={9.5} />
         )}
         <group ref={shipMeshRef} visible={shipReady}>
           <primitive object={model} />
@@ -584,6 +591,7 @@ export function GalleonShip({
         <Suspense fallback={null}>
           <ShipDeckCrew
             inPov={inPov}
+            enablePovRig={enablePovRig}
             wheelAngleRef={wheelAngleRef}
             progressive={progressive}
             mobileCompact={mobileCompact}

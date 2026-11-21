@@ -38,7 +38,7 @@ export default async function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{if(localStorage.getItem("jtt08_theme")==="dark"){document.documentElement.classList.add("dark")}}catch(e){}`,
+            __html: `try{if(localStorage.getItem("jtt08_theme")==="dark"){document.documentElement.classList.add("dark")}if((location.pathname==="/dashboard"||location.pathname.indexOf("/dashboard/")===0)&&location.search.indexOf("sail=1")!==-1&&!sessionStorage.getItem("jtt08_sail_played")){document.documentElement.setAttribute("data-sail-pending","1")}}catch(e){}`,
           }}
         />
       </head>

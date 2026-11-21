@@ -1,9 +1,8 @@
 "use client";
 
 /**
- * Pulau Tropis Realistis dengan Pantai Pasir Putih, Laguna Pirus,
- * Mercusuar Pantai, Dermaga Kayu & Perahu, Air Terjun Tebing,
- * Pohon Kelapa Melambai, Hutan Tropis, dan Huruf Besar 3D "LAST MILE" di Lereng Bukit.
+ * Pulau Tropis Realistis dengan Pantai Pasir Putih Melengkung (Teluk),
+ * Rimbun Pohon Kelapa Berlapis, Semak Hijau Tropis, dan Huruf 3D "LAST MILE".
  * Pulau menghadap ke arah -X (menyambut kapal yang melaju ke arah +X).
  */
 
@@ -45,43 +44,43 @@ function fbm(x: number, z: number, octaves = 4): number {
 }
 
 /**
- * Hitung ketinggian permukaan pulau pada koordinat lokal (lx, lz).
- * Bagian depan pulau (pantai pasir putih) berada di lx ≈ -55 .. -15,
- * lereng bukit utama (tempat tulisan JTT08) di lx ≈ -12 .. +18,
- * dan puncak bukit di lx ≈ +15 .. +45.
+ * Hitung ketinggian permukaan pulau tropis landai berbentuk teluk bulan sabit pada koordinat lokal (lx, lz).
+ * Sisi depan (-X) memiliki teluk pasir putih melengkung, diikuti gundukan rumput rendah (~7-11 m)
+ * yang menjadi tempat rimbun hutan kelapa dan tulisan 3D "LAST MILE".
  */
 export function getIslandHeight(lx: number, lz: number): number {
-  // Bentuk elips agak melengkung (teluk bulan sabit di sisi -X)
-  const bayCurve = Math.exp(-(lz * lz) / 2200) * 10;
-  const ex = (lx - bayCurve) / 78;
-  const ez = lz / 96;
-  const r2 = ex * ex + ez * ez;
-  if (r2 >= 1.25) return -2.5;
+  const ez = lz / 88;
+  if (Math.abs(ez) >= 1.12) return -2.2;
 
-  const mask = Math.max(0, 1 - r2);
-  const smoothMask = mask * mask * (3 - 2 * mask);
+  const wingEnvelope = Math.sqrt(Math.max(0, 1 - Math.min(1, ez * ez)));
+  const xBack = 52 * wingEnvelope;
+  // Teluk melengkung di bagian depan-tengah kanan (lz ≈ +8) seperti foto referensi
+  const coveCut = Math.exp(-((lz - 8) ** 2) / 420) * 32;
+  const xFront = -54 * wingEnvelope + coveCut;
 
-  // Pantai landai di sisi depan (-X), naik menjadi bukit di sisi tengah & belakang (+X)
-  const hillBias = THREE.MathUtils.smoothstep(lx, -38, 22);
+  if (lx < xFront - 12 || lx > xBack + 12) return -2.2;
 
-  // Tiga punggung bukit tropis: bukit utama di tengah + dua bukit pengapit
-  const mainPeak = Math.exp(-((lx - 18) ** 2) / 950 - (lz ** 2) / 1800) * 42;
-  const leftPeak = Math.exp(-((lx - 24) ** 2) / 700 - ((lz + 48) ** 2) / 950) * 32;
-  const rightPeak = Math.exp(-((lx - 22) ** 2) / 750 - ((lz - 46) ** 2) / 900) * 30;
+  const span = Math.max(8, xBack - xFront);
+  const ux = (lx - (xFront + xBack) * 0.5) / (span * 0.5);
+  const inner = Math.max(0, 1 - ux * ux) * Math.max(0, 1 - ez * ez);
+  if (inner <= 0) return -2.2;
 
-  // Lereng rata khusus di bagian depan bukit utama untuk dudukan tulisan JTT08
-  const signTerrace =
-    Math.exp(-((lx + 2) ** 2) / 360 - (lz ** 2) / 1400) * 16.5;
+  const smoothMask = inner * inner * (3 - 2 * inner);
+  const hillBias = THREE.MathUtils.smoothstep(ux, -0.55, 0.35);
 
-  // Detail punggung bukit alami (FBM)
-  const detail = fbm(lx * 0.045 + 3.1, lz * 0.045 + 7.4, 4) * (4.5 + hillBias * 7.5);
-  const baseBeach = smoothMask * 5.2;
+  // Gundukan hutan tengah yang landai (tanpa gunung tebing tinggi)
+  const mainKnoll = Math.exp(-((lx - 14) ** 2) / 1450 - (lz ** 2) / 2800) * 7.6;
+  const leftKnoll = Math.exp(-((lx - 12) ** 2) / 900 - ((lz + 42) ** 2) / 1100) * 4.8;
+  const rightKnoll = Math.exp(-((lx - 14) ** 2) / 900 - ((lz - 44) ** 2) / 1100) * 4.6;
 
-  const h =
-    baseBeach +
-    (mainPeak + leftPeak + rightPeak + signTerrace + detail) * smoothMask * (0.25 + 0.75 * hillBias);
+  // Permukaan berumput alami tepat di belakang garis teluk untuk dudukan "LAST MILE"
+  const signBerm = Math.exp(-((lx + 10) ** 2) / 140 - (lz ** 2) / 520) * 4.1;
 
-  return h - 0.6;
+  // Variasi kontur pasir & gundukan rumput organik halus
+  const detail = fbm(lx * 0.052 + 2.7, lz * 0.052 + 6.1, 3) * (0.65 + hillBias * 1.15);
+  const beachRamp = Math.pow(inner, 0.72) * 4.1;
+
+  return -1.6 + beachRamp + smoothMask * (mainKnoll + leftKnoll + rightKnoll + signBerm + detail) * (0.42 + 0.58 * hillBias);
 }
 
 // ── Tekstur Prosedural Daun Kelapa & Permukaan Pulau ───────────
@@ -184,14 +183,16 @@ function getTerrainDetailTexture(): THREE.CanvasTexture | null {
   return tex;
 }
 
-// ── Komponen Pohon Kelapa Realistis (CoconutPalmTree) ──────────
+// ── Komponen Pohon Kelapa Instanced (PalmGrovesInstanced) ──────
 
 interface SharedPalmAssets {
+  trunkGeo: THREE.BufferGeometry;
   frondGeo: THREE.BufferGeometry;
   coconutGeo: THREE.SphereGeometry;
   trunkMat: THREE.MeshStandardMaterial;
   frondMat: THREE.MeshStandardMaterial;
   coconutMat: THREE.MeshStandardMaterial;
+  crownLocalPos: THREE.Vector3;
 }
 
 let _sharedPalmAssets: SharedPalmAssets | null = null;
@@ -199,123 +200,222 @@ let _sharedPalmAssets: SharedPalmAssets | null = null;
 function getSharedPalmAssets(): SharedPalmAssets {
   if (_sharedPalmAssets) return _sharedPalmAssets;
 
-  const frondGeo = new THREE.PlaneGeometry(5.2, 2.35, 10, 4);
+  const h = 8.4;
+  const leanAngle = 0.2;
+  const dx = Math.sin(leanAngle) * h;
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(dx * 0.35, h * 0.33, 0),
+    new THREE.Vector3(dx * 0.75, h * 0.68, 0),
+    new THREE.Vector3(dx, h, 0),
+  ]);
+  const trunkGeo = new THREE.TubeGeometry(curve, 8, 0.28, 6, false);
+  const tPos = trunkGeo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < tPos.count; i++) {
+    v.fromBufferAttribute(tPos, i);
+    const t = Math.max(0, Math.min(1, v.y / h));
+    const center = curve.getPointAt(t);
+    const ring = 1 + Math.sin(t * 55) * 0.06;
+    const taper = (1 - t * 0.44) * ring;
+    v.sub(center).multiplyScalar(taper).add(center);
+    tPos.setXYZ(i, v.x, v.y, v.z);
+  }
+  trunkGeo.computeVertexNormals();
+
+  // Pelepah kelapa lebar & melengkung penuh (seperti kanopi lebat pada referensi)
+  const frondGeo = new THREE.PlaneGeometry(6.8, 3.15, 8, 3);
   frondGeo.rotateX(-Math.PI / 2);
-  frondGeo.translate(2.55, 0, 0);
+  frondGeo.translate(3.3, 0, 0);
   const pos = frondGeo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    const u = Math.max(0, x / 5.2);
-    const archY = Math.sin(u * Math.PI * 0.78) * 0.72 - u * u * 1.45;
-    const vFold = -Math.abs(z) * 0.28;
+    const u = Math.max(0, x / 6.8);
+    const archY = Math.sin(u * Math.PI * 0.78) * 0.92 - u * u * 1.72;
+    const vFold = -Math.abs(z) * 0.3;
     pos.setY(i, pos.getY(i) + archY + vFold);
   }
   frondGeo.computeVertexNormals();
 
-  const coconutGeo = new THREE.SphereGeometry(0.14, 8, 8);
+  const coconutGeo = new THREE.SphereGeometry(0.15, 7, 7);
   const trunkMat = new THREE.MeshStandardMaterial({
-    color: "#6b533e",
-    roughness: 0.88,
+    color: "#5c4632",
+    roughness: 0.9,
     metalness: 0.02,
   });
   const frondMat = new THREE.MeshStandardMaterial({
+    color: "#ffffff",
     map: getPalmFrondTexture(),
-    alphaTest: 0.35,
+    alphaTest: 0.32,
     side: THREE.DoubleSide,
-    roughness: 0.6,
-    metalness: 0.04,
+    emissive: "#2b4d16",
+    emissiveIntensity: 0.28,
+    roughness: 0.54,
+    metalness: 0.02,
   });
   const coconutMat = new THREE.MeshStandardMaterial({
     color: "#4a3219",
     roughness: 0.65,
   });
 
-  _sharedPalmAssets = { frondGeo, coconutGeo, trunkMat, frondMat, coconutMat };
+  _sharedPalmAssets = {
+    trunkGeo,
+    frondGeo,
+    coconutGeo,
+    trunkMat,
+    frondMat,
+    coconutMat,
+    crownLocalPos: new THREE.Vector3(dx, h, 0),
+  };
   return _sharedPalmAssets;
 }
 
-function CoconutPalmTree({
-  position,
-  scale = 1,
-  leanAngle = 0.22,
-  leanYaw = Math.PI,
-  isLowSpec = false,
-}: {
-  position: [number, number, number];
-  scale?: number;
-  leanAngle?: number;
-  leanYaw?: number;
-  phase?: number;
-  isLowSpec?: boolean;
-}) {
-  const { frondGeo, coconutGeo, trunkMat, frondMat, coconutMat } = useMemo(
+interface PalmPlacement {
+  pos: [number, number, number];
+  scale: number;
+  leanYaw: number;
+}
+
+function PalmGrovesInstanced({ palms }: { palms: PalmPlacement[] }) {
+  const { trunkGeo, frondGeo, coconutGeo, trunkMat, frondMat, coconutMat, crownLocalPos } = useMemo(
     () => getSharedPalmAssets(),
     []
   );
+  const trunkRef = useRef<THREE.InstancedMesh>(null);
+  const frondRef = useRef<THREE.InstancedMesh>(null);
+  const coconutRef = useRef<THREE.InstancedMesh>(null);
 
-  // Batang kelapa melengkung dengan cincin ruas kulit kayu
-  const { trunkGeo, crownPos } = useMemo(() => {
-    const h = 9.2;
-    const dx = Math.cos(leanYaw) * Math.sin(leanAngle) * h;
-    const dz = Math.sin(leanYaw) * Math.sin(leanAngle) * h;
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(dx * 0.35, h * 0.33, dz * 0.35),
-      new THREE.Vector3(dx * 0.75, h * 0.68, dz * 0.75),
-      new THREE.Vector3(dx, h, dz),
-    ]);
-    const geo = new THREE.TubeGeometry(curve, isLowSpec ? 6 : 9, 0.24, isLowSpec ? 5 : 7, false);
-    // Buat batang mengecil dari pangkal ke pucuk + guratan cincin kelapa
-    const posAttr = geo.attributes.position;
-    const v = new THREE.Vector3();
-    for (let i = 0; i < posAttr.count; i++) {
-      v.fromBufferAttribute(posAttr, i);
-      const t = Math.max(0, Math.min(1, v.y / h));
-      const center = curve.getPointAt(t);
-      const ring = 1 + Math.sin(t * 55) * 0.06;
-      const taper = (1 - t * 0.48) * ring;
-      v.sub(center).multiplyScalar(taper).add(center);
-      posAttr.setXYZ(i, v.x, v.y, v.z);
-    }
-    geo.computeVertexNormals();
-    return { trunkGeo: geo, crownPos: [dx, h, dz] as [number, number, number] };
-  }, [leanAngle, leanYaw, isLowSpec]);
+  const frondsPerTree = 12;
+  const coconutsPerTree = 3;
 
-  const frondCount = isLowSpec ? 6 : 9;
-  const fronds = useMemo(
-    () =>
-      Array.from({ length: frondCount }, (_, i) => ({
-        yaw: (i / frondCount) * Math.PI * 2 + (i % 2) * 0.14,
-        pitch: i % 3 === 0 ? 0.36 : i % 3 === 1 ? 0.08 : -0.14,
-        roll: ((i % 3) - 1) * 0.16,
-        scale: i % 2 === 0 ? 1.05 : 0.9,
-      })),
-    [frondCount]
-  );
+  useEffect(() => {
+    const trunkInst = trunkRef.current;
+    const frondInst = frondRef.current;
+    const cocoInst = coconutRef.current;
+    if (!trunkInst || !frondInst || !cocoInst) return;
+
+    // Layer 2: render di kamera utama, lewati mirrorCamera refleksi air
+    trunkInst.layers.set(2);
+    frondInst.layers.set(2);
+    cocoInst.layers.set(2);
+
+    const frondTints = [
+      new THREE.Color("#ffffff"),
+      new THREE.Color("#eef6cc"),
+      new THREE.Color("#cfe4a3"),
+      new THREE.Color("#bdd894"),
+      new THREE.Color("#f5f5c6"),
+    ];
+
+    const treeDummy = new THREE.Object3D();
+    const childDummy = new THREE.Object3D();
+    const worldM = new THREE.Matrix4();
+    let fIdx = 0;
+    let cIdx = 0;
+
+    palms.forEach((p, tIdx) => {
+      treeDummy.position.set(...p.pos);
+      treeDummy.rotation.set(0, -p.leanYaw, 0);
+      treeDummy.scale.setScalar(p.scale);
+      treeDummy.updateMatrix();
+      trunkInst.setMatrixAt(tIdx, treeDummy.matrix);
+
+      for (let i = 0; i < frondsPerTree; i++) {
+        const tier = i % 3;
+        const yaw = (i / frondsPerTree) * Math.PI * 2 + tier * 0.21 + tIdx * 0.41;
+        const pitch = tier === 0 ? 0.44 : tier === 1 ? 0.04 : -0.34;
+        const roll = (tier - 1) * 0.2;
+        const fScale = tier === 1 ? 1.12 : 0.96;
+        childDummy.position.copy(crownLocalPos);
+        childDummy.rotation.set(roll, yaw, pitch);
+        childDummy.scale.setScalar(fScale);
+        childDummy.updateMatrix();
+        worldM.multiplyMatrices(treeDummy.matrix, childDummy.matrix);
+        frondInst.setMatrixAt(fIdx, worldM);
+        frondInst.setColorAt(fIdx, frondTints[(tIdx + i) % frondTints.length]);
+        fIdx++;
+      }
+
+      for (let i = 0; i < coconutsPerTree; i++) {
+        const a = i * 2.1 + tIdx * 0.5;
+        childDummy.position.set(
+          crownLocalPos.x + Math.cos(a) * 0.22,
+          crownLocalPos.y - 0.18,
+          crownLocalPos.z + Math.sin(a) * 0.22
+        );
+        childDummy.rotation.set(0, 0, 0);
+        childDummy.scale.setScalar(1);
+        childDummy.updateMatrix();
+        worldM.multiplyMatrices(treeDummy.matrix, childDummy.matrix);
+        cocoInst.setMatrixAt(cIdx++, worldM);
+      }
+    });
+
+    trunkInst.instanceMatrix.needsUpdate = true;
+    frondInst.instanceMatrix.needsUpdate = true;
+    if (frondInst.instanceColor) frondInst.instanceColor.needsUpdate = true;
+    cocoInst.instanceMatrix.needsUpdate = true;
+  }, [palms, crownLocalPos]);
 
   return (
-    <group position={position} scale={scale}>
-      <mesh geometry={trunkGeo} material={trunkMat} />
-      <group position={crownPos}>
-        {/* Buah kelapa hanya pada mode standar */}
-        {!isLowSpec &&
-          [0, 2.2, 4.4].map((a, idx) => (
-            <mesh
-              key={idx}
-              position={[Math.cos(a) * 0.22, -0.18, Math.sin(a) * 0.22]}
-              geometry={coconutGeo}
-              material={coconutMat}
-            />
-          ))}
-        {/* Pelepah daun kelapa */}
-        {fronds.map((f, idx) => (
-          <group key={idx} rotation={[f.roll, f.yaw, f.pitch]} scale={f.scale}>
-            <mesh geometry={frondGeo} material={frondMat} />
-          </group>
-        ))}
-      </group>
+    <group>
+      <instancedMesh ref={trunkRef} args={[trunkGeo, trunkMat, palms.length]} />
+      <instancedMesh ref={frondRef} args={[frondGeo, frondMat, palms.length * frondsPerTree]} />
+      <instancedMesh ref={coconutRef} args={[coconutGeo, coconutMat, palms.length * coconutsPerTree]} />
     </group>
+  );
+}
+
+/** Rumpun palem muda / pakis rendah di sepanjang tepi pantai berumput (1 draw call) */
+function LowYoungPalmsInstanced({ spots }: { spots: PalmPlacement[] }) {
+  const { frondGeo, frondMat } = useMemo(() => getSharedPalmAssets(), []);
+  const meshRef = useRef<THREE.InstancedMesh>(null);
+  const frondsPerCluster = 7;
+
+  useEffect(() => {
+    const inst = meshRef.current;
+    if (!inst) return;
+    inst.layers.set(2);
+
+    const youngTints = [
+      new THREE.Color("#f0f9c2"),
+      new THREE.Color("#d9f0a4"),
+      new THREE.Color("#ffffff"),
+      new THREE.Color("#c4e48e"),
+    ];
+
+    const baseDummy = new THREE.Object3D();
+    const leafDummy = new THREE.Object3D();
+    const worldM = new THREE.Matrix4();
+    let idx = 0;
+
+    spots.forEach((s, sIdx) => {
+      baseDummy.position.set(s.pos[0], s.pos[1] + 0.35, s.pos[2]);
+      baseDummy.rotation.set(0, s.leanYaw, 0);
+      baseDummy.scale.setScalar(s.scale);
+      baseDummy.updateMatrix();
+
+      for (let i = 0; i < frondsPerCluster; i++) {
+        const yaw = (i / frondsPerCluster) * Math.PI * 2 + sIdx * 0.55;
+        const pitch = i % 2 === 0 ? 0.34 : 0.14;
+        leafDummy.position.set(0, 0, 0);
+        leafDummy.rotation.set(((i % 3) - 1) * 0.12, yaw, pitch);
+        leafDummy.scale.setScalar(i % 2 === 0 ? 0.96 : 0.8);
+        leafDummy.updateMatrix();
+        worldM.multiplyMatrices(baseDummy.matrix, leafDummy.matrix);
+        inst.setMatrixAt(idx, worldM);
+        inst.setColorAt(idx, youngTints[(sIdx + i) % youngTints.length]);
+        idx++;
+      }
+    });
+
+    inst.instanceMatrix.needsUpdate = true;
+    if (inst.instanceColor) inst.instanceColor.needsUpdate = true;
+  }, [spots]);
+
+  return (
+    <instancedMesh ref={meshRef} args={[frondGeo, frondMat, spots.length * frondsPerCluster]} />
   );
 }
 
@@ -458,17 +558,17 @@ function createLetterShapes(): LetterShapeDef[] {
   ];
 }
 
-const SIGN_LOCAL_X = -2.5;
-const SIGN_SCALE = 0.66;
+const SIGN_LOCAL_X = -10;
+const SIGN_SCALE = 0.56;
 const SIGN_GAP = 1.15;
 
 function getUniformSignBaseY() {
-  return Math.max(21.2, getIslandHeight(SIGN_LOCAL_X, 0) - 1.2);
+  return Math.max(7.2, getIslandHeight(SIGN_LOCAL_X, 0) - 0.35);
 }
 
 /**
  * Titik tengah (koordinat lokal pulau) papan 3D "LAST MILE" agar animasi zoom kamera
- * tepat mengarah ke tulisan di lereng bukit pada berbagai rasio layar.
+ * tepat mengarah ke tulisan di tepi hutan kelapa pada berbagai rasio layar.
  */
 export function getIslandSignMetrics() {
   const defs = createLetterShapes();
@@ -485,38 +585,46 @@ export function getIslandSignMetrics() {
   };
 }
 
-function HillsideLastMileSign({ isLowSpec = false }: { isLowSpec?: boolean }) {
-  const letters = useMemo(() => {
-    const defs = createLetterShapes();
-    const totalW =
-      defs.reduce((s, d) => s + d.width + (d.extraGapBefore || 0), 0) +
-      SIGN_GAP * (defs.length - 1);
-    let cursor = -totalW / 2;
-    const baseY = getUniformSignBaseY();
+let _cachedLastMileLetters:
+  | { geo: THREE.BufferGeometry; char: string; zStart: number; width: number; baseY: number; strutXs: number[] }[]
+  | null = null;
 
-    return defs.map((d) => {
-      cursor += d.extraGapBefore || 0;
-      const geo = new THREE.ExtrudeGeometry(d.shapes, {
-        depth: 1.85,
-        bevelEnabled: true,
-        bevelThickness: 0.24,
-        bevelSize: 0.18,
-        bevelSegments: 2,
-      });
-      const zStart = cursor * SIGN_SCALE;
-      cursor += d.width + SIGN_GAP;
-      return { geo, char: d.char, zStart, width: d.width, baseY, strutXs: d.strutXs };
+function getCachedLastMileLetters() {
+  if (_cachedLastMileLetters) return _cachedLastMileLetters;
+  const defs = createLetterShapes();
+  const totalW =
+    defs.reduce((s, d) => s + d.width + (d.extraGapBefore || 0), 0) +
+    SIGN_GAP * (defs.length - 1);
+  let cursor = -totalW / 2;
+  const baseY = getUniformSignBaseY();
+
+  _cachedLastMileLetters = defs.map((d) => {
+    cursor += d.extraGapBefore || 0;
+    const geo = new THREE.ExtrudeGeometry(d.shapes, {
+      depth: 1.75,
+      bevelEnabled: true,
+      bevelThickness: 0.22,
+      bevelSize: 0.16,
+      bevelSegments: 2,
     });
-  }, []);
+    const zStart = cursor * SIGN_SCALE;
+    cursor += d.width + SIGN_GAP;
+    return { geo, char: d.char, zStart, width: d.width, baseY, strutXs: d.strutXs };
+  });
+  return _cachedLastMileLetters;
+}
+
+function HillsideLastMileSign({ isLowSpec = false }: { isLowSpec?: boolean }) {
+  const letters = useMemo(() => getCachedLastMileLetters(), []);
 
   const frontMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#fffdf7",
-        emissive: "#ffd59c",
-        emissiveIntensity: 0.42,
-        roughness: 0.28,
-        metalness: 0.08,
+        color: "#fdfaf3",
+        emissive: "#ffe0b2",
+        emissiveIntensity: 0.34,
+        roughness: 0.32,
+        metalness: 0.06,
       }),
     []
   );
@@ -524,11 +632,11 @@ function HillsideLastMileSign({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const sideMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#c48c58",
-        emissive: "#5a3818",
-        emissiveIntensity: 0.18,
-        roughness: 0.48,
-        metalness: 0.22,
+        color: "#a87e54",
+        emissive: "#482e18",
+        emissiveIntensity: 0.14,
+        roughness: 0.52,
+        metalness: 0.18,
       }),
     []
   );
@@ -536,9 +644,9 @@ function HillsideLastMileSign({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const strutMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#3d352e",
-        roughness: 0.7,
-        metalness: 0.4,
+        color: "#332a22",
+        roughness: 0.78,
+        metalness: 0.25,
       }),
     []
   );
@@ -546,9 +654,9 @@ function HillsideLastMileSign({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const terraceMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: "#574c42",
-        roughness: 0.85,
-        metalness: 0.08,
+        color: "#4f4336",
+        roughness: 0.88,
+        metalness: 0.04,
       }),
     []
   );
@@ -556,303 +664,58 @@ function HillsideLastMileSign({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const letterMats = useMemo(() => [frontMat, sideMat], [frontMat, sideMat]);
   const baseY = getUniformSignBaseY();
 
+  const strutCount = useMemo(
+    () => letters.reduce((s, l) => s + l.strutXs.length, 0),
+    [letters]
+  );
+  const strutRef = useRef<THREE.InstancedMesh>(null);
+
+  useEffect(() => {
+    const inst = strutRef.current;
+    if (!inst) return;
+    inst.layers.set(2);
+    const dummy = new THREE.Object3D();
+    let idx = 0;
+    for (const l of letters) {
+      for (const sx of l.strutXs) {
+        dummy.position.set(
+          1.35 * SIGN_SCALE,
+          l.baseY + 3.6 * SIGN_SCALE,
+          l.zStart + sx * SIGN_SCALE
+        );
+        dummy.rotation.set(0, 0, -0.32);
+        dummy.scale.setScalar(SIGN_SCALE);
+        dummy.updateMatrix();
+        inst.setMatrixAt(idx++, dummy.matrix);
+      }
+    }
+    inst.instanceMatrix.needsUpdate = true;
+  }, [letters]);
+
   return (
     /* Diputar menghadap -X (ke arah kapal yang mendekat):
        sumbu X lokal ExtrudeGeometry mengarah ke +Z dunia */
-    <group position={[SIGN_LOCAL_X, 0, 6.5]}>
-      {/* Lampu sorot senja menerangi permukaan huruf LAST MILE */}
-      {!isLowSpec && (
-        <pointLight position={[-18, 32, 0]} color="#ffd9a0" intensity={52} distance={110} decay={1} />
-      )}
-
-      {/* Fondasi teras batu penopang di bawah barisan huruf LAST MILE */}
-      <mesh position={[0.4, baseY - 0.55, 0]} material={terraceMat}>
-        <boxGeometry args={[2.8, 1.1, 39.5]} />
+    <group position={[SIGN_LOCAL_X, 0, 0]}>
+      {/* Dudukan batu & kayu rendah yang menyatu dengan gundukan rumput pantai */}
+      <mesh position={[0.45, baseY - 0.52, 0]} material={terraceMat}>
+        <boxGeometry args={[2.2, 1.05, 34.5]} />
       </mesh>
 
       {letters.map((l, idx) => (
         <group key={idx} position={[0, l.baseY, l.zStart]} rotation={[0, -Math.PI / 2, 0]} scale={SIGN_SCALE}>
           <mesh geometry={l.geo} material={letterMats} />
-          {/* Tiang penyangga baja di belakang masing-masing batang huruf */}
-          {l.strutXs.map((sx, sIdx) => (
-            <mesh key={sIdx} position={[sx, 4.2, -1.3]} rotation={[0.28, 0, 0]} material={strutMat}>
-              <cylinderGeometry args={[0.14, 0.18, 12.5, 6]} />
-            </mesh>
-          ))}
-        </group>
-      ))}
-    </group>
-  );
-}
-
-// ── Mercusuar Tanjung Pantai (IslandLighthouse) ───────────────
-
-function IslandLighthouse() {
-  const beamRef = useRef<THREE.Group>(null);
-  const lx = -26;
-  const lz = -62;
-  const baseH = useMemo(() => Math.max(2.6, getIslandHeight(lx, lz)), [lx, lz]);
-
-  const mats = useMemo(() => {
-    const stone = new THREE.MeshStandardMaterial({ color: "#685e54", roughness: 0.88 });
-    const white = new THREE.MeshStandardMaterial({
-      color: "#faf5ec",
-      emissive: "#ffe4b8",
-      emissiveIntensity: 0.08,
-      roughness: 0.45,
-    });
-    const red = new THREE.MeshStandardMaterial({
-      color: "#b8332a",
-      emissive: "#5a1410",
-      emissiveIntensity: 0.08,
-      roughness: 0.48,
-    });
-    const darkIron = new THREE.MeshStandardMaterial({
-      color: "#22262c",
-      roughness: 0.42,
-      metalness: 0.72,
-    });
-    const glass = new THREE.MeshStandardMaterial({
-      color: "#fff5d6",
-      emissive: "#ffcf70",
-      emissiveIntensity: 1.4,
-      roughness: 0.15,
-    });
-    const beam = new THREE.MeshBasicMaterial({
-      color: "#ffe4a8",
-      transparent: true,
-      opacity: 0.2,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-    });
-    return { stone, white, red, darkIron, glass, beam };
-  }, []);
-
-  useFrame(({ clock }) => {
-    if (beamRef.current) {
-      beamRef.current.rotation.y = clock.elapsedTime * 0.75;
-    }
-  });
-
-  return (
-    <group position={[lx, baseH - 0.3, lz]}>
-      {/* Fondasi batu karang & podium oktagonal mercusuar */}
-      <mesh position={[0, 0.9, 0]} material={mats.stone}>
-        <cylinderGeometry args={[3.9, 4.8, 2.2, 10]} />
-      </mesh>
-      <mesh position={[0, 2.4, 0]} material={mats.white}>
-        <cylinderGeometry args={[2.7, 3.1, 1.2, 16]} />
-      </mesh>
-
-      {/* Menara belang merah-putih klasik (5 segmen bertingkat) */}
-      <mesh position={[0, 4.5, 0]} material={mats.red}>
-        <cylinderGeometry args={[2.38, 2.65, 3.2, 18]} />
-      </mesh>
-      <mesh position={[0, 7.6, 0]} material={mats.white}>
-        <cylinderGeometry args={[2.1, 2.38, 3.1, 18]} />
-      </mesh>
-      <mesh position={[0, 10.6, 0]} material={mats.red}>
-        <cylinderGeometry args={[1.84, 2.1, 3.0, 18]} />
-      </mesh>
-      <mesh position={[0, 13.5, 0]} material={mats.white}>
-        <cylinderGeometry args={[1.62, 1.84, 2.9, 18]} />
-      </mesh>
-      <mesh position={[0, 16.1, 0]} material={mats.red}>
-        <cylinderGeometry args={[1.48, 1.62, 2.4, 18]} />
-      </mesh>
-
-      {/* Balkon galeri besi & pagar */}
-      <mesh position={[0, 17.45, 0]} material={mats.darkIron}>
-        <cylinderGeometry args={[2.05, 1.72, 0.42, 18]} />
-      </mesh>
-      <mesh position={[0, 17.85, 0]} material={mats.darkIron}>
-        <torusGeometry args={[1.98, 0.07, 8, 24]} />
-      </mesh>
-
-      {/* Ruang lentera kaca bercahaya */}
-      <mesh position={[0, 18.75, 0]} material={mats.glass}>
-        <cylinderGeometry args={[1.32, 1.32, 2.2, 14]} />
-      </mesh>
-
-      {/* Kubah atap mercusuar & penangkal petir */}
-      <mesh position={[0, 20.1, 0]} material={mats.red}>
-        <coneGeometry args={[1.65, 1.6, 16]} />
-      </mesh>
-      <mesh position={[0, 21.3, 0]} material={mats.darkIron}>
-        <cylinderGeometry args={[0.04, 0.06, 1.2, 8]} />
-      </mesh>
-
-      {/* Sorot cahaya suar berputar ganda */}
-      <group ref={beamRef} position={[0, 18.8, 0]}>
-        <mesh position={[18, 0, 0]} rotation={[0, 0, Math.PI / 2]} material={mats.beam}>
-          <coneGeometry args={[4.6, 36, 16, 1, true]} />
-        </mesh>
-        <mesh position={[-18, 0, 0]} rotation={[0, 0, -Math.PI / 2]} material={mats.beam}>
-          <coneGeometry args={[4.6, 36, 16, 1, true]} />
-        </mesh>
-      </group>
-    </group>
-  );
-}
-
-// ── Dermaga Kayu Pelabuhan, Gudang Pantai & Perahu Berlabuh ───
-
-function IslandHarborDock() {
-  const boatRef = useRef<THREE.Group>(null);
-  const mats = useMemo(() => {
-    const woodDeck = new THREE.MeshStandardMaterial({ color: "#6e4b2e", roughness: 0.82 });
-    const darkPiling = new THREE.MeshStandardMaterial({ color: "#3d2716", roughness: 0.9 });
-    const cabinWall = new THREE.MeshStandardMaterial({ color: "#8c623d", roughness: 0.78 });
-    const cabinRoof = new THREE.MeshStandardMaterial({ color: "#7c2d1e", roughness: 0.72 });
-    const crateMat = new THREE.MeshStandardMaterial({ color: "#a67946", roughness: 0.8 });
-    const lanternGlow = new THREE.MeshStandardMaterial({
-      color: "#fff3c4",
-      emissive: "#ffba42",
-      emissiveIntensity: 1.75,
-      roughness: 0.2,
-    });
-    const hullMat = new THREE.MeshStandardMaterial({ color: "#4e2e18", roughness: 0.68 });
-    const sailTrim = new THREE.MeshStandardMaterial({ color: "#efe4cf", roughness: 0.75 });
-    return { woodDeck, darkPiling, cabinWall, cabinRoof, crateMat, lanternGlow, hullMat, sailTrim };
-  }, []);
-
-  useFrame(({ clock }) => {
-    if (boatRef.current) {
-      const t = clock.elapsedTime;
-      boatRef.current.position.y = 0.42 + Math.sin(t * 1.9) * 0.08;
-      boatRef.current.rotation.z = Math.sin(t * 1.5) * 0.04;
-      boatRef.current.rotation.x = Math.cos(t * 1.3) * 0.03;
-    }
-  });
-
-  const pilings = useMemo(() => [-38, -45, -52, -59, -66, -73], []);
-
-  return (
-    <group position={[0, 0, 7]}>
-      {/* Lantai utama dermaga kayu menjorok dari pantai pasir (-34) ke laut (-75) */}
-      <mesh position={[-54.5, 1.55, 0]} material={mats.woodDeck}>
-        <boxGeometry args={[41, 0.38, 4.6]} />
-      </mesh>
-      {/* Balok pembatas tepi kiri & kanan dermaga */}
-      <mesh position={[-54.5, 1.82, 2.15]} material={mats.darkPiling}>
-        <boxGeometry args={[41, 0.22, 0.26]} />
-      </mesh>
-      <mesh position={[-54.5, 1.82, -2.15]} material={mats.darkPiling}>
-        <boxGeometry args={[41, 0.22, 0.26]} />
-      </mesh>
-
-      {/* Tiang pancang kayu penyangga dermaga & lentera pelabuhan */}
-      {pilings.map((px, idx) => (
-        <group key={idx} position={[px, 0, 0]}>
-          <mesh position={[0, 0.85, 2.1]} material={mats.darkPiling}>
-            <cylinderGeometry args={[0.24, 0.28, 3.8, 8]} />
-          </mesh>
-          <mesh position={[0, 0.85, -2.1]} material={mats.darkPiling}>
-            <cylinderGeometry args={[0.24, 0.28, 3.8, 8]} />
-          </mesh>
-          {idx % 2 === 1 && (
-            <>
-              <mesh position={[0, 2.85, -2.1]} material={mats.darkPiling}>
-                <cylinderGeometry args={[0.1, 0.12, 2.3, 8]} />
-              </mesh>
-              <mesh position={[0, 4.02, -2.1]} material={mats.lanternGlow}>
-                <sphereGeometry args={[0.26, 10, 10]} />
-              </mesh>
-            </>
-          )}
         </group>
       ))}
 
-      {/* Bangunan Gudang Kayu / Pos Pelabuhan di Pangkal Dermaga */}
-      <group position={[-31.5, 2.2, 5.2]}>
-        <mesh position={[0, 1.6, 0]} material={mats.cabinWall}>
-          <boxGeometry args={[6.4, 3.2, 5.2]} />
-        </mesh>
-        <mesh position={[0, 3.95, 0]} rotation={[0, Math.PI / 4, 0]} material={mats.cabinRoof}>
-          <coneGeometry args={[5.2, 2.2, 4]} />
-        </mesh>
-        {/* Jendela gudang menyala hangat */}
-        <mesh position={[-3.22, 1.75, 0]} material={mats.lanternGlow}>
-          <boxGeometry args={[0.1, 0.95, 1.8]} />
-        </mesh>
-      </group>
-
-      {/* Tumpukan Peti Kargo di Dermaga */}
-      <mesh position={[-42, 2.15, 1.1]} material={mats.crateMat}>
-        <boxGeometry args={[1.1, 0.9, 1.1]} />
-      </mesh>
-      <mesh position={[-43.3, 2.05, 1.2]} material={mats.crateMat}>
-        <boxGeometry args={[0.9, 0.7, 0.9]} />
-      </mesh>
-
-      {/* Perahu Kayu Berlabuh di Samping Dermaga */}
-      <group ref={boatRef} position={[-63, 0.42, -4.4]}>
-        <mesh scale={[2.4, 0.55, 0.95]} material={mats.hullMat}>
-          <sphereGeometry args={[1.35, 14, 10]} />
-        </mesh>
-        <mesh position={[0, 0.48, 0]} scale={[2.1, 0.18, 0.78]} material={mats.sailTrim}>
-          <boxGeometry args={[1.2, 1, 1.2]} />
-        </mesh>
-        {/* Tiang perahu kecil & lentera haluan */}
-        <mesh position={[0.4, 2.1, 0]} material={mats.darkPiling}>
-          <cylinderGeometry args={[0.07, 0.1, 3.4, 8]} />
-        </mesh>
-        <mesh position={[-2.6, 0.75, 0]} material={mats.lanternGlow}>
-          <sphereGeometry args={[0.16, 8, 8]} />
-        </mesh>
-      </group>
+      {/* Tiang penyangga belakang (1 instanced draw call di layer 2) */}
+      <instancedMesh ref={strutRef} args={[undefined, strutMat, strutCount]}>
+        <cylinderGeometry args={[0.13, 0.17, 9.2, 6]} />
+      </instancedMesh>
     </group>
   );
 }
 
-// ── Air Terjun Tebing Tropis & Kolam Kabut (IslandCliffWaterfall) ──
-
-function IslandCliffWaterfall() {
-  const matWater = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#d9f7ff",
-        emissive: "#7fd8f0",
-        emissiveIntensity: 0.32,
-        roughness: 0.22,
-        metalness: 0.1,
-        transparent: true,
-        opacity: 0.86,
-      }),
-    []
-  );
-  const matCliff = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: "#4a433c",
-        roughness: 0.92,
-      }),
-    []
-  );
-
-  return (
-    <group position={[6, 3.2, -31]} rotation={[0, -0.25, 0]}>
-      {/* Tebing batu pengapit aliran air terjun */}
-      <mesh position={[1.5, 8.5, -3.2]} scale={[3.4, 9.5, 2.8]} material={matCliff}>
-        <dodecahedronGeometry args={[1, 0]} />
-      </mesh>
-      <mesh position={[1.5, 8.2, 3.2]} scale={[3.2, 9.0, 2.6]} material={matCliff}>
-        <dodecahedronGeometry args={[1, 0]} />
-      </mesh>
-      {/* Aliran air terjun bertingkat */}
-      <mesh position={[-0.6, 8.8, 0]} rotation={[0, 0, 0.24]} material={matWater}>
-        <boxGeometry args={[0.45, 16.5, 3.1]} />
-      </mesh>
-      {/* Kolam pirus & buih dasar air terjun */}
-      <mesh position={[-4.5, 0.35, 0]} rotation={[-Math.PI / 2, 0, 0]} material={matWater}>
-        <circleGeometry args={[5.4, 18]} />
-      </mesh>
-    </group>
-  );
-}
-
-// ── Semak Tropis Rendah di Lereng Bukit ──
+// ── Semak Tropis Rapat di Bawah Tajuk Kelapa ────────────────
 
 function JungleCanopyInstanced({ isLowSpec = false }: { isLowSpec?: boolean }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -860,26 +723,22 @@ function JungleCanopyInstanced({ isLowSpec = false }: { isLowSpec?: boolean }) {
 
   const bushes = useMemo(() => {
     const list: { pos: [number, number, number]; scale: [number, number, number]; color: THREE.Color }[] = [];
-    const palette = ["#396428", "#447030", "#4e7c37", "#325923", "#56853d"];
-    const maxBushes = isLowSpec ? 28 : 42;
-    for (let i = 0; i < maxBushes * 3.5; i++) {
+    const palette = ["#2f5e21", "#3e7429", "#4f8932", "#629b3a", "#264e1a", "#72a741"];
+    const maxBushes = isLowSpec ? 75 : 135;
+    for (let i = 0; i < maxBushes * 5; i++) {
       if (list.length >= maxBushes) break;
-      const a = hash2(i * 1.7, 9.1) * Math.PI * 2;
-      const rad = 10 + hash2(i * 3.3, 2.7) * 44;
-      const lx = Math.cos(a) * rad + 8;
-      const lz = Math.sin(a) * rad * 1.05;
-      // Jangan tutupi area di sekitar tulisan LAST MILE (lx in -16..8, |lz| < 26)
-      if (lx > -16 && lx < 8 && Math.abs(lz) < 26) continue;
+      const lx = -46 + hash2(i * 1.7, 3.3) * 90;
+      const lz = (hash2(i * 2.9, 7.1) * 2 - 1) * 78;
+      // Jangan tutupi area di depan tulisan LAST MILE
+      if (lx < -5 && Math.abs(lz) < 20) continue;
       const h = getIslandHeight(lx, lz);
-      if (h < 6.5 || h > 23) continue;
-      const dhX = Math.abs(getIslandHeight(lx + 2, lz) - getIslandHeight(lx - 2, lz));
-      const dhZ = Math.abs(getIslandHeight(lx, lz + 2) - getIslandHeight(lx, lz - 2));
-      if (dhX > 1.8 || dhZ > 1.8) continue;
-      const sx = 1.6 + hash2(i, 19.3) * 1.8;
+      if (h < 2.2 || h > 12.2) continue;
+      const isEdge = h < 4.0;
+      const sx = (isEdge ? 1.8 : 2.5) + hash2(i, 19.3) * (isEdge ? 1.6 : 2.5);
       const col = new THREE.Color(palette[i % palette.length]);
       list.push({
-        pos: [lx, h - sx * 0.45, lz],
-        scale: [sx * 1.05, sx * 0.72, sx * 1.0],
+        pos: [lx, h - sx * 0.34, lz],
+        scale: [sx * 1.22, sx * (isEdge ? 0.78 : 1.02), sx * 1.15],
         color: col,
       });
     }
@@ -889,11 +748,12 @@ function JungleCanopyInstanced({ isLowSpec = false }: { isLowSpec?: boolean }) {
   useEffect(() => {
     const inst = meshRef.current;
     if (!inst) return;
+    inst.layers.set(2);
     const dummy = new THREE.Object3D();
     bushes.forEach((b, idx) => {
       dummy.position.set(...b.pos);
       dummy.scale.set(...b.scale);
-      dummy.rotation.set(hash2(idx, 1.1) * 0.25, idx * 1.1, hash2(idx, 2.3) * 0.25);
+      dummy.rotation.set(hash2(idx, 1.1) * 0.28, idx * 1.17, hash2(idx, 2.3) * 0.28);
       dummy.updateMatrix();
       inst.setMatrixAt(idx, dummy.matrix);
       inst.setColorAt(idx, b.color);
@@ -904,14 +764,186 @@ function JungleCanopyInstanced({ isLowSpec = false }: { isLowSpec?: boolean }) {
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, bushes.length]}>
-      <dodecahedronGeometry args={[1, 0]} />
+      <icosahedronGeometry args={[1, 1]} />
       <meshStandardMaterial
+        color="#ffffff"
         map={detailTex}
-        roughness={0.88}
+        emissive="#1e3d11"
+        emissiveIntensity={0.22}
+        roughness={0.84}
         metalness={0.02}
       />
     </instancedMesh>
   );
+}
+
+// ── Cache Geometri & Material Pulau Tropis (Zero UV Stretching) ──
+
+const _cachedTerrainGeoMap = new Map<number, THREE.BufferGeometry>();
+let _cachedIslandMat: THREE.MeshStandardMaterial | null = null;
+
+function getCachedIslandTerrainGeometry(segs: number): THREE.BufferGeometry {
+  const existing = _cachedTerrainGeoMap.get(segs);
+  if (existing) return existing;
+
+  const geo = new THREE.PlaneGeometry(180, 210, segs, segs);
+  geo.rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const lx = pos.getX(i);
+    const lz = pos.getZ(i);
+    pos.setY(i, getIslandHeight(lx, lz));
+  }
+  geo.computeVertexNormals();
+
+  // Vertex color alami: pasir basah -> pasir pantai krem-keemasan -> rumput pantai -> lantai hutan teduh
+  const colors = new Float32Array(pos.count * 3);
+  const cWetSand = new THREE.Color("#c5b08a");
+  const cBrightSand = new THREE.Color("#f3e5c7");
+  const cWarmSand = new THREE.Color("#e8d4ae");
+  const cShoreGrass = new THREE.Color("#889d45");
+  const cLushGrass = new THREE.Color("#4f782d");
+  const cJungleFloor = new THREE.Color("#2a4d1e");
+  const tmp = new THREE.Color();
+
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const lx = pos.getX(i);
+    const lz = pos.getZ(i);
+    const nVar = valueNoise(lx * 0.14, lz * 0.14);
+    const nFine = valueNoise(lx * 0.38 + 5.1, lz * 0.38 - 2.3);
+
+    // Transisi organik berombak antara pasir pantai & garis rumput (tidak kaku)
+    const grassLine = 2.45 + (nVar - 0.5) * 0.65;
+
+    if (y < 0.72) {
+      tmp.copy(cWetSand).lerp(cBrightSand, THREE.MathUtils.clamp((y + 0.3) / 1.02, 0, 1));
+    } else if (y < grassLine) {
+      tmp.copy(cBrightSand).lerp(cWarmSand, nFine * 0.55);
+    } else if (y < grassLine + 1.55) {
+      const gT = THREE.MathUtils.clamp((y - grassLine) / 1.55, 0, 1);
+      tmp.copy(cWarmSand).lerp(cShoreGrass, gT).lerp(cLushGrass, Math.max(0, gT - 0.35) * 0.9);
+    } else if (y < 6.5) {
+      const fT = THREE.MathUtils.clamp((y - (grassLine + 1.55)) / 3.2, 0, 1);
+      tmp.copy(cLushGrass).lerp(cJungleFloor, fT * 0.75 + nVar * 0.25);
+    } else {
+      tmp.copy(cJungleFloor).lerp(cLushGrass, nFine * 0.32);
+    }
+
+    // AO lembut di bawah rimbun bagian dalam pulau
+    const hAvg =
+      (getIslandHeight(lx + 4, lz) +
+        getIslandHeight(lx - 4, lz) +
+        getIslandHeight(lx, lz + 4) +
+        getIslandHeight(lx, lz - 4)) *
+      0.25;
+    const concavity = THREE.MathUtils.clamp((hAvg - y) * 0.12, 0, 0.28);
+    tmp.multiplyScalar(1 - concavity);
+
+    colors[i * 3] = tmp.r;
+    colors[i * 3 + 1] = tmp.g;
+    colors[i * 3 + 2] = tmp.b;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  _cachedTerrainGeoMap.set(segs, geo);
+  return geo;
+}
+
+function getDetailedIslandMaterial(detailTex: THREE.CanvasTexture | null): THREE.MeshStandardMaterial {
+  if (_cachedIslandMat) return _cachedIslandMat;
+
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    map: detailTex,
+    roughness: 0.9,
+    metalness: 0.01,
+  });
+
+  mat.customProgramCacheKey = () => "tropical-palm-island-v3";
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+         varying vec3 vTerrainPos;`
+      )
+      .replace(
+        "#include <begin_vertex>",
+        `#include <begin_vertex>
+         vTerrainPos = position;`
+      );
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        `#include <common>
+         varying vec3 vTerrainPos;
+
+         float tmHash(vec2 p) {
+           return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+         }
+         float tmNoise(vec2 p) {
+           vec2 i = floor(p);
+           vec2 f = fract(p);
+           vec2 u = f * f * (3.0 - 2.0 * f);
+           return mix(
+             mix(tmHash(i), tmHash(i + vec2(1.0, 0.0)), u.x),
+             mix(tmHash(i + vec2(0.0, 1.0)), tmHash(i + vec2(1.0, 1.0)), u.x),
+             u.y
+           );
+         }
+         float tmFbm(vec2 p) {
+           float v = 0.0;
+           float a = 0.5;
+           for (int i = 0; i < 4; i++) {
+             v += a * tmNoise(p);
+             p = p * 2.08 + vec2(11.3, 5.7);
+             a *= 0.5;
+           }
+           return v;
+         }
+         vec3 perturbTerrainNormal(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDir) {
+           vec3 vSigmaX = normalize(dFdx(surf_pos));
+           vec3 vSigmaY = normalize(dFdy(surf_pos));
+           vec3 R1 = cross(vSigmaY, surf_norm);
+           vec3 R2 = cross(surf_norm, vSigmaX);
+           float fDet = dot(vSigmaX, R1) * faceDir;
+           vec3 vGrad = sign(fDet) * (dHdxy.x * R1 + dHdxy.y * R2);
+           return normalize(abs(fDet) * surf_norm - vGrad);
+         }`
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+         float tmVeg = smoothstep(2.1, 3.8, vTerrainPos.y);
+         float tmSand = 1.0 - smoothstep(1.2, 3.2, vTerrainPos.y);
+
+         float tmMacro = tmFbm(vTerrainPos.xz * 0.25);
+         float tmGrass = tmFbm(vTerrainPos.xz * 1.15 + tmMacro * 1.4);
+         float tmSpeck = tmNoise(vTerrainPos.xz * 4.2);
+
+         // Tekstur rumput pantai & lantai hutan tropis
+         vec3 vegTint = mix(vec3(0.72, 0.84, 0.56), vec3(1.18, 1.24, 0.86), tmGrass * 0.72 + tmSpeck * 0.28);
+         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vegTint, tmVeg * 0.78);
+
+         // Tekstur pasir koral lembut & bintik kerikil halus (seperti pantai di foto)
+         float sandRipple = tmNoise(vec2(vTerrainPos.x * 1.7, vTerrainPos.z * 0.85 + tmMacro * 1.6));
+         float pebbleSpeck = step(0.84, tmNoise(vTerrainPos.xz * 3.4));
+         diffuseColor.rgb *= mix(1.0, 0.94 + sandRipple * 0.1 - pebbleSpeck * 0.08, tmSand);
+
+         float tmMicroH =
+           tmVeg * (tmGrass * 0.55 + tmSpeck * 0.22) +
+           tmSand * (sandRipple * 0.14 - pebbleSpeck * 0.06);`
+      )
+      .replace(
+        "#include <normal_fragment_maps>",
+        `#include <normal_fragment_maps>
+         normal = perturbTerrainNormal(-vViewPosition, normal, vec2(dFdx(tmMicroH), dFdy(tmMicroH)) * 1.25, faceDirection);`
+      );
+  };
+
+  _cachedIslandMat = mat;
+  return mat;
 }
 
 // ── Komponen Utama Pulau Tropis ───────────────────────────────
@@ -928,75 +960,24 @@ export function TropicalIsland({
   const surfRingRef = useRef<THREE.Mesh>(null);
   const detailTex = useMemo(() => getTerrainDetailTexture(), []);
 
-  // 1. Geometri kontur pulau (pasir putih -> tebing batu -> bukit hijau tropis)
-  const terrainGeo = useMemo(() => {
-    const segs = isLowSpec ? 36 : 48;
-    const geo = new THREE.PlaneGeometry(190, 230, segs, segs);
-    geo.rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      const lx = pos.getX(i);
-      const lz = pos.getZ(i);
-      pos.setY(i, getIslandHeight(lx, lz));
-    }
-    geo.computeVertexNormals();
+  // 1. Geometri kontur pulau landai (di-cache agar instan saat transisi ke kapal)
+  const terrainGeo = useMemo(
+    () => getCachedIslandTerrainGeometry(isLowSpec ? 64 : 84),
+    [isLowSpec]
+  );
+  const islandMat = useMemo(() => getDetailedIslandMaterial(detailTex), [detailTex]);
 
-    // Vertex color realistis berdasarkan elevasi & kemiringan lereng
-    const norm = geo.attributes.normal;
-    const colors = new Float32Array(pos.count * 3);
-    const cWetSand = new THREE.Color("#c9af8c");
-    const cWhiteSand = new THREE.Color("#f5e9d4");
-    const cGrass = new THREE.Color("#637c3a");
-    const cJungle = new THREE.Color("#2b5625");
-    const cHighJungle = new THREE.Color("#3b6b30");
-    const cRock = new THREE.Color("#63584d");
-    const tmp = new THREE.Color();
-
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i);
-      const ny = norm.getY(i);
-      const lx = pos.getX(i);
-      const lz = pos.getZ(i);
-      const nVar = valueNoise(lx * 0.12, lz * 0.12);
-
-      if (y < 1.1) {
-        tmp.copy(cWetSand).lerp(cWhiteSand, THREE.MathUtils.clamp((y + 0.3) / 1.4, 0, 1));
-      } else if (y < 5.0) {
-        tmp.copy(cWhiteSand);
-        if (y > 3.6) {
-          tmp.lerp(cGrass, (y - 3.6) / 1.4);
-        }
-      } else if (y < 9.5) {
-        tmp.copy(cGrass).lerp(cJungle, (y - 5.0) / 4.5);
-      } else {
-        tmp.copy(cJungle).lerp(cHighJungle, nVar * 0.75);
-      }
-
-      // Lereng curam berubah menjadi batuan tebing
-      if (y > 3.0 && ny < 0.74) {
-        const rockFactor = THREE.MathUtils.clamp((0.74 - ny) / 0.22, 0, 1);
-        tmp.lerp(cRock, rockFactor);
-      }
-
-      colors[i * 3] = tmp.r;
-      colors[i * 3 + 1] = tmp.g;
-      colors[i * 3 + 2] = tmp.b;
-    }
-    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    return geo;
-  }, [isLowSpec]);
-
-  // 2. Tekstur laguna pirus & buih ombak pantai
+  // 2. Buih tipis tepi pantai & dangkal teluk
   const lagoonTex = useMemo(() => {
     if (typeof document === "undefined") return null;
     const canvas = document.createElement("canvas");
     canvas.width = 256;
     canvas.height = 256;
     const ctx = canvas.getContext("2d")!;
-    const g = ctx.createRadialGradient(128, 128, 42, 128, 128, 126);
-    g.addColorStop(0, "rgba(255, 250, 240, 0.88)");
-    g.addColorStop(0.5, "rgba(64, 214, 198, 0.56)");
-    g.addColorStop(0.76, "rgba(28, 148, 158, 0.28)");
+    const g = ctx.createRadialGradient(128, 128, 46, 128, 128, 126);
+    g.addColorStop(0, "rgba(255, 248, 232, 0.72)");
+    g.addColorStop(0.55, "rgba(182, 230, 218, 0.34)");
+    g.addColorStop(0.82, "rgba(74, 152, 162, 0.14)");
     g.addColorStop(1, "rgba(12, 60, 80, 0)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, 256, 256);
@@ -1005,151 +986,113 @@ export function TropicalIsland({
     return tex;
   }, []);
 
-  // 3. Posisi pohon kelapa di sepanjang pantai pasir putih & punggung bukit
-  const palms = useMemo(() => {
-    const items: {
-      pos: [number, number, number];
-      scale: number;
-      leanAngle: number;
-      leanYaw: number;
-      phase: number;
-    }[] = [];
+  // 3. Sebaran rimbun pohon kelapa (barisan pantai melengkung + hutan tengah + sayap teluk) & palem muda rendah
+  const { palms, lowPalms } = useMemo(() => {
+    const tall: PalmPlacement[] = [];
+    const low: PalmPlacement[] = [];
+    const targetTall = isLowSpec ? 46 : 76;
 
-    const zCoords = [-62, -48, -36, -24, -14, -4, 8, 16, 30, 42, 54, 64];
-
-    zCoords.forEach((lz, i) => {
-      for (let lx = -60; lx <= -10; lx += 3.5) {
+    // Pohon kelapa pantai di sayap kiri & kanan yang menjorok menghadap teluk (persis siluet foto)
+    const wingZ = [-68, -60, -52, -44, -36, -28, 30, 38, 46, 54, 62, 70];
+    wingZ.forEach((lz, i) => {
+      for (let lx = -58; lx <= -6; lx += 3.0) {
         const h = getIslandHeight(lx, lz);
-        if (h >= 1.6 && h <= 3.8) {
-          items.push({
-            pos: [lx, h - 0.15, lz],
-            scale: 0.95 + hash2(i, 8.2) * 0.35,
-            leanAngle: 0.16 + hash2(i, 5.5) * 0.18,
-            leanYaw: Math.PI + (hash2(i, 2.9) - 0.5) * 0.85,
-            phase: i * 0.7,
+        if (h >= 2.0 && h <= 4.2) {
+          tall.push({
+            pos: [lx, h - 0.18, lz],
+            scale: 0.92 + hash2(i, 8.2) * 0.44,
+            leanYaw: Math.PI + (lz < 0 ? 0.35 : -0.35) + (hash2(i, 2.9) - 0.5) * 0.65,
           });
           break;
         }
       }
     });
 
-    // Pohon kelapa di punggung bukit & sekitar teluk
-    for (let i = 0; i < 10; i++) {
-      const side = i % 2 === 0 ? -1 : 1;
-      const lz = side * (28 + hash2(i, 12.7) * 34);
-      const lx = -6 + hash2(i, 15.1) * 34;
+    // Hutan kelapa rapat memenuhi seluruh gundukan pulau di belakang & samping tulisan LAST MILE
+    for (let i = 0; i < 480 && tall.length < targetTall; i++) {
+      const lx = -24 + hash2(i * 1.9, 4.7) * 66;
+      const lz = (hash2(i * 3.1, 11.3) * 2 - 1) * 74;
+      // Sisakan koridor bersih di depan tulisan LAST MILE agar huruf terbaca tegas
+      if (lx < -4.5 && Math.abs(lz) < 20.5) continue;
       const h = getIslandHeight(lx, lz);
-      if (h >= 6.5 && h <= 28.0) {
-        items.push({
-          pos: [lx, h - 0.25, lz],
-          scale: 0.9 + hash2(i, 17.9) * 0.35,
-          leanAngle: 0.1 + hash2(i, 13.4) * 0.15,
-          leanYaw: Math.PI + (hash2(i, 8.8) - 0.5) * 1.8,
-          phase: i * 0.9,
-        });
+      if (h < 2.8 || h > 12.2) continue;
+
+      // Jaga jarak minimum agar batang kelapa tidak saling bertumpuk
+      let tooClose = false;
+      for (const ex of tall) {
+        const dx = ex.pos[0] - lx;
+        const dz = ex.pos[2] - lz;
+        if (dx * dx + dz * dz < 30) {
+          tooClose = true;
+          break;
+        }
       }
+      if (tooClose) continue;
+
+      // Campurkan kelapa muda lebih pendek (0.62..0.95) & kelapa tinggi (1.0..1.48) untuk siluet hutan rapat
+      tall.push({
+        pos: [lx, h - 0.25, lz],
+        scale: 0.62 + hash2(i, 17.9) * 0.86,
+        leanYaw: hash2(i, 8.8) * Math.PI * 2,
+      });
     }
 
-    return items;
-  }, []);
+    // Rumpun palem muda / pakis rendah berdaun lebar di garis batas pasir-rumput
+    const targetLow = isLowSpec ? 28 : 54;
+    for (let i = 0; i < 340 && low.length < targetLow; i++) {
+      const lx = -48 + hash2(i * 2.3, 13.7) * 86;
+      const lz = (hash2(i * 4.1, 5.9) * 2 - 1) * 76;
+      if (lx < -6 && Math.abs(lz) < 18.5) continue;
+      const h = getIslandHeight(lx, lz);
+      if (h < 2.25 || h > 7.2) continue;
+      low.push({
+        pos: [lx, h - 0.12, lz],
+        scale: 0.48 + hash2(i, 21.4) * 0.28,
+        leanYaw: hash2(i, 3.2) * Math.PI * 2,
+      });
+    }
 
-  // 4. Batu karang pantai & gugusan tebing laut
-  const rocks = useMemo(() => {
-    const spots: { pos: [number, number, number]; scale: [number, number, number]; rot: number }[] = [
-      { pos: [-44, 0.8, -52], scale: [5.0, 2.8, 4.2], rot: 0.4 },
-      { pos: [-42, 0.9, 50], scale: [5.2, 3.0, 4.5], rot: 2.1 },
-      { pos: [-38, 1.0, 28], scale: [2.8, 1.5, 2.4], rot: 1.7 },
-      { pos: [-52, 0.6, -34], scale: [3.6, 2.1, 3.1], rot: 0.9 },
-      { pos: [-48, 0.7, 38], scale: [3.8, 2.2, 3.2], rot: 2.6 },
-      { pos: [-33, 2.2, -62], scale: [6.2, 4.0, 5.4], rot: 1.2 },
-    ];
-    return spots;
-  }, []);
+    return { palms: tall, lowPalms: low };
+  }, [isLowSpec]);
 
   useFrame(({ clock }) => {
     if (surfRingRef.current) {
       const t = clock.elapsedTime;
-      const pulse = 1 + Math.sin(t * 1.6) * 0.014;
-      surfRingRef.current.scale.set(pulse, 1, pulse * 1.18);
+      const pulse = 1 + Math.sin(t * 1.4) * 0.01;
+      surfRingRef.current.scale.set(pulse, 1, pulse * 1.16);
     }
   });
 
   return (
     <group position={position} rotation={rotation}>
-      {/* Pantulan hangat cahaya senja di pantai pulau */}
-      {!isLowSpec && (
-        <pointLight position={[-65, 26, 0]} color="#ffd5a3" intensity={65} distance={160} decay={1} />
-      )}
-
-      {/* Laguna dangkal pirus & buih pantai */}
+      {/* Buih tipis garis pantai & perairan dangkal teluk */}
       <mesh
         ref={surfRingRef}
-        position={[-6, 0.22, 0]}
+        position={[-4, 0.12, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
       >
-        <planeGeometry args={[225, 255]} />
+        <planeGeometry args={[195, 225]} />
         <meshBasicMaterial
           map={lagoonTex}
           transparent
-          opacity={0.82}
+          opacity={0.58}
           depthWrite={false}
         />
       </mesh>
 
-      {/* Daratan Pulau (Pasir Putih -> Bukit Tropis) */}
-      <mesh geometry={terrainGeo}>
-        <meshStandardMaterial
-          vertexColors
-          map={detailTex}
-          roughness={0.84}
-          metalness={0.02}
-        />
-      </mesh>
+      {/* Daratan Pulau (Pantai Pasir Putih Melengkung -> Gundukan Rumput Tropis) */}
+      <mesh geometry={terrainGeo} material={islandMat} />
 
-      {/* Mercusuar Pantai dengan Sorot Cahaya Berputar */}
-      <IslandLighthouse />
-
-      {/* Dermaga Kayu Pelabuhan, Gudang Pantai & Perahu Berlabuh */}
-      <IslandHarborDock />
-
-      {/* Air Terjun Tebing Tropis */}
-      <IslandCliffWaterfall />
-
-      {/* Batu Karang Pantai */}
-      {rocks.map((r, idx) => (
-        <mesh
-          key={idx}
-          position={r.pos}
-          scale={r.scale}
-          rotation={[0.15, r.rot, 0.1]}
-        >
-          <dodecahedronGeometry args={[1, 0]} />
-          <meshStandardMaterial
-            color="#584e45"
-            map={detailTex}
-            roughness={0.9}
-            metalness={0.05}
-          />
-        </mesh>
-      ))}
-
-      {/* Rumpun Hutan di Lereng Bukit */}
+      {/* Semak Tropis Rapat Penutup Tepi & Bawah Tajuk Kelapa */}
       <JungleCanopyInstanced isLowSpec={isLowSpec} />
 
-      {/* Pohon Kelapa Melambai di Sepanjang Pantai Pasir Putih */}
-      {palms.map((p, idx) => (
-        <CoconutPalmTree
-          key={idx}
-          position={p.pos}
-          scale={p.scale}
-          leanAngle={p.leanAngle}
-          leanYaw={p.leanYaw}
-          phase={p.phase}
-          isLowSpec={false}
-        />
-      ))}
+      {/* Palem Muda / Pakis Rendah di Garis Pantai Berumput */}
+      <LowYoungPalmsInstanced spots={lowPalms} />
 
-      {/* Huruf 3D Raksasa "LAST MILE" di Lereng Bukit */}
+      {/* Rimbun Hutan Pohon Kelapa Berlapis Instanced */}
+      <PalmGrovesInstanced palms={palms} />
+
+      {/* Huruf 3D "LAST MILE" yang Tertanam Rapi di Tepi Hutan Kelapa */}
       <HillsideLastMileSign isLowSpec={isLowSpec} />
     </group>
   );

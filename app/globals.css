@@ -27,6 +27,18 @@ html.dark body {
   color: #f8fafc;
 }
 
+/* Sembunyikan Navbar, Footer, & fallback skeleton dashboard sejak frame-0 saat transisi berlayar pasca-login aktif */
+html[data-sail-pending="1"] body > header,
+html[data-sail-pending="1"] body > footer,
+html[data-sail-pending="1"] body > main {
+  display: none !important;
+}
+
+html[data-sail-pending="1"] body {
+  background: #0b1120 !important;
+  overflow: hidden !important;
+}
+
 /* ============================================================
    Dark Mode Global Surface, Border, Text & Table Adaptations
    ============================================================ */

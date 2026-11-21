@@ -8,6 +8,7 @@ import { Anchor, Compass, ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const [sceneReady, setSceneReady] = useState(false);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -20,12 +21,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden flex flex-col justify-between">
-      {/* Laut sunset realistis (WebGL): langit fisik, ombak Gerstner & kapal galleon */}
-      <SunsetLoginBackground />
+    <div className="min-h-screen relative overflow-hidden flex flex-col justify-between bg-[#0b1120]">
+      {/* Laut sunset realistis (WebGL): langit fisik, ombak Gerstner, pulau & kapal galleon */}
+      <SunsetLoginBackground onReady={() => setSceneReady(true)} />
+
+      {/* Jangan tampilkan halaman login sebelum background 3D & kapal siap */}
+      {!sceneReady && (
+        <div className="fixed inset-0 z-30 bg-[#0b1120] flex items-center justify-center">
+          <div className="h-7 w-7 rounded-full border-2 border-slate-700 border-t-slate-300 animate-spin" />
+        </div>
+      )}
 
       {/* Top Header / Branding Bar */}
-      <header className="relative z-10 w-full px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between">
+      {sceneReady && (
+        <>
+          <header className="relative z-10 w-full px-4 sm:px-8 py-4 sm:py-5 flex items-center justify-between animate-fadeIn">
         <div className="flex items-center gap-2.5 pointer-events-none select-none">
           <div className="w-9 h-9 rounded-xl bg-white/15 md:bg-white/10 border border-white/25 shadow-lg flex items-center justify-center">
             <Anchor className="h-5 w-5 text-amber-200" />
@@ -154,12 +164,14 @@ export default function LoginPage() {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 w-full px-4 py-4 text-center text-xs text-orange-50/70 select-none">
-        <span>Made with 💖 by </span>
-        <strong className="text-amber-100 font-bold">EW Team JTT08</strong>
-        <span className="hidden sm:inline"> · Selamat Bertugas di Lautan Operasional</span>
-      </footer>
+          {/* Footer */}
+          <footer className="relative z-10 w-full px-4 py-4 text-center text-xs text-orange-50/70 select-none animate-fadeIn">
+            <span>Made with 💖 by </span>
+            <strong className="text-amber-100 font-bold">EW Team JTT08</strong>
+            <span className="hidden sm:inline"> · Selamat Bertugas di Lautan Operasional</span>
+          </footer>
+        </>
+      )}
     </div>
   );
 }

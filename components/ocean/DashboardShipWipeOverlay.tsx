@@ -576,7 +576,17 @@ export function DashboardShipWipeOverlay({
     };
   }, [mounted, phase]);
 
-  if (!mounted) return null;
+  if (!mounted) {
+    if (phase === "curtain") {
+      return (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 w-screen h-[100dvh] z-[999990] pointer-events-none bg-[#0b1528]"
+        />
+      );
+    }
+    return null;
+  }
 
   const content = (
     <div
@@ -584,13 +594,7 @@ export function DashboardShipWipeOverlay({
       className="fixed inset-0 w-screen h-[100dvh] z-[999990] pointer-events-none overflow-hidden select-none"
     >
       {phase === "curtain" ? (
-        <div
-          className="w-full h-full"
-          style={{
-            background:
-              "linear-gradient(180deg, #14192e 0%, #232542 45%, #6a3a45 78%, #0b243b 100%)",
-          }}
-        />
+        <div className="w-full h-full bg-[#0b1528]" />
       ) : (
         <canvas ref={canvasRef} className="w-full h-full block" />
       )}

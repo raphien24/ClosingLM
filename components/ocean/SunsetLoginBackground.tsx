@@ -123,12 +123,17 @@ function LoginScene({
   );
 }
 
-export function SunsetLoginBackground() {
+export function SunsetLoginBackground({ onReady }: { onReady?: () => void } = {}) {
   const [mounted, setMounted] = useState(false);
   const [isLowSpecDevice, setIsLowSpecDevice] = useState(false);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [ready, setReady] = useState(false);
-  const handleReady = useCallback(() => setReady(true), []);
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  const handleReady = useCallback(() => {
+    setReady(true);
+    onReadyRef.current?.();
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -142,17 +147,17 @@ export function SunsetLoginBackground() {
     });
     preloadHumanModels(false);
 
-    const fallbackTimer = window.setTimeout(() => setReady(true), 2500);
+    const fallbackTimer = window.setTimeout(handleReady, 10000);
     const onResize = () => setIsCompactViewport(window.innerWidth < 768);
     window.addEventListener("resize", onResize);
     return () => {
       window.clearTimeout(fallbackTimer);
       window.removeEventListener("resize", onResize);
     };
-  }, []);
+  }, [handleReady]);
 
   return (
-    <div className="fixed inset-0 overflow-hidden pointer-events-none select-none bg-[#120d1d]">
+    <div className="fixed inset-0 overflow-hidden pointer-events-none select-none bg-[#0b1120]">
       {mounted && (
         <Canvas
           frameloop="always"
@@ -162,9 +167,9 @@ export function SunsetLoginBackground() {
             near: 0.28,
             far: 16000,
           }}
-          dpr={isLowSpecDevice ? [1, 1.15] : [1, 1.35]}
+          dpr={isLowSpecDevice ? 1 : [1, 1.25]}
           gl={{
-            antialias: true,
+            antialias: !isLowSpecDevice,
             alpha: false,
             powerPreference: "high-performance",
           }}
@@ -174,7 +179,7 @@ export function SunsetLoginBackground() {
             gl.debug.checkShaderErrors = false;
           }}
         >
-          <color attach="background" args={["#181124"]} />
+          <color attach="background" args={["#0b1120"]} />
           <MobileFramerateDriver active={false} />
           <LoginScene
             isLowSpecDevice={isLowSpecDevice}
@@ -184,9 +189,9 @@ export function SunsetLoginBackground() {
         </Canvas>
       )}
 
-      {/* Selubung gelap senja singkat hingga langit, laut, dan kapal siap tergambar bersama */}
+      {/* Tirai gelap netral (disembunyikan di background tanpa warna oranye) hingga seluruh scene 3D & kapal siap */}
       <div
-        className={`absolute inset-0 bg-gradient-to-b from-[#151025] via-[#261831] to-[#1a1326] transition-opacity duration-300 ease-out ${
+        className={`absolute inset-0 bg-[#0b1120] transition-opacity duration-500 ease-out ${
           ready ? "opacity-0" : "opacity-100"
         }`}
       />

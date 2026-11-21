@@ -37,7 +37,7 @@ function DashboardFallback() {
 
   if (isSail) {
     return (
-      <div className="fixed inset-0 w-screen h-screen z-[999999] bg-[#1b1530]" />
+      <div className="fixed inset-0 w-screen h-screen z-[999999] bg-[#0b1120]" />
     );
   }
 
@@ -107,11 +107,18 @@ function DashboardContent() {
     setDashboardReady(true);
   }, []);
 
+  useEffect(() => {
+    if (!showSail) {
+      delete document.documentElement.dataset.sailPending;
+    }
+  }, [showSail]);
+
   const handleSailComplete = useCallback(() => {
     setShowSail(false);
     setDashboardReady(true);
     if (typeof window !== "undefined") {
       sessionStorage.setItem("jtt08_sail_played", "1");
+      delete document.documentElement.dataset.sailPending;
     }
     const reduced =
       typeof window !== "undefined" &&
