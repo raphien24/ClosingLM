@@ -17,6 +17,10 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { GracePeriodToggle } from "@/components/productivity/GracePeriodToggle";
 import { DailyActiveModal } from "@/components/productivity/DailyActiveModal";
+import {
+  ProductivityGapAnalysis,
+  type GapSegmentMetrics,
+} from "@/components/productivity/ProductivityGapAnalysis";
 import { DailyActiveMetrics } from "@/types/productivity";
 import {
   MaritimeWaveBackdrop,
@@ -26,14 +30,7 @@ import {
 } from "@/components/productivity/MaritimeAnimations";
 import { format } from "date-fns";
 
-interface CoreSegmentMetrics {
-  avgProductivity: number;
-  target: number;
-  threshold75: number;
-  achievement: number;
-  totalShifts: number;
-  totalDelivered: number;
-}
+type CoreSegmentMetrics = GapSegmentMetrics;
 
 interface DailySegmentMetrics {
   cour: number;
@@ -796,6 +793,14 @@ export default function DashboardMonthlyPage() {
                 </p>
               </div>
             </div>
+
+            {/* Analisis Kekurangan Productivity (Gap Analysis per Segmen) */}
+            <ProductivityGapAnalysis
+              dedicated2wh={data.core2wh.dedicated}
+              kurirPlus2wh={data.core2wh.kurirPlus}
+              dedicated4wh={data.core4wh.dedicated4wh}
+              operatingDays={data.operatingDays}
+            />
 
             {/* Daily Breakdown Table */}
             <div className="bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-[#134074] dark:border-t-blue-500 shadow-sm p-6">

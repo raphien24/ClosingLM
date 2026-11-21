@@ -1191,6 +1191,11 @@ export interface CoreSegmentMetrics {
   achievement: number;
   totalShifts: number;
   totalDelivered: number;
+  segmentDays?: number;
+  avgCouriersPerDay?: number;
+  shortfallPerCourier?: number;
+  totalGapParcels?: number;
+  catchUpTarget?: number;
 }
 
 export interface DailySegmentMetrics {
@@ -1374,6 +1379,9 @@ export async function getMonthlyMetrics(
 
     const thr75 = segTarget * 0.75;
     const ach = totalShifts > 0 ? calcThresholdAchievement(avgProd, segTarget) : 0;
+    const segmentDays = dayTargetMap.size;
+    const avgCouriersPerDay = segmentDays > 0 ? Math.round(totalShifts / segmentDays) : 0;
+    const rawShortfall = totalShifts > 0 ? Math.max(0, segTarget - avgProd) : 0;
 
     return {
       avgProductivity: Math.round(avgProd * 10) / 10,
@@ -1382,6 +1390,11 @@ export async function getMonthlyMetrics(
       achievement: Math.round(ach * 10) / 10,
       totalShifts,
       totalDelivered,
+      segmentDays,
+      avgCouriersPerDay,
+      shortfallPerCourier: Math.round(rawShortfall * 10) / 10,
+      totalGapParcels: totalShifts > 0 ? Math.round(rawShortfall * totalShifts) : 0,
+      catchUpTarget: Math.round((segTarget + rawShortfall) * 10) / 10,
     };
   };
 
