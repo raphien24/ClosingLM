@@ -20,11 +20,11 @@ export const metadata: Metadata = {
   description: "Sistem Closing Harian & Productivity Last Mile JTT08",
   icons: {
     icon: [
-      { url: "/favicon.ico?v=2" },
-      { url: "/favicon.png?v=2", type: "image/png" },
+      { url: "/favicon.ico?v=3" },
+      { url: "/favicon.png?v=3", type: "image/png" },
     ],
-    shortcut: [{ url: "/favicon.ico?v=2" }],
-    apple: [{ url: "/favicon.png?v=2" }],
+    shortcut: [{ url: "/favicon.ico?v=3" }],
+    apple: [{ url: "/favicon.png?v=3" }],
   },
 };
 
