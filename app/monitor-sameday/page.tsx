@@ -96,11 +96,11 @@ export default function MonitorSamedayPage() {
       if (json.success) {
         setData(json.data);
       } else {
-        toast.error(json.error || "Gagal memuat data Monitor Sameday");
+        toast.error(json.error || "Gagal memuat data Monitor STD");
       }
     } catch {
       if (seq === reqSeqRef.current) {
-        toast.error("Gagal menghubungi Google Sheets Monitor Sameday.");
+        toast.error("Gagal menghubungi Google Sheets Monitor STD.");
       }
     } finally {
       if (seq === reqSeqRef.current) {
@@ -184,7 +184,7 @@ export default function MonitorSamedayPage() {
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                    Monitor Sameday
+                    Monitor STD
                   </h1>
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-200 dark:bg-sky-500/20 dark:text-sky-300 dark:border-sky-400/35">
                     STD SD · Hub SD
@@ -237,7 +237,7 @@ export default function MonitorSamedayPage() {
           <div className="hover-lift bg-gradient-to-br from-[#fffdf7] to-[#fdf3dc] dark:from-[#1e293b] dark:to-[#282116] rounded-2xl border border-amber-200/85 dark:border-slate-700/80 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 p-4 shadow-sm">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Total Hub Sameday
+                Total Hub STD
               </p>
               <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
             </div>
@@ -403,7 +403,6 @@ export default function MonitorSamedayPage() {
         {data && (
           <SamedayProgressCharts
             rows={filteredRows}
-            deliveringDailyCols={data.deliveringDailyCols}
             deliveredDailyCols={data.deliveredDailyCols}
             onSelectHub={setSelectedHub}
           />
@@ -417,7 +416,7 @@ export default function MonitorSamedayPage() {
                 <Anchor className="h-4 w-4 text-[#134074] dark:text-sky-400 animate-ship-bob" />
                 <h2 className="text-base sm:text-lg font-extrabold text-gray-900">
                   {viewMode === "summary"
-                    ? "Ringkasan Performa Sameday Seluruh Hub"
+                    ? "Ringkasan Performa STD Seluruh Hub"
                     : viewMode === "delivering_daily"
                     ? "Detail Harian SD Delivering (14 Hari Terakhir)"
                     : "Detail Harian SD Delivered (14 Hari Terakhir)"}

@@ -38,7 +38,7 @@ interface NavItem {
 const mainLinks: NavItem[] = [
   { href: "/dashboard", label: "Dashboard Closing", compactLabel: "Dashboard", iconId: "dashboard" },
   { href: "/input", label: "Input Data", iconId: "input" },
-  { href: "/monitor-sameday", label: "Monitor Sameday", compactLabel: "Sameday", iconId: "sameday" },
+  { href: "/monitor-sameday", label: "Monitor STD", compactLabel: "STD", iconId: "sameday" },
 ];
 
 const guideLink: NavItem = {

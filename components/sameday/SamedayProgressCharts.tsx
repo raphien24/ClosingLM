@@ -1,12 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SamedayHubRow, SamedayPeriodColumn } from "@/lib/samedayService";
 import { BarChart3, LineChart, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react";
 
 interface SamedayProgressChartsProps {
   rows: SamedayHubRow[];
-  deliveringDailyCols: SamedayPeriodColumn[];
   deliveredDailyCols: SamedayPeriodColumn[];
   onSelectHub?: (row: SamedayHubRow) => void;
 }
@@ -16,7 +15,6 @@ type HubRankMode = "lowest" | "highest";
 
 interface TrendPoint {
   label: string;
-  delivering: number | null;
   delivered: number | null;
 }
 
@@ -34,73 +32,88 @@ function fmtPct(v: number | null): string {
 
 export function SamedayProgressCharts({
   rows,
-  deliveringDailyCols,
   deliveredDailyCols,
   onSelectHub,
 }: SamedayProgressChartsProps) {
   const [granularity, setGranularity] = useState<TrendGranularity>("daily");
   const [rankMode, setRankMode] = useState<HubRankMode>("lowest");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const chartBoxRef = useRef<HTMLDivElement>(null);
+  const [chartSize, setChartSize] = useState<{ width: number; height: number }>({
+    width: 880,
+    height: 290,
+  });
 
-  const avgTargetDelivering = useMemo(
-    () => avgNums(rows.map((r) => r.targetDelivering)),
-    [rows]
-  );
+  useEffect(() => {
+    const el = chartBoxRef.current;
+    if (!el) return;
+
+    const updateSize = () => {
+      const rect = el.getBoundingClientRect();
+      const nextW = Math.max(360, Math.round(rect.width));
+      const nextH = Math.max(240, Math.round(rect.height));
+      setChartSize((prev) =>
+        prev.width === nextW && prev.height === nextH
+          ? prev
+          : { width: nextW, height: nextH }
+      );
+    };
+
+    updateSize();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(updateSize);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const avgTargetDelivered = useMemo(
     () => avgNums(rows.map((r) => r.targetDelivered)),
     [rows]
   );
 
-  // Data titik tren (kronologis dari kiri/lama ke kanan/terbaru)
+  // Data titik tren SD Delivered (kronologis dari kiri/lama ke kanan/terbaru)
   const trendPoints = useMemo<TrendPoint[]>(() => {
     if (rows.length === 0) return [];
     if (granularity === "weekly") {
-      const stages: { label: string; getDeliv: (r: SamedayHubRow) => number | null; getDelvd: (r: SamedayHubRow) => number | null }[] = [
-        { label: "L1M", getDeliv: (r) => r.delivering.l1m, getDelvd: (r) => r.delivered.l1m },
-        { label: "L3W", getDeliv: (r) => r.delivering.l3w, getDelvd: (r) => r.delivered.l3w },
-        { label: "L2W", getDeliv: (r) => r.delivering.l2w, getDelvd: (r) => r.delivered.l2w },
-        { label: "L1W", getDeliv: (r) => r.delivering.l1w, getDelvd: (r) => r.delivered.l1w },
-        { label: "WTD", getDeliv: (r) => r.delivering.wtd, getDelvd: (r) => r.delivered.wtd },
-        { label: "MTD", getDeliv: (r) => r.delivering.mtd, getDelvd: (r) => r.delivered.mtd },
+      const stages: { label: string; getDelvd: (r: SamedayHubRow) => number | null }[] = [
+        { label: "L1M", getDelvd: (r) => r.delivered.l1m },
+        { label: "L3W", getDelvd: (r) => r.delivered.l3w },
+        { label: "L2W", getDelvd: (r) => r.delivered.l2w },
+        { label: "L1W", getDelvd: (r) => r.delivered.l1w },
+        { label: "WTD", getDelvd: (r) => r.delivered.wtd },
+        { label: "MTD", getDelvd: (r) => r.delivered.mtd },
       ];
       return stages.map((st) => ({
         label: st.label,
-        delivering: avgNums(rows.map(st.getDeliv)),
         delivered: avgNums(rows.map(st.getDelvd)),
       }));
     }
 
-    const dayCount = Math.max(deliveringDailyCols.length, deliveredDailyCols.length);
+    const dayCount = deliveredDailyCols.length;
     const pts: TrendPoint[] = [];
     // Sheet STD SD meletakkan tanggal terbaru di kiri (idx 0) -> balik urutan jadi kronologis
     for (let i = dayCount - 1; i >= 0; i--) {
-      const label =
-        deliveringDailyCols[i]?.label ||
-        deliveredDailyCols[i]?.label ||
-        `H-${i + 1}`;
+      const label = deliveredDailyCols[i]?.label || `H-${i + 1}`;
       pts.push({
         label,
-        delivering: avgNums(rows.map((r) => r.delivering.daily[i] ?? null)),
         delivered: avgNums(rows.map((r) => r.delivered.daily[i] ?? null)),
       });
     }
     return pts;
-  }, [rows, granularity, deliveringDailyCols, deliveredDailyCols]);
+  }, [rows, granularity, deliveredDailyCols]);
 
-  // Skala sumbu Y otomatis agar variasi 88%–100% terlihat jelas
+  // Skala sumbu Y otomatis khusus SD Delivered agar variasi terlihat jelas
   const { yMin, yMax } = useMemo(() => {
     const allVals: number[] = [];
     trendPoints.forEach((p) => {
-      if (p.delivering !== null) allVals.push(p.delivering);
       if (p.delivered !== null) allVals.push(p.delivered);
     });
-    if (avgTargetDelivering !== null) allVals.push(avgTargetDelivering);
     if (avgTargetDelivered !== null) allVals.push(avgTargetDelivered);
     if (allVals.length === 0) return { yMin: 80, yMax: 100 };
     const rawMin = Math.min(...allVals);
     const paddedMin = Math.max(0, Math.floor((rawMin - 2) / 2) * 2);
     return { yMin: Math.min(paddedMin, 94), yMax: 100 };
-  }, [trendPoints, avgTargetDelivering, avgTargetDelivered]);
+  }, [trendPoints, avgTargetDelivered]);
 
   // Distribusi kepatuhan target Delivered MTD & ranking Hub
   const { statusStats, rankedHubs } = useMemo(() => {
@@ -141,15 +154,15 @@ export function SamedayProgressCharts({
     };
   }, [rows, rankMode]);
 
-  // Geometri SVG Line/Area Chart
-  const svgW = 680;
-  const svgH = 235;
-  const padL = 42;
+  // Geometri SVG Line/Area Chart mengikuti ukuran riil kontainer (1:1 CSS px, bebas ruang kosong)
+  const svgW = chartSize.width;
+  const svgH = chartSize.height;
+  const padL = 44;
   const padR = 16;
   const padT = 16;
-  const padB = 34;
-  const plotW = svgW - padL - padR;
-  const plotH = svgH - padT - padB;
+  const padB = 30;
+  const plotW = Math.max(120, svgW - padL - padR);
+  const plotH = Math.max(100, svgH - padT - padB);
 
   const getX = (idx: number) => {
     if (trendPoints.length <= 1) return padL + plotW / 2;
@@ -180,7 +193,6 @@ export function SamedayProgressCharts({
     return { line, area, dots };
   };
 
-  const delivSeries = buildPaths((p) => p.delivering);
   const delvdSeries = buildPaths((p) => p.delivered);
 
   const yTicks = useMemo(() => {
@@ -193,6 +205,10 @@ export function SamedayProgressCharts({
     hoverIdx !== null && hoverIdx >= 0 && hoverIdx < trendPoints.length
       ? trendPoints[hoverIdx]
       : null;
+  const displayPoint =
+    activePoint ??
+    (trendPoints.length > 0 ? trendPoints[trendPoints.length - 1] : null);
+  const isShowingHover = activePoint !== null;
 
   // Donut arc helper
   const donutRadius = 36;
@@ -206,19 +222,19 @@ export function SamedayProgressCharts({
     rows.length === 1 ? rows[0].namaHub : `Rata-rata ${rows.length} Hub Terfilter`;
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-stretch">
       {/* Chart 1 (2/3 width): Tren Progres Harian / Mingguan SD Delivering & Delivered */}
-      <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-sky-600 dark:border-t-sky-500 shadow-sm p-5 flex flex-col justify-between">
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+      <div className="xl:col-span-2 bg-white rounded-2xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-sky-600 dark:border-t-sky-500 shadow-sm p-5 flex flex-col">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-2.5">
           <div>
             <div className="flex items-center gap-2">
               <LineChart className="h-4 w-4 text-sky-600 dark:text-sky-400" />
               <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
-                Grafik Progres Sameday ({granularity === "daily" ? "14 Hari Terakhir" : "L1M → MTD"})
+                Grafik Progres STD ({granularity === "daily" ? "14 Hari Terakhir" : "L1M → MTD"})
               </h2>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {scopeLabel} · Perbandingan SD Delivering vs SD Delivered terhadap target
+              {scopeLabel} · Perbandingan SD Delivered terhadap target
             </p>
           </div>
 
@@ -257,47 +273,36 @@ export function SamedayProgressCharts({
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] font-semibold mb-2">
           <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
-            <span className="w-2.5 h-2.5 rounded-full bg-sky-500" />
-            SD Delivering
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
             SD Delivered
           </span>
-          {avgTargetDelivering !== null && (
-            <span className="inline-flex items-center gap-1.5 text-sky-600 dark:text-sky-300">
-              <span className="w-4 border-t-2 border-dashed border-sky-400" />
-              Target Deliv ({fmtPct(avgTargetDelivering)})
-            </span>
-          )}
           {avgTargetDelivered !== null && (
             <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-300">
               <span className="w-4 border-t-2 border-dashed border-emerald-400" />
-              Target Delvd ({fmtPct(avgTargetDelivered)})
+              Target Delivered ({fmtPct(avgTargetDelivered)})
             </span>
           )}
         </div>
 
-        {/* Responsive SVG Chart */}
-        <div className="relative w-full">
+        {/* Responsive Full-Bleed SVG Chart */}
+        <div
+          ref={chartBoxRef}
+          className="relative w-full flex-1 min-h-[250px]"
+        >
           {trendPoints.length === 0 ? (
-            <div className="h-52 flex items-center justify-center text-xs text-slate-400">
+            <div className="h-full min-h-[250px] flex items-center justify-center text-xs text-slate-400">
               Tidak ada data tren untuk ditampilkan.
             </div>
           ) : (
             <svg
               viewBox={`0 0 ${svgW} ${svgH}`}
-              className="w-full h-56 sm:h-60 overflow-visible select-none"
+              className="absolute inset-0 w-full h-full block overflow-visible select-none"
               onMouseLeave={() => setHoverIdx(null)}
             >
               <defs>
-                <linearGradient id="sdDelivGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.22" />
-                  <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0.01" />
-                </linearGradient>
                 <linearGradient id="sdDelvdGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.24" />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.01" />
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.26" />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity="0.02" />
                 </linearGradient>
               </defs>
 
@@ -327,19 +332,7 @@ export function SamedayProgressCharts({
                 );
               })}
 
-              {/* Reference Target Lines */}
-              {avgTargetDelivering !== null && avgTargetDelivering >= yMin && avgTargetDelivering <= yMax && (
-                <line
-                  x1={padL}
-                  y1={getY(avgTargetDelivering)}
-                  x2={svgW - padR}
-                  y2={getY(avgTargetDelivering)}
-                  stroke="#38bdf8"
-                  strokeWidth="1.5"
-                  strokeDasharray="5 4"
-                  opacity="0.8"
-                />
-              )}
+              {/* Reference Target Line */}
               {avgTargetDelivered !== null && avgTargetDelivered >= yMin && avgTargetDelivered <= yMax && (
                 <line
                   x1={padL}
@@ -349,31 +342,20 @@ export function SamedayProgressCharts({
                   stroke="#34d399"
                   strokeWidth="1.5"
                   strokeDasharray="5 4"
-                  opacity="0.85"
+                  opacity="0.9"
                 />
               )}
 
-              {/* Area Fills */}
-              {delivSeries.area && <path d={delivSeries.area} fill="url(#sdDelivGrad)" />}
+              {/* Area Fill */}
               {delvdSeries.area && <path d={delvdSeries.area} fill="url(#sdDelvdGrad)" />}
 
-              {/* Lines */}
-              {delivSeries.line && (
-                <path
-                  d={delivSeries.line}
-                  fill="none"
-                  stroke="#0ea5e9"
-                  strokeWidth="2.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              )}
+              {/* Line */}
               {delvdSeries.line && (
                 <path
                   d={delvdSeries.line}
                   fill="none"
                   stroke="#10b981"
-                  strokeWidth="2.6"
+                  strokeWidth="2.8"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                 />
@@ -393,23 +375,12 @@ export function SamedayProgressCharts({
               )}
 
               {/* Data Points */}
-              {delivSeries.dots.map((d) => (
-                <circle
-                  key={`dlv-${d.idx}`}
-                  cx={d.x}
-                  cy={d.y}
-                  r={hoverIdx === d.idx ? 5 : 3.2}
-                  fill="#0ea5e9"
-                  stroke="#ffffff"
-                  strokeWidth="1.5"
-                />
-              ))}
               {delvdSeries.dots.map((d) => (
                 <circle
                   key={`dlvd-${d.idx}`}
                   cx={d.x}
                   cy={d.y}
-                  r={hoverIdx === d.idx ? 5.2 : 3.4}
+                  r={hoverIdx === d.idx ? 5.5 : 3.6}
                   fill="#10b981"
                   stroke="#ffffff"
                   strokeWidth="1.5"
@@ -456,23 +427,30 @@ export function SamedayProgressCharts({
             </svg>
           )}
 
-          {/* Hover Tooltip Strip */}
-          {activePoint && (
-            <div className="mt-1 px-3 py-2 rounded-xl bg-slate-900 dark:bg-slate-950 text-white text-xs flex flex-wrap items-center justify-between gap-3 border border-slate-700 shadow-md">
-              <span className="font-extrabold text-amber-300">{activePoint.label}</span>
-              <div className="flex items-center gap-4 tabular-nums">
-                <span>
-                  Delivering:{" "}
-                  <strong className="text-sky-300">{fmtPct(activePoint.delivering)}</strong>
-                </span>
-                <span>
-                  Delivered:{" "}
-                  <strong className="text-emerald-300">{fmtPct(activePoint.delivered)}</strong>
-                </span>
-              </div>
-            </div>
-          )}
+          {/* Telemetry / Hover Info Strip */}
         </div>
+        {displayPoint && (
+          <div className="mt-3 px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-slate-950 text-white text-xs flex flex-wrap items-center justify-between gap-3 border border-slate-700/90 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-amber-300">{displayPoint.label}</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                {isShowingHover ? "Dipilih" : "Terbaru · Arahkan kursor ke grafik"}
+              </span>
+            </div>
+            <div className="flex items-center gap-4 tabular-nums">
+              <span>
+                Delivered:{" "}
+                <strong className="text-emerald-300">{fmtPct(displayPoint.delivered)}</strong>
+              </span>
+              {avgTargetDelivered !== null && (
+                <span className="text-slate-300">
+                  Target:{" "}
+                  <strong className="text-amber-300">{fmtPct(avgTargetDelivered)}</strong>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Chart 2 (1/3 width): Donut Kepatuhan Target & Progres per Hub */}
