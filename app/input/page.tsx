@@ -501,9 +501,6 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             "mitra_actual_2wh",
             "mitra_actual_4wh",
             "backlog_total",
-            "backlog_to_buyer",
-            "backlog_to_seller",
-            "backlog_to_transfer",
             "total_expedite",
           ] as const;
           const hasMain2whRatios = /(?:2|Z)\s*W\s*H[^\n]*(?:\d+\s*\/\s*\d+[^\n]*){2,}/i.test(

@@ -958,10 +958,7 @@ function isValidDonutForPcts(n: number, rawSectionText: string): boolean {
 }
 
 function extractBacklog(text: string): {
-  backlog_total:       number | null;
-  backlog_to_buyer:    number | null;
-  backlog_to_seller:   number | null;
-  backlog_to_transfer: number | null;
+  backlog_total: number | null;
 } {
   // 1. Ekstrak dari tabel Aging (paling akurat 100% saat Ctrl+A / Ctrl+V)
   // Batasi pencarian di antara "Backlog" dan "To Expedite" / "Operation Progress"
@@ -970,7 +967,7 @@ function extractBacklog(text: string): {
   );
   if (!backlogBlockMatch) {
     // Gambar ini bukan kartu Backlog (mis. Fleet Head Counts) -> jangan fabrikasi angka
-    return { backlog_total: null, backlog_to_buyer: null, backlog_to_seller: null, backlog_to_transfer: null };
+    return { backlog_total: null };
   }
   const blockText = backlogBlockMatch[1];
 
@@ -1032,22 +1029,15 @@ function extractBacklog(text: string): {
 
   // Jika tabel Aging lengkap terbaca (3 baris: >3 Hari, 3 Hari, 1-2 Hari), jumlah ketiganya = 100% akurat
   if (foundAgingRows >= 3) {
-    const sumAging = to_buyer + to_seller + to_transfer;
     return {
-      backlog_total:       sumAging,
-      backlog_to_buyer:    to_buyer,
-      backlog_to_seller:   to_seller,
-      backlog_to_transfer: to_transfer,
+      backlog_total: to_buyer + to_seller + to_transfer,
     };
   }
 
   // Jika hanya sebagian baris Aging terbaca (misal dari OCR buram), gunakan hanya jika >= 2 baris terbaca
   const sumPartial = foundAgingRows >= 2 ? to_buyer + to_seller + to_transfer : null;
   return {
-    backlog_total:       donut_total ?? sumPartial,
-    backlog_to_buyer:    foundAgingRows >= 2 ? to_buyer    : null,
-    backlog_to_seller:   foundAgingRows >= 2 ? to_seller   : null,
-    backlog_to_transfer: foundAgingRows >= 2 ? to_transfer : null,
+    backlog_total: donut_total ?? sumPartial,
   };
 }
 

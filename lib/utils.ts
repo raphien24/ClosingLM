@@ -113,7 +113,7 @@ export function addAnomaliesToRows(
 }
 
 // ── Konversi ClosingData ↔ Sheets row ───────────────────────
-// Urutan WAJIB sama persis dengan header DATA_CLOSING (27 kolom)
+// Urutan WAJIB sama persis dengan header DATA_CLOSING (24 kolom)
 export function closingDataToRow(
   data: ClosingData,
   submittedAt: string,
@@ -136,17 +136,14 @@ export function closingDataToRow(
     data.mitra_actual_2wh           ?? "",    // [13]
     data.mitra_actual_4wh           ?? "",    // [14]
     data.backlog_total              ?? "",    // [15]
-    data.backlog_to_buyer           ?? "",    // [16]
-    data.backlog_to_seller          ?? "",    // [17]
-    data.backlog_to_transfer        ?? "",    // [18]
-    data.expedite                   ?? "",    // [19]
-    data.super_expedite             ?? "",    // [20]
-    data.total_expedite             ?? "",    // [21]
-    submittedAt,                              // [22]
-    submittedBy,                              // [23]
-    data.parcel_sweeper_total       ?? "",    // [24]
-    data.parcel_sweeper_scanned_pct ?? "",    // [25]
-    (data.manual_fields || []).join(","),     // [26]
+    data.expedite                   ?? "",    // [16]
+    data.super_expedite             ?? "",    // [17]
+    data.total_expedite             ?? "",    // [18]
+    submittedAt,                              // [19]
+    submittedBy,                              // [20]
+    data.parcel_sweeper_total       ?? "",    // [21]
+    data.parcel_sweeper_scanned_pct ?? "",    // [22]
+    (data.manual_fields || []).join(","),     // [23]
   ];
 }
 
@@ -195,17 +192,14 @@ export function rowToClosingData(row: string[]): ClosingData {
     mitra_actual_2wh:           n(row[13]),
     mitra_actual_4wh:           n(row[14]),
     backlog_total:              n(row[15]),
-    backlog_to_buyer:           n(row[16]),
-    backlog_to_seller:          n(row[17]),
-    backlog_to_transfer:        n(row[18]),
-    expedite:                   n(row[19]),
-    super_expedite:             n(row[20]),
-    total_expedite:             n(row[21]),
-    submitted_at:               row[22] || "",
-    submitted_by:               row[23] || "",
-    parcel_sweeper_total:       n(row[24]),
-    parcel_sweeper_scanned_pct: n(row[25]),
-    manual_fields:              (row[26] || "")
+    expedite:                   n(row[16]),
+    super_expedite:             n(row[17]),
+    total_expedite:             n(row[18]),
+    submitted_at:               row[19] || "",
+    submitted_by:               row[20] || "",
+    parcel_sweeper_total:       n(row[21]),
+    parcel_sweeper_scanned_pct: n(row[22]),
+    manual_fields:              (row[23] || "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
