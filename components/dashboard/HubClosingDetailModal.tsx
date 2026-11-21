@@ -197,21 +197,36 @@ export function HubSummaryReportCard({
         </div>
 
         <div className="flex items-center gap-3 flex-shrink-0">
-          {hasData && (
-            <div
-              aria-label="Original Report Approved"
-              className="select-none pointer-events-none -rotate-6 rounded-lg border-2 border-emerald-600/80 dark:border-emerald-400/80 p-[2px] bg-emerald-500/[0.06] dark:bg-emerald-400/10 shadow-[0_2px_10px_-2px_rgba(16,185,129,0.28)]"
-            >
-              <div className="rounded-[5px] border border-dashed border-emerald-600/70 dark:border-emerald-400/70 px-2.5 py-1 text-center text-emerald-700 dark:text-emerald-300">
-                <p className="text-[7px] sm:text-[8px] font-black tracking-[0.18em] uppercase leading-tight">
-                  ★ ORIGINAL REPORT ★
-                </p>
-                <p className="text-[11px] sm:text-xs font-black tracking-[0.2em] uppercase leading-tight mt-0.5">
-                  APPROVED
-                </p>
+          {hasData &&
+            (manualCount > 0 ? (
+              <div
+                aria-label="Modified Manual Report Detected"
+                className="select-none pointer-events-none -rotate-6 rounded-lg border-2 border-red-600/85 dark:border-red-400/85 p-[2px] bg-red-500/[0.08] dark:bg-red-500/15 shadow-[0_2px_10px_-2px_rgba(220,38,38,0.32)]"
+              >
+                <div className="rounded-[5px] border border-dashed border-red-600/75 dark:border-red-400/75 px-2.5 py-1 text-center text-red-700 dark:text-red-300">
+                  <p className="text-[7px] sm:text-[8px] font-black tracking-[0.16em] uppercase leading-tight">
+                    ⚠ MODIFIED MANUAL ⚠
+                  </p>
+                  <p className="text-[9px] sm:text-[10px] font-black tracking-[0.14em] uppercase leading-tight mt-0.5">
+                    REPORT DETECTED
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div
+                aria-label="Original Report Approved"
+                className="select-none pointer-events-none -rotate-6 rounded-lg border-2 border-emerald-600/80 dark:border-emerald-400/80 p-[2px] bg-emerald-500/[0.06] dark:bg-emerald-400/10 shadow-[0_2px_10px_-2px_rgba(16,185,129,0.28)]"
+              >
+                <div className="rounded-[5px] border border-dashed border-emerald-600/70 dark:border-emerald-400/70 px-2.5 py-1 text-center text-emerald-700 dark:text-emerald-300">
+                  <p className="text-[7px] sm:text-[8px] font-black tracking-[0.18em] uppercase leading-tight">
+                    ★ ORIGINAL REPORT ★
+                  </p>
+                  <p className="text-[11px] sm:text-xs font-black tracking-[0.2em] uppercase leading-tight mt-0.5">
+                    APPROVED
+                  </p>
+                </div>
+              </div>
+            ))}
 
           {isModal && (
             <button

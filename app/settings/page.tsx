@@ -18,6 +18,7 @@ import {
   Send,
   Settings,
   ShieldAlert,
+  TrendingUp,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -26,9 +27,12 @@ export default function SettingsPage() {
   const [webhookUrl, setWebhookUrl] = useState("");
   const [updatedAt, setUpdatedAt] = useState("");
   const [updatedBy, setUpdatedBy] = useState("");
+  const [stdWebhookUrl, setStdWebhookUrl] = useState("");
+  const [stdUpdatedAt, setStdUpdatedAt] = useState("");
+  const [stdUpdatedBy, setStdUpdatedBy] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
+  const [testingTarget, setTestingTarget] = useState<"closing" | "std" | null>(null);
   const [runningCron, setRunningCron] = useState<string | null>(null);
   const [cronPreview, setCronPreview] = useState<{
     title: string;
@@ -41,7 +45,7 @@ export default function SettingsPage() {
   } | null>(null);
 
   const gasScheduleSnippet = `// Jalankan fungsi setupSeatalkScheduleTriggers() sekali di Google Apps Script
-// agar jadwal berjalan tepat pada 23:20 WIB & 00:05 WIB (mengikuti zona Asia/Jakarta).
+// agar jadwal berjalan tepat pada 23:20 WIB, 00:05 WIB, & 09:00 WIB (zona Asia/Jakarta).
 const CLOSING_LM_URL = "https://closing-lm.vercel.app";
 const CLOSING_LM_API_KEY = "spx-soko-jtt08-secure-2026";
 
@@ -63,10 +67,23 @@ function runSeaTalkSummary0005() {
   Logger.log("Summary 00:05 (" + res.getResponseCode() + "): " + res.getContentText());
 }
 
+function runSeaTalkStd0900() {
+  const res = UrlFetchApp.fetch(CLOSING_LM_URL + "/api/cron/std-report", {
+    method: "POST",
+    headers: { "x-api-key": CLOSING_LM_API_KEY },
+    muteHttpExceptions: true,
+  });
+  Logger.log("Monitor STD 09:00 (" + res.getResponseCode() + "): " + res.getContentText());
+}
+
 function setupSeatalkScheduleTriggers() {
   ScriptApp.getProjectTriggers().forEach((t) => {
     const fn = t.getHandlerFunction();
-    if (fn === "runSeaTalkReminder2320" || fn === "runSeaTalkSummary0005") {
+    if (
+      fn === "runSeaTalkReminder2320" ||
+      fn === "runSeaTalkSummary0005" ||
+      fn === "runSeaTalkStd0900"
+    ) {
       ScriptApp.deleteTrigger(t);
     }
   });
@@ -74,11 +91,13 @@ function setupSeatalkScheduleTriggers() {
     .timeBased().atHour(23).nearMinute(20).everyDays(1).inTimezone("Asia/Jakarta").create();
   ScriptApp.newTrigger("runSeaTalkSummary0005")
     .timeBased().atHour(0).nearMinute(5).everyDays(1).inTimezone("Asia/Jakarta").create();
-  Logger.log("Trigger SeaTalk 23:20 & 00:05 WIB berhasil dibuat!");
+  ScriptApp.newTrigger("runSeaTalkStd0900")
+    .timeBased().atHour(9).nearMinute(0).everyDays(1).inTimezone("Asia/Jakarta").create();
+  Logger.log("Trigger SeaTalk 23:20, 00:05 & 09:00 WIB berhasil dibuat!");
 }`;
 
   const handleRunCronJob = async (
-    endpoint: "reminder-closing" | "daily-summary",
+    endpoint: "reminder-closing" | "daily-summary" | "std-report",
     dryRun: boolean
   ) => {
     const key = `${endpoint}-${dryRun ? "preview" : "send"}`;
@@ -89,20 +108,23 @@ function setupSeatalkScheduleTriggers() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gagal menjalankan jadwal");
       if (json.preview) {
+        const previewTitle =
+          endpoint === "reminder-closing"
+            ? `Preview Reminder 23:20 WIB (${json.targetDate})`
+            : endpoint === "daily-summary"
+            ? `Preview Daily Summary 00:05 WIB (${json.targetDate})`
+            : `Preview Monitor STD 09:00 WIB (${json.reportDate || json.targetDate})`;
         setCronPreview({
-          title:
-            endpoint === "reminder-closing"
-              ? `Preview Reminder 23:20 WIB (${json.targetDate})`
-              : `Preview Daily Summary 00:05 WIB (${json.targetDate})`,
+          title: previewTitle,
           text: json.preview,
           imageDataUrl: json.previewImageDataUrl,
         });
       }
       toast.success(
         dryRun
-          ? `Preview berhasil dimuat (${json.mentionedCount || 0} PIC tercantum).`
-          : endpoint === "daily-summary"
-          ? `Gambar report & caption berhasil dikirim ke SeaTalk (${json.mentionedCount || 0} PIC tercantum)!`
+          ? "Preview berhasil dimuat."
+          : endpoint === "daily-summary" || endpoint === "std-report"
+          ? "Gambar report & caption berhasil dikirim ke SeaTalk!"
           : `Pesan berhasil dikirim ke SeaTalk (${json.mentionedCount || 0} PIC tercantum)!`
       );
     } catch (err) {
@@ -121,6 +143,9 @@ function setupSeatalkScheduleTriggers() {
       setWebhookUrl(json.settings?.seatalk_webhook_url || "");
       setUpdatedAt(json.settings?.updated_at || "");
       setUpdatedBy(json.settings?.updated_by || "");
+      setStdWebhookUrl(json.settings?.seatalk_std_webhook_url || "");
+      setStdUpdatedAt(json.settings?.std_updated_at || "");
+      setStdUpdatedBy(json.settings?.std_updated_by || "");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal memuat pengaturan");
     } finally {
@@ -145,7 +170,10 @@ function setupSeatalkScheduleTriggers() {
       const res = await fetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seatalk_webhook_url: webhookUrl.trim() }),
+        body: JSON.stringify({
+          seatalk_webhook_url: webhookUrl.trim(),
+          seatalk_std_webhook_url: stdWebhookUrl.trim(),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Gagal menyimpan settings");
@@ -153,6 +181,9 @@ function setupSeatalkScheduleTriggers() {
       setWebhookUrl(json.settings?.seatalk_webhook_url || "");
       setUpdatedAt(json.settings?.updated_at || "");
       setUpdatedBy(json.settings?.updated_by || "");
+      setStdWebhookUrl(json.settings?.seatalk_std_webhook_url || "");
+      setStdUpdatedAt(json.settings?.std_updated_at || "");
+      setStdUpdatedBy(json.settings?.std_updated_by || "");
       setStatusBanner({
         type: "success",
         msg: json.message || "Pengaturan berhasil disimpan.",
@@ -168,18 +199,26 @@ function setupSeatalkScheduleTriggers() {
     }
   };
 
-  const handleTestWebhook = async () => {
-    if (!webhookUrl.trim()) {
-      toast.error("Masukkan URL Webhook SeaTalk terlebih dahulu.");
+  const handleTestWebhook = async (target: "closing" | "std") => {
+    const candidate = target === "std" ? stdWebhookUrl.trim() : webhookUrl.trim();
+    if (!candidate) {
+      toast.error(
+        target === "std"
+          ? "Masukkan URL Webhook SeaTalk Monitor STD terlebih dahulu."
+          : "Masukkan URL Webhook SeaTalk Closing terlebih dahulu."
+      );
       return;
     }
-    setIsTesting(true);
+    setTestingTarget(target);
     setStatusBanner(null);
     try {
       const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seatalk_webhook_url: webhookUrl.trim() }),
+        body: JSON.stringify({
+          target,
+          seatalk_webhook_url: candidate,
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Test webhook gagal");
@@ -188,13 +227,13 @@ function setupSeatalkScheduleTriggers() {
         type: "success",
         msg: json.message || "Pesan test berhasil dikirim ke SeaTalk!",
       });
-      toast.success("Test pesan terkirim ke SeaTalk!");
+      toast.success(json.message || "Test pesan terkirim ke SeaTalk!");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Test webhook gagal";
       setStatusBanner({ type: "error", msg });
       toast.error(msg);
     } finally {
-      setIsTesting(false);
+      setTestingTarget(null);
     }
   };
 
@@ -225,26 +264,40 @@ function setupSeatalkScheduleTriggers() {
               <Badge variant="green">Owner Only</Badge>
             </div>
             <p className="text-sm text-gray-500">
-              Konfigurasi integrasi Webhook Group SeaTalk untuk tombol Confirm Closing &amp; Send Seatalk
+              Konfigurasi integrasi Webhook Group SeaTalk untuk laporan Closing LM &amp; Monitor STD
             </p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-2xl bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+      <div className="max-w-4xl bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         {isLoading ? (
           <div className="py-10 text-center text-sm text-gray-400">
             Memuat pengaturan...
           </div>
         ) : (
-          <form onSubmit={handleSave} className="space-y-5">
-            <div>
-              <label
-                htmlFor="seatalk-webhook-url"
-                className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5"
-              >
-                Webhook SeaTalk Group URL
-              </label>
+          <form onSubmit={handleSave} className="space-y-6">
+            {/* Field 1: Webhook Closing LM */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label
+                  htmlFor="seatalk-webhook-url"
+                  className="block text-xs font-semibold text-gray-600 uppercase tracking-wider"
+                >
+                  Webhook SeaTalk Group URL — Report Closing LM
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  loading={testingTarget === "closing"}
+                  disabled={isSaving || !!testingTarget || !webhookUrl.trim()}
+                  onClick={() => handleTestWebhook("closing")}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Test Webhook Closing
+                </Button>
+              </div>
               <div className="relative">
                 <KeyRound className="h-4 w-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
@@ -256,12 +309,54 @@ function setupSeatalkScheduleTriggers() {
                   className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1.5">
-                Salin Webhook URL dari SeaTalk Group Bot / System Account (`https://openapi.seatalk.io/webhook/group/...`). Saat tombol <strong>Confirm Closing &amp; Send Seatalk</strong> diklik di Dashboard, screenshot beserta caption list Hub sudah closing &amp; belum closing dikirim ke webhook ini.
+              <p className="text-xs text-gray-500">
+                Digunakan untuk tombol <strong>Confirm Closing &amp; Send Seatalk</strong>, Reminder Closing <strong>23:20 WIB</strong>, dan Daily Summary <strong>00:05 WIB</strong>.
               </p>
               {updatedAt && (
-                <p className="text-[11px] text-gray-400 mt-1">
+                <p className="text-[11px] text-gray-400">
                   Terakhir diperbarui: {updatedAt} {updatedBy ? `oleh ${updatedBy}` : ""}
+                </p>
+              )}
+            </div>
+
+            {/* Field 2: Webhook Monitor STD */}
+            <div className="pt-5 border-t border-gray-100 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <label
+                  htmlFor="seatalk-std-webhook-url"
+                  className="block text-xs font-semibold text-sky-700 uppercase tracking-wider"
+                >
+                  Webhook SeaTalk Group URL — Report Monitor STD (09:00 WIB)
+                </label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  loading={testingTarget === "std"}
+                  disabled={isSaving || !!testingTarget || !stdWebhookUrl.trim()}
+                  onClick={() => handleTestWebhook("std")}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Test Webhook STD
+                </Button>
+              </div>
+              <div className="relative">
+                <KeyRound className="h-4 w-4 text-sky-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  id="seatalk-std-webhook-url"
+                  type="url"
+                  value={stdWebhookUrl}
+                  onChange={(e) => setStdWebhookUrl(e.target.value)}
+                  placeholder="https://openapi.seatalk.io/webhook/group/yyyyyyyy"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm border border-sky-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono"
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                Webhook khusus grup tujuan untuk pengiriman otomatis gambar &amp; summary <strong>Monitor STD</strong> setiap jam <strong>09:00 WIB</strong>.
+              </p>
+              {stdUpdatedAt && (
+                <p className="text-[11px] text-gray-400">
+                  Terakhir diperbarui: {stdUpdatedAt} {stdUpdatedBy ? `oleh ${stdUpdatedBy}` : ""}
                 </p>
               )}
             </div>
@@ -283,28 +378,17 @@ function setupSeatalkScheduleTriggers() {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-100">
-              <Button
-                type="button"
-                variant="outline"
-                loading={isTesting}
-                disabled={isSaving || !webhookUrl.trim()}
-                onClick={handleTestWebhook}
-              >
-                <Send className="h-4 w-4" />
-                Test Kirim ke SeaTalk
-              </Button>
-
-              <Button type="submit" loading={isSaving} disabled={isTesting}>
+            <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-gray-100">
+              <Button type="submit" loading={isSaving} disabled={!!testingTarget}>
                 <Save className="h-4 w-4" />
-                Simpan Settings
+                Simpan Semua Webhook
               </Button>
             </div>
           </form>
         )}
       </div>
 
-      {/* Jadwal Otomatis SeaTalk 23:20 WIB & 00:05 WIB */}
+      {/* Jadwal Otomatis SeaTalk 23:20 WIB, 00:05 WIB & 09:00 WIB */}
       <div className="max-w-4xl bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
@@ -316,13 +400,13 @@ function setupSeatalkScheduleTriggers() {
                 Jadwal Laporan &amp; Reminder Otomatis SeaTalk
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
-                Otomatis berjalan via GitHub Actions (dan bisa dipasang di Google Apps Script untuk akurasi menit tepat di WIB). Anti-duplikat harian aktif.
+                Otomatis berjalan via GitHub Actions &amp; Google Apps Script pada jam WIB. Anti-duplikat harian aktif.
               </p>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Card 23:20 WIB Reminder */}
           <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -396,6 +480,43 @@ function setupSeatalkScheduleTriggers() {
               </Button>
             </div>
           </div>
+
+          {/* Card 09:00 WIB Monitor STD Report */}
+          <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-sky-900">
+                <TrendingUp className="h-4 w-4 text-sky-600" />
+                Monitor STD Report
+              </span>
+              <Badge variant="blue">09:00 WIB</Badge>
+            </div>
+            <p className="text-xs text-gray-600">
+              Mengirim gambar dashboard Monitor STD (KPI + grafik 14 hari + ranking Hub) beserta daftar Hub di bawah target ke Webhook STD.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                loading={runningCron === "std-report-preview"}
+                disabled={!!runningCron}
+                onClick={() => handleRunCronJob("std-report", true)}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                loading={runningCron === "std-report-send"}
+                disabled={!!runningCron || !stdWebhookUrl.trim()}
+                onClick={() => handleRunCronJob("std-report", false)}
+              >
+                <Send className="h-3.5 w-3.5" />
+                Kirim Sekarang
+              </Button>
+            </div>
+          </div>
         </div>
 
         {cronPreview && (
@@ -429,7 +550,7 @@ function setupSeatalkScheduleTriggers() {
         <div className="pt-3 border-t border-gray-100 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-gray-700">
-              Opsional — Script Trigger Google Apps Script (Tepat 23:20 &amp; 00:05 WIB)
+              Opsional — Script Trigger Google Apps Script (23:20, 00:05 &amp; 09:00 WIB)
             </p>
             <Button
               type="button"

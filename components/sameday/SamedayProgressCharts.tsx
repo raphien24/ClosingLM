@@ -158,8 +158,8 @@ export function SamedayProgressCharts({
   const svgW = chartSize.width;
   const svgH = chartSize.height;
   const padL = 44;
-  const padR = 16;
-  const padT = 16;
+  const padR = 26;
+  const padT = 26;
   const padB = 30;
   const plotW = Math.max(120, svgW - padL - padR);
   const plotH = Math.max(100, svgH - padT - padB);
@@ -374,18 +374,35 @@ export function SamedayProgressCharts({
                 />
               )}
 
-              {/* Data Points */}
-              {delvdSeries.dots.map((d) => (
-                <circle
-                  key={`dlvd-${d.idx}`}
-                  cx={d.x}
-                  cy={d.y}
-                  r={hoverIdx === d.idx ? 5.5 : 3.6}
-                  fill="#10b981"
-                  stroke="#ffffff"
-                  strokeWidth="1.5"
-                />
-              ))}
+              {/* Data Points + Value Labels */}
+              {delvdSeries.dots.map((d) => {
+                const isHovered = hoverIdx === d.idx;
+                return (
+                  <g key={`dlvd-${d.idx}`}>
+                    <circle
+                      cx={d.x}
+                      cy={d.y}
+                      r={isHovered ? 5.5 : 3.6}
+                      fill="#10b981"
+                      stroke="#ffffff"
+                      strokeWidth="1.5"
+                    />
+                    <text
+                      x={d.x}
+                      y={d.y - 10}
+                      textAnchor="middle"
+                      style={{ paintOrder: "stroke" }}
+                      className={`text-[10px] tabular-nums stroke-[3px] stroke-white dark:stroke-slate-900 pointer-events-none ${
+                        isHovered
+                          ? "font-extrabold fill-amber-600 dark:fill-amber-300"
+                          : "font-bold fill-emerald-700 dark:fill-emerald-300"
+                      }`}
+                    >
+                      {fmtPct(d.val)}
+                    </text>
+                  </g>
+                );
+              })}
 
               {/* X Axis Labels & Interactive Hover Columns */}
               {trendPoints.map((pt, idx) => {

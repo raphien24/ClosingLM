@@ -29,6 +29,7 @@ export interface DailySummaryImagePayload {
   incompleteCount: number;
   deliveringGantunganCount: number;
   onholdGantunganCount: number;
+  manualHubCount?: number;
   hubRows: DailySummaryHubRow[];
 }
 
@@ -233,41 +234,79 @@ export async function generateDailySummaryImageBase64(
           </div>
 
           {/* Stamp */}
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "6px 14px",
-              borderRadius: 10,
-              border: "2px solid #059669",
-              backgroundColor: "#ecfdf5",
-              transform: "rotate(-4deg)",
-            }}
-          >
+          {(data.manualHubCount ?? 0) > 0 ? (
             <div
               style={{
-                fontSize: 9,
-                fontWeight: 800,
-                color: "#047857",
-                letterSpacing: "0.14em",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "6px 14px",
+                borderRadius: 10,
+                border: "2px solid #dc2626",
+                backgroundColor: "#fef2f2",
+                transform: "rotate(-4deg)",
               }}
             >
-              ORIGINAL REPORT
+              <div
+                style={{
+                  fontSize: 9,
+                  fontWeight: 800,
+                  color: "#b91c1c",
+                  letterSpacing: "0.14em",
+                }}
+              >
+                MODIFIED MANUAL
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 900,
+                  color: "#991b1b",
+                  letterSpacing: "0.12em",
+                  marginTop: 1,
+                }}
+              >
+                REPORT DETECTED
+              </div>
             </div>
+          ) : (
             <div
               style={{
-                fontSize: 13,
-                fontWeight: 900,
-                color: "#065f46",
-                letterSpacing: "0.18em",
-                marginTop: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "6px 14px",
+                borderRadius: 10,
+                border: "2px solid #059669",
+                backgroundColor: "#ecfdf5",
+                transform: "rotate(-4deg)",
               }}
             >
-              SUMMARY
+              <div
+                style={{
+                  fontSize: 9,
+                  fontWeight: 800,
+                  color: "#047857",
+                  letterSpacing: "0.14em",
+                }}
+              >
+                ORIGINAL REPORT
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 900,
+                  color: "#065f46",
+                  letterSpacing: "0.18em",
+                  marginTop: 1,
+                }}
+              >
+                SUMMARY
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* KPI Strip */}

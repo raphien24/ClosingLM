@@ -10,6 +10,7 @@ const COL_UPDATED_AT = 2;
 const COL_UPDATED_BY = 3;
 
 export const SEATALK_WEBHOOK_KEY = "seatalk_webhook_url";
+export const SEATALK_STD_WEBHOOK_KEY = "seatalk_std_webhook_url";
 
 export interface SettingRecord {
   key: string;
@@ -121,5 +122,12 @@ export async function getSeaTalkWebhookUrl(options?: {
   skipCache?: boolean;
 }): Promise<string> {
   const rec = await getSetting(SEATALK_WEBHOOK_KEY, options);
+  return rec?.value || "";
+}
+
+export async function getSeaTalkStdWebhookUrl(options?: {
+  skipCache?: boolean;
+}): Promise<string> {
+  const rec = await getSetting(SEATALK_STD_WEBHOOK_KEY, options);
   return rec?.value || "";
 }

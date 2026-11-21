@@ -3,11 +3,28 @@ import { auth } from "@/lib/auth";
 import { isOwnerAdminEmail } from "@/lib/authConstants";
 import {
   getSetting,
+  SEATALK_STD_WEBHOOK_KEY,
   SEATALK_WEBHOOK_KEY,
   setSetting,
   SettingsError,
   validateSeaTalkWebhookUrl,
 } from "@/lib/settingsService";
+
+async function readAllSettingsPayload(skipCache = false) {
+  const [closingRec, stdRec] = await Promise.all([
+    getSetting(SEATALK_WEBHOOK_KEY, { skipCache }),
+    getSetting(SEATALK_STD_WEBHOOK_KEY, { skipCache }),
+  ]);
+
+  return {
+    seatalk_webhook_url: closingRec?.value || "",
+    updated_at: closingRec?.updated_at || "",
+    updated_by: closingRec?.updated_by || "",
+    seatalk_std_webhook_url: stdRec?.value || "",
+    std_updated_at: stdRec?.updated_at || "",
+    std_updated_by: stdRec?.updated_by || "",
+  };
+}
 
 export async function GET() {
   const session = await auth();
@@ -23,14 +40,10 @@ export async function GET() {
   }
 
   try {
-    const rec = await getSetting(SEATALK_WEBHOOK_KEY);
+    const settings = await readAllSettingsPayload();
     return NextResponse.json({
       success: true,
-      settings: {
-        seatalk_webhook_url: rec?.value || "",
-        updated_at: rec?.updated_at || "",
-        updated_by: rec?.updated_by || "",
-      },
+      settings,
     });
   } catch (err) {
     return NextResponse.json(
@@ -53,7 +66,7 @@ export async function PUT(req: NextRequest) {
     );
   }
 
-  let body: { seatalk_webhook_url?: string };
+  let body: { seatalk_webhook_url?: string; seatalk_std_webhook_url?: string };
   try {
     body = await req.json();
   } catch {
@@ -61,23 +74,42 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const cleanUrl = validateSeaTalkWebhookUrl(body.seatalk_webhook_url ?? "");
-    const saved = await setSetting({
-      key: SEATALK_WEBHOOK_KEY,
-      value: cleanUrl,
-      updatedBy: session.user.email || "",
-    });
+    const updatedBy = session.user.email || "";
+    const tasks: Promise<unknown>[] = [];
+
+    if (typeof body.seatalk_webhook_url === "string") {
+      const cleanClosingUrl = validateSeaTalkWebhookUrl(body.seatalk_webhook_url);
+      tasks.push(
+        setSetting({
+          key: SEATALK_WEBHOOK_KEY,
+          value: cleanClosingUrl,
+          updatedBy,
+        })
+      );
+    }
+
+    if (typeof body.seatalk_std_webhook_url === "string") {
+      const cleanStdUrl = validateSeaTalkWebhookUrl(body.seatalk_std_webhook_url);
+      tasks.push(
+        setSetting({
+          key: SEATALK_STD_WEBHOOK_KEY,
+          value: cleanStdUrl,
+          updatedBy,
+        })
+      );
+    }
+
+    if (tasks.length === 0) {
+      throw new SettingsError("Tidak ada field pengaturan yang dikirim.", 400);
+    }
+
+    await Promise.all(tasks);
+    const settings = await readAllSettingsPayload(true);
 
     return NextResponse.json({
       success: true,
-      message: cleanUrl
-        ? "Webhook SeaTalk berhasil disimpan."
-        : "Webhook SeaTalk berhasil dikosongkan.",
-      settings: {
-        seatalk_webhook_url: saved.value,
-        updated_at: saved.updated_at,
-        updated_by: saved.updated_by,
-      },
+      message: "Pengaturan Webhook SeaTalk berhasil disimpan.",
+      settings,
     });
   } catch (err) {
     const status = err instanceof SettingsError ? err.status : 500;
@@ -101,7 +133,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let body: { seatalk_webhook_url?: string };
+  let body: { target?: "closing" | "std"; seatalk_webhook_url?: string };
   try {
     body = await req.json();
   } catch {
@@ -109,22 +141,30 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const isStd = body.target === "std";
+    const settingKey = isStd ? SEATALK_STD_WEBHOOK_KEY : SEATALK_WEBHOOK_KEY;
     const rawCandidate =
       typeof body.seatalk_webhook_url === "string"
         ? body.seatalk_webhook_url
-        : (await getSetting(SEATALK_WEBHOOK_KEY, { skipCache: true }))?.value || "";
+        : (await getSetting(settingKey, { skipCache: true }))?.value || "";
     const webhookUrl = validateSeaTalkWebhookUrl(rawCandidate);
     if (!webhookUrl) {
-      throw new SettingsError("Masukkan URL Webhook SeaTalk terlebih dahulu.", 400);
+      throw new SettingsError(
+        isStd
+          ? "Masukkan URL Webhook SeaTalk Monitor STD terlebih dahulu."
+          : "Masukkan URL Webhook SeaTalk Closing terlebih dahulu.",
+        400
+      );
     }
 
+    const label = isStd ? "Monitor STD" : "Closing LM";
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tag: "text",
         text: {
-          content: `✅ Test koneksi Webhook SeaTalk dari Closing LM JTT08 berhasil (${session.user.email}).`,
+          content: `✅ Test koneksi Webhook SeaTalk (${label}) dari Closing LM JTT08 berhasil (${session.user.email}).`,
           at_all: false,
         },
       }),
@@ -147,7 +187,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Pesan test berhasil dikirim ke grup SeaTalk!",
+      message: `Pesan test Webhook ${label} berhasil dikirim ke grup SeaTalk!`,
     });
   } catch (err) {
     const status = err instanceof SettingsError ? err.status : 500;

@@ -118,7 +118,7 @@ function splitUtf8Chunks(text: string, maxBytes: number): string[] {
   return chunks;
 }
 
-async function sendSeaTalkImageMessage(
+export async function sendSeaTalkImageMessage(
   webhookUrl: string,
   base64Content: string
 ): Promise<void> {
@@ -148,7 +148,7 @@ async function sendSeaTalkImageMessage(
   }
 }
 
-async function sendSeaTalkTextMessage(
+export async function sendSeaTalkTextMessage(
   webhookUrl: string,
   content: string
 ): Promise<{ ok: boolean }> {
@@ -369,6 +369,7 @@ export async function runDailySummaryJob(options?: {
   let totalDeliveringAll = 0;
   let totalOhVolAll = 0;
   let prodFilledCount = 0;
+  let manualHubCount = 0;
 
   const hubRows: DailySummaryHubRow[] = [];
   const missingClosing: { hub: string; picText: string; hasProd: boolean }[] = [];
@@ -410,6 +411,9 @@ export async function runDailySummaryJob(options?: {
     }
 
     closedCount++;
+    if ((row.manual_fields?.length || 0) > 0) {
+      manualHubCount++;
+    }
 
     const vol =
       (row.in_hub_transported || 0) +
@@ -539,6 +543,7 @@ export async function runDailySummaryJob(options?: {
     incompleteCount: incompleteOrEmpty.length,
     deliveringGantunganCount: deliveringGantungan.length,
     onholdGantunganCount: onholdGantungan.length,
+    manualHubCount,
     hubRows,
   });
 
