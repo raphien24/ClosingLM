@@ -1,5 +1,6 @@
 import { appendRow, ensureSheet, getSheetData, updateRow } from "./sheets";
 import { getAllUserMappings } from "./userMapping";
+import { getConsistentHubsMap } from "./consistencyService";
 
 const PRESENCE_SHEET = "USER_PRESENCE";
 const PRESENCE_HEADERS = ["email", "nama_user", "nama_hub", "google_image", "last_seen_ms"];
@@ -24,6 +25,8 @@ export interface ActiveUserPresence {
   avatar_url: string;
   last_seen_ms: number;
   isCurrentUser: boolean;
+  isConsistent: boolean;
+  consistencyReason?: string;
 }
 
 interface RawPresenceRow {
@@ -225,6 +228,20 @@ export async function getActiveUsers(
   const now = Date.now();
   const normalizedCurrent = String(currentUserEmail ?? "").trim().toLowerCase();
 
+  // Ambil daftar Hub unik dari user yang masih aktif agar pengecekan konsistensi efisien
+  const activeHubs = Array.from(
+    new Set(
+      rows
+        .filter((r) => r.last_seen_ms && now - r.last_seen_ms <= PRESENCE_ONLINE_WINDOW_MS && r.nama_hub)
+        .map((r) => r.nama_hub.trim())
+        .filter(Boolean)
+    )
+  );
+  const consistencyMap =
+    activeHubs.length > 0
+      ? await getConsistentHubsMap(activeHubs).catch(() => new Map())
+      : new Map();
+
   // Indeks profil terbaru dari USER_MAPPING (nama_user & foto custom)
   const profileByEmail = new Map<
     string,
@@ -253,6 +270,7 @@ export async function getActiveUsers(
 
     const existing = deduped.get(row.email);
     if (!existing || row.last_seen_ms > existing.last_seen_ms) {
+      const hubConsistency = consistencyMap.get(row.nama_hub.toLowerCase().trim());
       deduped.set(row.email, {
         email: row.email,
         nama_user: nickname,
@@ -260,6 +278,8 @@ export async function getActiveUsers(
         avatar_url: avatarUrl,
         last_seen_ms: row.last_seen_ms,
         isCurrentUser: Boolean(normalizedCurrent && row.email === normalizedCurrent),
+        isConsistent: Boolean(hubConsistency?.isConsistent),
+        consistencyReason: hubConsistency?.reason || undefined,
       });
     }
   }

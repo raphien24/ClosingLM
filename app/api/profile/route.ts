@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { resolveActiveHubForSession } from "@/lib/activeHub";
 import { isOwnerAdminEmail } from "@/lib/authConstants";
+import { getHubConsistency } from "@/lib/consistencyService";
 import {
   getUserProfile,
   updateUserProfile,
@@ -24,7 +25,15 @@ export async function GET() {
   };
 
   try {
-    const rawProfile = await getUserProfile(email);
+    const [rawProfile, consistency] = await Promise.all([
+      getUserProfile(email),
+      getHubConsistency(activeHub).catch(() => ({
+        isConsistent: false,
+        reason: "",
+        currentStreakDays: 0,
+        completedMonthLabel: null,
+      })),
+    ]);
     const isOwner = isOwnerAdminEmail(email);
     const profile = rawProfile
       ? { ...rawProfile, nama_hub: activeHub }
@@ -47,6 +56,7 @@ export async function GET() {
       isOwner,
       activeHub,
       hubs: allowedHubs,
+      consistency,
     });
   } catch (err) {
     return NextResponse.json(

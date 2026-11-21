@@ -3,31 +3,25 @@
 import { Suspense, useRef } from "react";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { KpiCards } from "@/components/dashboard/KpiCards";
 import { ClosingInsightCards } from "@/components/dashboard/ClosingInsightCards";
 import { HubTable } from "@/components/dashboard/HubTable";
 import { HubClosingDetailModal } from "@/components/dashboard/HubClosingDetailModal";
 import { FilterBar } from "@/components/dashboard/FilterBar";
-import { ClosingData, KpiSummary } from "@/types/closing";
+import { ClosingData } from "@/types/closing";
 import { todayWIB } from "@/lib/dateUtils";
 import { formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { useUserProfileDisplay } from "@/hooks/useAuth";
+import {
+  ConsistentBadgePill,
+  ProfileAvatarFrame,
+} from "@/components/ui/ProfileAvatarFrame";
 import { SunsetSailTransition } from "@/components/ocean/SunsetSailTransition";
 import { DashboardShipWipeOverlay } from "@/components/ocean/DashboardShipWipeOverlay";
 import {
   NauticalChartBackdrop,
-  LighthouseBeaconIcon,
   SailorCompassIcon,
 } from "@/components/productivity/MaritimeAnimations";
-
-const defaultKpi: KpiSummary = {
-  totalDelivered: 0,
-  totalOnhold: 0,
-  totalBacklog: 0,
-  hubUpdated: 0,
-  hubTotal: 0,
-};
 
 function DashboardFallback() {
   const isSail =
@@ -69,7 +63,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, displayName } = useUserProfileDisplay();
+  const { user, displayName, avatarSrc, consistency } = useUserProfileDisplay();
 
   const today = todayWIB();
   const [selectedDate, setSelectedDate] = useState(
@@ -81,7 +75,6 @@ function DashboardContent() {
 
   const [closingData, setClosingData] = useState<ClosingData[]>([]);
   const [allHubs, setAllHubs] = useState<string[]>([]);
-  const [kpi, setKpi] = useState<KpiSummary>(defaultKpi);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedHubDetail, setSelectedHubDetail] = useState<ClosingData | null>(null);
 
@@ -156,7 +149,6 @@ function DashboardContent() {
 
       const json = await res.json();
       setClosingData(json.closingData || []);
-      setKpi(json.kpi || defaultKpi);
       setAllHubs(json.allHubs || []);
     } catch (err) {
       toast.error("Gagal memuat data. Coba refresh halaman.");
@@ -233,17 +225,29 @@ function DashboardContent() {
 
               <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3.5">
-                  <LighthouseBeaconIcon />
+                  <ProfileAvatarFrame
+                    src={avatarSrc}
+                    fallbackLetter={(displayName || user?.email || "U")[0].toUpperCase()}
+                    size="lg"
+                    isConsistent={consistency.isConsistent}
+                    consistencyReason={consistency.reason}
+                    showPlaque={consistency.isConsistent}
+                  />
                   <div>
-                    <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-                      Welcome Back Sailor
-                      {displayName && (
-                        <>
-                          {" "}
-                          <span className="text-amber-700 dark:text-amber-300">{displayName}</span>
-                        </>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h1 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                        Welcome Back Sailor
+                        {displayName && (
+                          <>
+                            {" "}
+                            <span className="text-amber-700 dark:text-amber-300">{displayName}</span>
+                          </>
+                        )}
+                      </h1>
+                      {consistency.isConsistent && (
+                        <ConsistentBadgePill reason={consistency.reason} />
                       )}
-                    </h1>
+                    </div>
                     <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap font-medium">
                       <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-semibold">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
@@ -271,11 +275,6 @@ function DashboardContent() {
                   )}
                 </div>
               </div>
-            </div>
-
-            {/* KPI Cards */}
-            <div className="dash-kpis">
-              <KpiCards kpi={kpi} isLoading={isLoading} />
             </div>
 
             {/* 5 Operational Insight Cards */}

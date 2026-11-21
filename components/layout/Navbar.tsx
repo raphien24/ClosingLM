@@ -19,6 +19,10 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ClosingCountdownWidget } from "./ClosingCountdownWidget";
 import { ActiveViewersWidget } from "./ActiveViewersWidget";
+import {
+  ConsistentBadgePill,
+  ProfileAvatarFrame,
+} from "@/components/ui/ProfileAvatarFrame";
 import { MaritimeWaveBackdrop } from "@/components/productivity/MaritimeAnimations";
 import {
   DeckCompassWatermark,
@@ -205,8 +209,17 @@ function DrawerNavSection({
  */
 export function Navbar() {
   const pathname = usePathname();
-  const { user, hubName, hubs, switchHub, isSuperAdmin, isOwnerAdmin, displayName, avatarSrc } =
-    useUserProfileDisplay();
+  const {
+    user,
+    hubName,
+    hubs,
+    switchHub,
+    isSuperAdmin,
+    isOwnerAdmin,
+    consistency,
+    displayName,
+    avatarSrc,
+  } = useUserProfileDisplay();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [prodMenuOpen, setProdMenuOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -475,17 +488,14 @@ export function Navbar() {
                 onClick={() => setUserMenuOpen((p) => !p)}
                 className="flex items-center gap-1.5 2xl:gap-2 px-1.5 lg:px-2 py-1.5 rounded-xl border border-amber-400/45 bg-gradient-to-b from-[#17243b]/95 to-[#0f1929]/95 hover:border-amber-300/80 hover:from-[#1d2d49] hover:to-[#132033] shadow-[inset_0_1px_0_rgba(253,230,138,0.16),0_2px_10px_rgba(0,0,0,0.3)] transition-all duration-200 cursor-pointer"
               >
-                {avatarSrc ? (
-                  <img
-                    src={avatarSrc}
-                    alt=""
-                    className="w-7 h-7 rounded-full object-cover ring-2 ring-amber-400/75"
-                  />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500 via-amber-700 to-[#4a1812] ring-2 ring-amber-300/65 flex items-center justify-center text-amber-50 font-extrabold text-xs shadow-xs">
-                    {(displayName || user?.email || "U")[0].toUpperCase()}
-                  </div>
-                )}
+                <ProfileAvatarFrame
+                  src={avatarSrc}
+                  fallbackLetter={(displayName || user?.email || "U")[0].toUpperCase()}
+                  size="xs"
+                  isConsistent={consistency.isConsistent}
+                  consistencyReason={consistency.reason}
+                  showPlaque={false}
+                />
                 <div className="hidden lg:flex flex-col items-start text-left max-w-[78px] 2xl:max-w-[92px]">
                   <p className="text-xs font-bold text-amber-50 leading-tight truncate w-full">
                     {displayName}
@@ -506,21 +516,38 @@ export function Navbar() {
                 <div className="animate-dropdown absolute right-0 mt-2.5 w-64 bg-[#0d1727]/98 backdrop-blur-md rounded-2xl shadow-[0_18px_42px_-8px_rgba(2,6,15,0.85)] border border-amber-400/45 overflow-hidden z-50">
                   <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
                   <div className="px-4 py-3 bg-gradient-to-br from-[#182236] to-[#0f1726] border-b border-amber-400/20">
-                    <p className="text-sm font-bold text-amber-50 truncate">
-                      {displayName}
-                    </p>
-                    <p className="text-xs text-slate-400 truncate">
-                      {user?.email}
-                    </p>
-                    <span className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-0.5 bg-amber-400/15 text-amber-200 border border-amber-400/40 text-xs rounded-full font-semibold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                      {hubName || "All Hub"}
-                      {hubs.length > 1 && (
-                        <span className="text-[10px] text-amber-300/75 font-normal">
-                          ({hubs.length} Hub)
-                        </span>
+                    <div className="flex items-center gap-3">
+                      <ProfileAvatarFrame
+                        src={avatarSrc}
+                        fallbackLetter={(displayName || user?.email || "U")[0].toUpperCase()}
+                        size="md"
+                        isConsistent={consistency.isConsistent}
+                        consistencyReason={consistency.reason}
+                        showPlaque={false}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-amber-50 truncate">
+                          {displayName}
+                        </p>
+                        <p className="text-xs text-slate-400 truncate">
+                          {user?.email}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-400/15 text-amber-200 border border-amber-400/40 text-xs rounded-full font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                        {hubName || "All Hub"}
+                        {hubs.length > 1 && (
+                          <span className="text-[10px] text-amber-300/75 font-normal">
+                            ({hubs.length} Hub)
+                          </span>
+                        )}
+                      </span>
+                      {consistency.isConsistent && (
+                        <ConsistentBadgePill compact reason={consistency.reason} />
                       )}
-                    </span>
+                    </div>
                   </div>
 
                   {hubs.length > 1 && (
@@ -784,21 +811,23 @@ export function Navbar() {
                 </button>
 
                 <div className="flex items-center gap-2.5 px-1.5 py-1">
-                  {avatarSrc ? (
-                    <img
-                      src={avatarSrc}
-                      alt=""
-                      className="w-8 h-8 rounded-full object-cover ring-2 ring-amber-400/70"
-                    />
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-[#4a1812] ring-2 ring-amber-300/60 flex items-center justify-center text-amber-50 font-bold text-xs shadow-xs">
-                      {(displayName || user?.email || "U")[0].toUpperCase()}
-                    </div>
-                  )}
+                  <ProfileAvatarFrame
+                    src={avatarSrc}
+                    fallbackLetter={(displayName || user?.email || "U")[0].toUpperCase()}
+                    size="sm"
+                    isConsistent={consistency.isConsistent}
+                    consistencyReason={consistency.reason}
+                    showPlaque={false}
+                  />
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold text-amber-50 truncate">
-                      {displayName}
-                    </p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="text-xs font-bold text-amber-50 truncate">
+                        {displayName}
+                      </p>
+                      {consistency.isConsistent && (
+                        <ConsistentBadgePill compact reason={consistency.reason} />
+                      )}
+                    </div>
                     <p className="text-[10px] text-amber-200/65 truncate">
                       {user?.email}
                     </p>

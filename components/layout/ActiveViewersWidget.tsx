@@ -4,6 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ActiveUserPresence } from "@/lib/presenceService";
+import {
+  ConsistentBadgePill,
+  ProfileAvatarFrame,
+} from "@/components/ui/ProfileAvatarFrame";
 
 interface ActiveViewersWidgetProps {
   userEmail?: string | null;
@@ -15,11 +19,11 @@ const HEARTBEAT_INTERVAL_MS = 40_000;
 const VISIBILITY_DEBOUNCE_MS = 15_000;
 
 const RING_PALETTE = [
-  { ring: "border-rose-500 ring-rose-500/35", bg: "from-rose-600 to-red-800" },
-  { ring: "border-amber-500 ring-amber-400/35", bg: "from-amber-500 to-orange-700" },
-  { ring: "border-emerald-500 ring-emerald-400/35", bg: "from-emerald-600 to-teal-800" },
-  { ring: "border-sky-500 ring-sky-400/35", bg: "from-sky-600 to-blue-800" },
-  { ring: "border-violet-500 ring-violet-400/35", bg: "from-violet-600 to-purple-800" },
+  { ring: "ring-2 ring-rose-500", bg: "bg-gradient-to-br from-rose-600 to-red-800 text-white" },
+  { ring: "ring-2 ring-amber-500", bg: "bg-gradient-to-br from-amber-500 to-orange-700 text-white" },
+  { ring: "ring-2 ring-emerald-500", bg: "bg-gradient-to-br from-emerald-600 to-teal-800 text-white" },
+  { ring: "ring-2 ring-sky-500", bg: "bg-gradient-to-br from-sky-600 to-blue-800 text-white" },
+  { ring: "ring-2 ring-violet-500", bg: "bg-gradient-to-br from-violet-600 to-purple-800 text-white" },
 ];
 
 function getRingStyle(email: string) {
@@ -32,44 +36,26 @@ function getRingStyle(email: string) {
 
 function ViewerAvatar({
   viewer,
-  sizeClass = "w-7 h-7 sm:w-8 sm:h-8",
-  broken,
-  onBroken,
+  size = "xs",
 }: {
   viewer: ActiveUserPresence;
-  sizeClass?: string;
-  broken: boolean;
-  onBroken: (email: string) => void;
+  size?: "xs" | "sm" | "md";
 }) {
   const palette = getRingStyle(viewer.email);
   const initial = (viewer.nama_user || viewer.email || "U")[0].toUpperCase();
 
   return (
-    <span
-      className={cn(
-        "relative inline-flex items-center justify-center rounded-full border-2 ring-2 overflow-hidden flex-shrink-0 bg-[#0f1726]",
-        palette.ring,
-        sizeClass
-      )}
-    >
-      {viewer.avatar_url && !broken ? (
-        <img
-          src={viewer.avatar_url}
-          alt={viewer.nama_user}
-          onError={() => onBroken(viewer.email)}
-          className="w-full h-full object-cover"
-        />
-      ) : (
-        <span
-          className={cn(
-            "w-full h-full flex items-center justify-center bg-gradient-to-br text-white font-extrabold text-[11px]",
-            palette.bg
-          )}
-        >
-          {initial}
-        </span>
-      )}
-    </span>
+    <ProfileAvatarFrame
+      src={viewer.avatar_url}
+      alt={viewer.nama_user}
+      fallbackLetter={initial}
+      size={size}
+      isConsistent={viewer.isConsistent}
+      consistencyReason={viewer.consistencyReason}
+      showPlaque={false}
+      ringClassName={palette.ring}
+      fallbackClassName={palette.bg}
+    />
   );
 }
 
@@ -81,7 +67,6 @@ export function ActiveViewersWidget({
   const [users, setUsers] = useState<ActiveUserPresence[]>([]);
   const [selectedViewerEmail, setSelectedViewerEmail] = useState<string | null>(null);
   const [showAllList, setShowAllList] = useState(false);
-  const [brokenAvatars, setBrokenAvatars] = useState<Record<string, boolean>>({});
 
   const containerRef = useRef<HTMLDivElement>(null);
   const lastSyncRef = useRef<number>(0);
@@ -168,10 +153,6 @@ export function ActiveViewersWidget({
   const visibleUsers = users.slice(0, 2);
   const extraCount = Math.max(0, users.length - 2);
 
-  const handleMarkBroken = (email: string) => {
-    setBrokenAvatars((prev) => (prev[email] ? prev : { ...prev, [email]: true }));
-  };
-
   return (
     <div ref={containerRef} className="relative flex items-center gap-1 flex-shrink-0">
       {visibleUsers.map((viewer) => {
@@ -188,29 +169,20 @@ export function ActiveViewersWidget({
                 );
               }}
               aria-label={`Lihat user aktif: ${viewer.nama_user}`}
-              title={`${viewer.nama_user}${viewer.isCurrentUser ? " (Anda)" : ""}`}
+              title={`${viewer.nama_user}${viewer.isCurrentUser ? " (Anda)" : ""}${viewer.isConsistent ? " · Si Paling Konsisten" : ""}`}
               className={cn(
                 "relative rounded-full p-0.5 transition-transform duration-150 hover:scale-105 focus:outline-none cursor-pointer",
                 isSelected && "scale-105"
               )}
             >
-              <ViewerAvatar
-                viewer={viewer}
-                broken={!!brokenAvatars[viewer.email]}
-                onBroken={handleMarkBroken}
-              />
+              <ViewerAvatar viewer={viewer} size="xs" />
             </button>
 
             {isSelected && (
-              <div className="animate-dropdown absolute right-0 mt-2 w-52 bg-[#0d1727]/98 backdrop-blur-md rounded-xl shadow-[0_14px_34px_-6px_rgba(2,6,15,0.85)] border border-amber-400/45 overflow-hidden z-50">
+              <div className="animate-dropdown absolute right-0 mt-2 w-60 bg-[#0d1727]/98 backdrop-blur-md rounded-xl shadow-[0_14px_34px_-6px_rgba(2,6,15,0.85)] border border-amber-400/45 overflow-hidden z-50">
                 <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
                 <div className="px-3.5 py-2.5 flex items-center gap-2.5">
-                  <ViewerAvatar
-                    viewer={viewer}
-                    sizeClass="w-9 h-9"
-                    broken={!!brokenAvatars[viewer.email]}
-                    onBroken={handleMarkBroken}
-                  />
+                  <ViewerAvatar viewer={viewer} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
@@ -227,6 +199,13 @@ export function ActiveViewersWidget({
                       <p className="text-[11px] text-slate-300/85 truncate mt-0.5">
                         {viewer.nama_hub}
                       </p>
+                    )}
+                    {viewer.isConsistent && (
+                      <ConsistentBadgePill
+                        compact
+                        reason={viewer.consistencyReason}
+                        className="mt-1.5"
+                      />
                     )}
                   </div>
                 </div>
@@ -258,7 +237,7 @@ export function ActiveViewersWidget({
           </button>
 
           {showAllList && (
-            <div className="animate-dropdown absolute right-0 mt-2 w-64 bg-[#0d1727]/98 backdrop-blur-md rounded-2xl shadow-[0_18px_42px_-8px_rgba(2,6,15,0.88)] border border-amber-400/45 overflow-hidden z-50">
+            <div className="animate-dropdown absolute right-0 mt-2 w-72 bg-[#0d1727]/98 backdrop-blur-md rounded-2xl shadow-[0_18px_42px_-8px_rgba(2,6,15,0.88)] border border-amber-400/45 overflow-hidden z-50">
               <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
               <div className="px-3.5 py-2.5 bg-[#121e33] border-b border-amber-400/20 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
@@ -278,12 +257,7 @@ export function ActiveViewersWidget({
                     key={viewer.email}
                     className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl hover:bg-amber-400/10 transition-colors"
                   >
-                    <ViewerAvatar
-                      viewer={viewer}
-                      sizeClass="w-8 h-8"
-                      broken={!!brokenAvatars[viewer.email]}
-                      onBroken={handleMarkBroken}
-                    />
+                    <ViewerAvatar viewer={viewer} size="sm" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
@@ -296,11 +270,16 @@ export function ActiveViewersWidget({
                           )}
                         </p>
                       </div>
-                      {viewer.nama_hub && (
-                        <p className="text-[10px] text-slate-400 truncate">
-                          {viewer.nama_hub}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        {viewer.nama_hub && (
+                          <p className="text-[10px] text-slate-400 truncate">
+                            {viewer.nama_hub}
+                          </p>
+                        )}
+                        {viewer.isConsistent && (
+                          <ConsistentBadgePill compact reason={viewer.consistencyReason} />
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

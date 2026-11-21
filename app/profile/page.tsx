@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, type HubConsistencyStatus } from "@/hooks/useAuth";
+import {
+  ConsistentBadgePill,
+  ProfileAvatarFrame,
+} from "@/components/ui/ProfileAvatarFrame";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
@@ -92,6 +96,12 @@ export default function EditProfilePage() {
 
   const [namaUser, setNamaUser] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [consistency, setConsistency] = useState<HubConsistencyStatus>({
+    isConsistent: false,
+    reason: "",
+    currentStreakDays: 0,
+    completedMonthLabel: null,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessingImg, setIsProcessingImg] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -111,6 +121,14 @@ export default function EditProfilePage() {
         if (active && json.profile) {
           setNamaUser(json.profile.nama_user || "");
           setAvatarUrl(json.profile.avatar_url || "");
+          if (json.consistency) {
+            setConsistency({
+              isConsistent: Boolean(json.consistency.isConsistent),
+              reason: json.consistency.reason || "",
+              currentStreakDays: Number(json.consistency.currentStreakDays) || 0,
+              completedMonthLabel: json.consistency.completedMonthLabel ?? null,
+            });
+          }
         }
       } catch (err) {
         if (active) {
@@ -212,22 +230,27 @@ export default function EditProfilePage() {
             {/* Bagian Foto Profil */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-5 pb-6 border-b border-gray-100">
               <div className="relative flex-shrink-0 self-start sm:self-center">
-                {displayAvatar ? (
-                  <img
-                    src={displayAvatar}
-                    alt="Foto Profil"
-                    className="w-24 h-24 rounded-full object-cover ring-4 ring-blue-500/20 shadow-sm"
-                  />
-                ) : (
-                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center ring-4 ring-blue-500/20 shadow-sm">
-                    <span className="text-white font-bold text-3xl">{initialLetter}</span>
-                  </div>
-                )}
+                <ProfileAvatarFrame
+                  src={displayAvatar}
+                  alt="Foto Profil"
+                  fallbackLetter={initialLetter}
+                  size="xl"
+                  isConsistent={consistency.isConsistent}
+                  consistencyReason={consistency.reason}
+                  showPlaque
+                  ringClassName="ring-4 ring-blue-500/20 shadow-sm"
+                  fallbackClassName="bg-gradient-to-br from-blue-600 to-indigo-700 text-white"
+                />
               </div>
 
               <div className="space-y-2.5 flex-1">
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-900">Foto Profil</h2>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-sm font-semibold text-gray-900">Foto Profil</h2>
+                    {consistency.isConsistent && (
+                      <ConsistentBadgePill reason={consistency.reason} />
+                    )}
+                  </div>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {avatarUrl
                       ? "Menggunakan foto profil kustom (dioptimalkan otomatis ke 128×128 px)."
@@ -235,6 +258,16 @@ export default function EditProfilePage() {
                       ? "Saat ini menggunakan foto default dari akun Google Anda."
                       : "Belum ada foto — menampilkan inisial nama Anda."}
                   </p>
+                  {consistency.isConsistent ? (
+                    <p className="text-[11px] font-semibold text-amber-700 mt-1">
+                      Bingkai spesial aktif: {consistency.reason || "Closing konsisten 1 bulan penuh"}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Lengkapi Closing &amp; Productivity harian 1 bulan penuh (streak lengkap saat ini: {consistency.currentStreakDays} hari) untuk membuka border mewah{" "}
+                      <span className="font-semibold text-amber-600">&ldquo;Si Paling Konsisten&rdquo;</span>.
+                    </p>
+                  )}
                 </div>
 
                 <input

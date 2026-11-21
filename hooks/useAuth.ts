@@ -56,10 +56,24 @@ export function useAuth() {
   };
 }
 
+export interface HubConsistencyStatus {
+  isConsistent: boolean;
+  reason: string;
+  currentStreakDays: number;
+  completedMonthLabel: string | null;
+}
+
+const DEFAULT_CONSISTENCY: HubConsistencyStatus = {
+  isConsistent: false,
+  reason: "",
+  currentStreakDays: 0,
+  completedMonthLabel: null,
+};
+
 /**
- * Mengambil nama tampilan, avatar profil, hub aktif, & status admin live terbaru
+ * Mengambil nama tampilan, avatar profil, hub aktif, konsistensi 1 bulan, & status admin live terbaru
  * (disinkronkan dengan /api/profile dan event "jtt08-profile-updated")
- * untuk dipakai konsisten di Navbar & Dashboard.
+ * untuk dipakai konsisten di Navbar, Dashboard, & Halaman Profil.
  */
 export function useUserProfileDisplay() {
   const auth = useAuth();
@@ -68,6 +82,7 @@ export function useUserProfileDisplay() {
   const [liveIsAdmin, setLiveIsAdmin] = useState<boolean | null>(null);
   const [liveActiveHub, setLiveActiveHub] = useState<string | null>(null);
   const [liveHubs, setLiveHubs] = useState<string[] | null>(null);
+  const [consistency, setConsistency] = useState<HubConsistencyStatus>(DEFAULT_CONSISTENCY);
 
   useEffect(() => {
     setCustomAvatar("");
@@ -75,6 +90,7 @@ export function useUserProfileDisplay() {
     setLiveIsAdmin(null);
     setLiveActiveHub(null);
     setLiveHubs(null);
+    setConsistency(DEFAULT_CONSISTENCY);
     if (!auth.user?.email) return;
     let active = true;
     fetch("/api/profile")
@@ -89,6 +105,14 @@ export function useUserProfileDisplay() {
         }
         if (Array.isArray(json.hubs) && json.hubs.length > 0) {
           setLiveHubs(json.hubs);
+        }
+        if (json.consistency && typeof json.consistency.isConsistent === "boolean") {
+          setConsistency({
+            isConsistent: json.consistency.isConsistent,
+            reason: json.consistency.reason || "",
+            currentStreakDays: Number(json.consistency.currentStreakDays) || 0,
+            completedMonthLabel: json.consistency.completedMonthLabel ?? null,
+          });
         }
       })
       .catch(() => {});
@@ -114,6 +138,7 @@ export function useUserProfileDisplay() {
     hubName: liveActiveHub ?? auth.hubName,
     hubs: liveHubs ?? auth.hubs,
     isSuperAdmin: liveIsAdmin ?? auth.isSuperAdmin,
+    consistency,
     displayName,
     avatarSrc,
   };
