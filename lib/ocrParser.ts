@@ -329,7 +329,7 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
     if (/^\s*(?:\[\s*\]|\(\s*\))(?:\s|$)/.test(cell)) return 0;
     return dashToZero(cell, null);
   };
-  // Perbaiki bila Total terbaca < Volume (mis. "103   13   10(8,8%)" -> "113" hilang digit "1"):
+  // Perbaiki bila Total kosong atau terbaca < Volume (mis. "103   13   10(8,8%)" atau "31   0(0%)"):
   // Dalam tabel FMS, On-hold Total >= On-hold Volume dan Total = Volume + Selesai.
   const finalizeOnHold = (
     vol: number | null,
@@ -337,20 +337,30 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
     doneText: string
   ): { oh_volume: number | null; oh_total: number | null } => {
     const fixedVol = tot === 0 && vol === null ? 0 : vol;
-    if (fixedVol !== null && tot !== null && tot < fixedVol) {
-      const doneMatch = doneText.match(/(\d[\d.,]*)\s*\(\s*(\d+(?:[.,]\d+)?)\s*%/);
+    if (fixedVol !== null && (tot === null || tot < fixedVol)) {
+      const doneMatch = doneText.match(
+        /(\d[\d.,]*|[Oo])\s*\(\s*(\d+(?:[.,]\d+)?|[Oo])\s*%/
+      );
       if (doneMatch) {
-        const done = parseNumber(doneMatch[1]);
-        const pct = parseFloat(doneMatch[2].replace(",", "."));
-        if (done !== null && !isNaN(pct) && fixedVol + done > 0) {
-          const calcPct = (done / (fixedVol + done)) * 100;
-          if (Math.abs(calcPct - pct) <= 1.2) {
-            return { oh_volume: fixedVol, oh_total: fixedVol + done };
+        const done = /^[Oo]$/.test(doneMatch[1]) ? 0 : parseNumber(doneMatch[1]);
+        const pct = /^[Oo]$/.test(doneMatch[2])
+          ? 0
+          : parseFloat(doneMatch[2].replace(",", "."));
+        if (done !== null && !isNaN(pct)) {
+          if (fixedVol + done > 0) {
+            const calcPct = (done / (fixedVol + done)) * 100;
+            if (Math.abs(calcPct - pct) <= 1.2) {
+              return { oh_volume: fixedVol, oh_total: fixedVol + done };
+            }
+          } else if (fixedVol === 0 && done === 0 && pct === 0) {
+            return { oh_volume: 0, oh_total: 0 };
           }
         }
       }
       // Tolak nilai Total yang mustahil (< Volume) agar pass/crop lain dapat mengisi Total yang benar
-      return { oh_volume: fixedVol, oh_total: null };
+      if (tot !== null && tot < fixedVol) {
+        return { oh_volume: fixedVol, oh_total: null };
+      }
     }
     return { oh_volume: fixedVol, oh_total: tot };
   };
@@ -358,7 +368,14 @@ function extractOnHold(text: string): { oh_volume: number | null; oh_total: numb
   // Jika kolom dipisahkan >= 2 spasi (mis. "a   52   17.3%)" atau "103   113   10(8,8%)"), pertahankan posisi kolom Volume & Total
   const cells = afterLabel.trim().split(/\s{2,}/).filter(Boolean);
   if (cells.length >= 2) {
-    return finalizeOnHold(parseOnHoldCell(cells[0]), parseOnHoldCell(cells[1]), cells.slice(2).join(" "));
+    // Jika sel ke-2 langsung berisi kolom Selesai ("0(0%)") karena kolom Total terlewat OCR, jangan anggap sebagai Total
+    const secondIsDoneCol = /%|\(\s*(?:\d+|[Oo])\s*%?/.test(cells[1]);
+    const vol = parseOnHoldCell(cells[0]);
+    const tot = secondIsDoneCol ? null : parseOnHoldCell(cells[1]);
+    const doneText = secondIsDoneCol
+      ? cells.slice(1).join(" ")
+      : cells.slice(2).join(" ");
+    return finalizeOnHold(vol, tot, doneText);
   }
 
   let nums = allNumbers(afterLabel);
