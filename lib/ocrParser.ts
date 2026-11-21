@@ -33,12 +33,18 @@ export function detectDate(text: string): string | null {
   return dates[0] ?? null;
 }
 
-const PARCEL_SWEEPER_RE =
-  /__PS_CARD__|Parcel\s+Sweeper|Expected\s+Orders?\s+Scanned|\bTotal\b[\s\S]{0,60}\bUnscanned\b|\bPS20\d{6,}/i;
+const STRONG_PARCEL_SWEEPER_RE =
+  /__PS_CARD__|Parcel\s+Sweeper\s+(?:Task|View|Report)|Expected\s+Orders?\s+Scanned|\bTotal\b[\s\S]{0,60}\b(?:Unscanned|Unscammed)\b|\b(?:Unscanned|Unscammed)\b[\s\S]{0,60}\bScanned\b|\bPS20\d{6,}/i;
+
+const DASHBOARD_PAGE_RE =
+  /Operation\s+Progress|In\s+Hub\s+Status|Ringkasan\s+Hub|To\s*Expedit|Linehaul\s+Trip|LM\s+Hub\s+Aging|Fleet\s+Head\s+Counts|Fleet\s+Productivity/i;
 
 /** Apakah teks berasal dari halaman Parcel Sweeper (perlu validasi tanggal wajib hari ini). */
 export function isParcelSweeperPage(text: string): boolean {
-  return PARCEL_SWEEPER_RE.test(text);
+  if (STRONG_PARCEL_SWEEPER_RE.test(text)) return true;
+  // Jangan anggap menu sidebar kiri ("Parcel Sweeper Manage...") pada halaman Dashboard/Backlog/Expedite sebagai Parcel Sweeper
+  if (DASHBOARD_PAGE_RE.test(text)) return false;
+  return /\bParcel\s+Sweeper(?!\s+Manage)/i.test(text);
 }
 
 /**
@@ -141,7 +147,7 @@ export function parseOcrText(rawText: string): {
   //  yang TIDAK BOLEH salah masuk ke In Hub Status / Backlog / Expedite!)
   const isParcelSweeper =
     isParcelSweeperPage(text) &&
-    !/Operation\s+Progress|In\s+Hub\s+Status|Ringkasan\s+Hub/i.test(text);
+    !DASHBOARD_PAGE_RE.test(text);
 
   // ── Parcel Sweeper ───────────────────────────────────────
   const { parcel_sweeper_total, parcel_sweeper_scanned_pct } = extractParcelSweeper(text);
