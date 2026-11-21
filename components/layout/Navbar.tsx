@@ -27,19 +27,21 @@ import {
 interface NavItem {
   href: string;
   label: string;
+  compactLabel?: string;
   iconId: PirateNavIconId;
   badge?: string;
 }
 
 const mainLinks: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard Closing", iconId: "dashboard" },
+  { href: "/dashboard", label: "Dashboard Closing", compactLabel: "Dashboard", iconId: "dashboard" },
   { href: "/input", label: "Input Data", iconId: "input" },
-  { href: "/monitor-sameday", label: "Monitor Sameday", iconId: "sameday" },
+  { href: "/monitor-sameday", label: "Monitor Sameday", compactLabel: "Sameday", iconId: "sameday" },
 ];
 
 const guideLink: NavItem = {
   href: "/guide",
   label: "User Guide",
+  compactLabel: "Guide",
   iconId: "guide",
 };
 
@@ -58,10 +60,20 @@ function isRouteActive(href: string, pathname: string, exact = false) {
 
 function getDesktopTabClasses(active: boolean) {
   return cn(
-    "relative flex items-center gap-1.5 lg:gap-2 px-2.5 xl:px-3 py-1.5 rounded-xl border text-xs lg:text-[13px] font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer flex-shrink-0",
+    "relative flex items-center gap-1.5 2xl:gap-2 px-2 lg:px-2.5 2xl:px-3 py-1.5 rounded-xl border text-[11px] lg:text-xs 2xl:text-[13px] font-semibold whitespace-nowrap transition-all duration-200 cursor-pointer flex-shrink-0",
     active
       ? "bg-gradient-to-b from-[#7a211b]/95 via-[#541614]/95 to-[#2d0c0e]/95 text-amber-100 border-amber-400/80 shadow-[0_3px_14px_rgba(245,158,11,0.25),inset_0_1px_0_rgba(253,230,138,0.3)] -translate-y-0.5"
       : "bg-white/[0.03] text-amber-50/90 border-amber-400/15 hover:text-amber-100 hover:bg-amber-400/12 hover:border-amber-400/45 hover:-translate-y-0.5"
+  );
+}
+
+function renderResponsiveLabel(label: string, compactLabel?: string) {
+  if (!compactLabel) return <span>{label}</span>;
+  return (
+    <>
+      <span className="lg:hidden">{compactLabel}</span>
+      <span className="hidden lg:inline">{label}</span>
+    </>
   );
 }
 
@@ -287,13 +299,13 @@ export function Navbar() {
             <PirateHelmMedallion size="md" />
             <div className="flex flex-col min-w-0">
               <p className="text-xs xl:text-sm font-extrabold tracking-tight bg-gradient-to-r from-[#fffbeb] via-[#fde68a] to-[#f59e0b] bg-clip-text text-transparent group-hover:from-white group-hover:to-amber-300 transition-all truncate">
-                <span className="lg:hidden">Closing LM</span>
-                <span className="hidden lg:inline">Closing Report LM JTT08</span>
+                <span className="xl:hidden">Closing LM</span>
+                <span className="hidden xl:inline">Closing Report LM JTT08</span>
               </p>
               <p className="flex items-center gap-1.5 text-[10px] xl:text-[11px] font-semibold text-amber-200/75 leading-tight truncate">
                 <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-400/85 flex-shrink-0" />
-                <span className="lg:hidden truncate">{hubName || "JTT08"}</span>
-                <span className="hidden lg:inline truncate">Last Mile Operations Portal</span>
+                <span className="xl:hidden truncate">{hubName || "JTT08"}</span>
+                <span className="hidden xl:inline truncate">Last Mile Operations Portal</span>
               </p>
             </div>
           </Link>
@@ -301,8 +313,8 @@ export function Navbar() {
           <BrassDivider className="hidden md:block" />
 
           {/* Navigasi Utama Desktop */}
-          <nav className="hidden md:flex items-center gap-1 xl:gap-1.5 flex-1 min-w-0">
-            {mainLinks.map(({ href, label, iconId }) => {
+          <nav className="hidden md:flex items-center gap-1 2xl:gap-1.5 flex-1 min-w-0">
+            {mainLinks.map(({ href, label, compactLabel, iconId }) => {
               const active = isRouteActive(href, pathname);
               return (
                 <Link key={href} href={href} className={getDesktopTabClasses(active)}>
@@ -310,7 +322,7 @@ export function Navbar() {
                     id={iconId}
                     className={active ? "text-amber-300" : "text-amber-300/75"}
                   />
-                  <span>{label}</span>
+                  {renderResponsiveLabel(label, compactLabel)}
                   {active && <ActiveKeelGlow />}
                 </Link>
               );
@@ -382,7 +394,7 @@ export function Navbar() {
                     id={guideLink.iconId}
                     className={active ? "text-amber-300" : "text-amber-300/75"}
                   />
-                  <span>{guideLink.label}</span>
+                  {renderResponsiveLabel(guideLink.label, guideLink.compactLabel)}
                   {active && <ActiveKeelGlow />}
                 </Link>
               );
@@ -404,14 +416,14 @@ export function Navbar() {
               {isDark ? (
                 <>
                   <Sun className="h-4 w-4 text-amber-300 group-hover:rotate-45 transition-transform duration-300" />
-                  <span className="hidden lg:inline text-xs font-semibold text-amber-100">
+                  <span className="hidden xl:inline text-xs font-semibold text-amber-100">
                     Light
                   </span>
                 </>
               ) : (
                 <>
                   <Moon className="h-4 w-4 text-amber-200 group-hover:-rotate-12 transition-transform duration-300" />
-                  <span className="hidden lg:inline text-xs font-semibold text-amber-50">
+                  <span className="hidden xl:inline text-xs font-semibold text-amber-50">
                     Dark
                   </span>
                 </>

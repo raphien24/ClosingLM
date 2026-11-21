@@ -236,8 +236,8 @@ export function ClosingCountdownWidget({
         </svg>
       </div>
 
-      {/* Info label + progress bar beranimasi (tampil penuh mulai layar xl >= 1280px) */}
-      <div className="hidden xl:flex flex-col min-w-[148px]">
+      {/* Info label + progress bar beranimasi (tampil penuh mulai layar 2xl >= 1536px) */}
+      <div className="hidden 2xl:flex flex-col min-w-[148px]">
         <div className="flex items-center justify-between gap-2">
           <span className={cn("text-[10px] font-bold uppercase tracking-wider leading-none whitespace-nowrap", theme.label)}>
             Batas Closing
@@ -268,7 +268,7 @@ export function ClosingCountdownWidget({
       </div>
 
       {/* Timer Digital Monospace */}
-      <div className={cn("flex flex-col items-end pl-0.5 xl:border-l xl:pl-3", theme.divider)}>
+      <div className={cn("flex flex-col items-end pl-0.5 2xl:border-l 2xl:pl-3", theme.divider)}>
         <div
           className={cn(
             "flex items-baseline gap-0.5 font-mono font-extrabold text-[15px] tracking-tight tabular-nums leading-none whitespace-nowrap",
@@ -282,13 +282,13 @@ export function ClosingCountdownWidget({
           <span>{ss}</span>
         </div>
         <span className={cn("text-[10px] font-semibold leading-none mt-1 whitespace-nowrap", theme.label)}>
-          <span className="xl:hidden">Closing · WIB</span>
-          <span className="hidden xl:inline">Sisa waktu · WIB</span>
+          <span className="2xl:hidden">Closing · WIB</span>
+          <span className="hidden 2xl:inline">Sisa waktu · WIB</span>
         </span>
       </div>
 
-      {/* Garis progres pasang-surut ringkas untuk layar laptop (1024px–1279px) */}
-      <div className={cn("xl:hidden absolute inset-x-3 bottom-0.5 h-[2px] rounded-full overflow-hidden", theme.track)}>
+      {/* Garis progres pasang-surut ringkas untuk layar laptop (1024px–1535px) */}
+      <div className={cn("2xl:hidden absolute inset-x-3 bottom-0.5 h-[2px] rounded-full overflow-hidden", theme.track)}>
         <div
           className={cn("h-full rounded-full bg-gradient-to-r transition-all duration-700", theme.fill)}
           style={{ width: `${Math.max(4, remainingPct)}%` }}
