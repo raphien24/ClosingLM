@@ -424,18 +424,21 @@ export default function MonitorSamedayPage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <div className="overflow-auto max-h-[70vh] rounded-xl border border-gray-200 dark:border-slate-700/80">
             <table className="w-full text-xs sm:text-sm border-collapse">
               <thead>
                 {viewMode === "summary" ? (
                   <>
                     <tr className="bg-gray-50 border-b border-gray-200">
-                      <th rowSpan={2} className="py-3 px-3 text-center text-[11px] font-bold text-gray-500 uppercase w-11">
+                      <th
+                        rowSpan={2}
+                        className="sticky top-0 z-20 bg-gray-50 py-3 px-3 text-center text-[11px] font-bold text-gray-500 uppercase w-11 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]"
+                      >
                         No
                       </th>
                       <th
                         rowSpan={2}
-                        className="sticky left-0 z-10 bg-gray-50 py-3 px-4 text-left text-xs font-bold text-gray-700 uppercase whitespace-nowrap border-l border-gray-200"
+                        className="sticky left-0 top-0 z-30 bg-gray-50 py-3 px-4 text-left text-xs font-bold text-gray-700 uppercase whitespace-nowrap border-l border-gray-200 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]"
                       >
                         <button
                           type="button"
@@ -448,7 +451,7 @@ export default function MonitorSamedayPage() {
                       </th>
                       <th
                         rowSpan={2}
-                        className="py-3 px-3 text-center text-xs font-bold text-gray-700 uppercase border-l border-gray-200"
+                        className="sticky top-0 z-20 bg-gray-50 py-3 px-3 text-center text-xs font-bold text-gray-700 uppercase border-l border-gray-200 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]"
                       >
                         <button
                           type="button"
@@ -461,34 +464,34 @@ export default function MonitorSamedayPage() {
                       </th>
                       <th
                         colSpan={2}
-                        className="py-2 px-3 text-center text-xs font-extrabold uppercase border-l border-gray-200 bg-slate-100/80 dark:bg-slate-800/70 text-slate-700 dark:text-slate-200"
+                        className="sticky top-0 z-20 h-9 px-3 text-center text-xs font-extrabold uppercase border-l border-gray-200 bg-[#eef2f6] dark:bg-[#1b273a] text-slate-700 dark:text-slate-200 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]"
                       >
                         Target SD
                       </th>
                       <th
                         colSpan={6}
-                        className="py-2 px-3 text-center text-xs font-extrabold uppercase border-l border-gray-200 bg-blue-50/70 text-blue-700"
+                        className="sticky top-0 z-20 h-9 px-3 text-center text-xs font-extrabold uppercase border-l border-gray-200 bg-[#e6f0ff] dark:bg-[#142a4b] text-blue-700 dark:text-sky-300 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]"
                       >
                         SD Delivering
                       </th>
                       <th
                         colSpan={6}
-                        className="py-2 px-3 text-center text-xs font-extrabold uppercase border-l border-gray-200 bg-emerald-50/80 text-emerald-700"
+                        className="sticky top-0 z-20 h-9 px-3 text-center text-xs font-extrabold uppercase border-l border-gray-200 bg-[#e2f7ee] dark:bg-[#103329] text-emerald-700 dark:text-emerald-300 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]"
                       >
                         SD Delivered
                       </th>
                       <th
                         colSpan={2}
-                        className="py-2 px-3 text-center text-xs font-extrabold uppercase border-l border-gray-200 bg-amber-50/70 text-amber-800"
+                        className="sticky top-0 z-20 h-9 px-3 text-center text-xs font-extrabold uppercase border-l border-gray-200 bg-[#fef3dc] dark:bg-[#2c2114] text-amber-800 dark:text-amber-300 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]"
                       >
                         Achv vs Target
                       </th>
                     </tr>
                     <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase">
-                      <th className="py-2 px-2.5 text-center border-l border-gray-200 whitespace-nowrap">Deliv</th>
-                      <th className="py-2 px-2.5 text-center whitespace-nowrap">Delvd</th>
+                      <th className="sticky top-9 z-20 bg-gray-50 py-2 px-2.5 text-center border-l border-gray-200 whitespace-nowrap shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">Deliv</th>
+                      <th className="sticky top-9 z-20 bg-gray-50 py-2 px-2.5 text-center whitespace-nowrap shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">Delvd</th>
 
-                      <th className="py-2 px-2.5 text-center border-l border-gray-200 bg-[#f2f7ff] dark:bg-[#11233e] whitespace-nowrap">
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center border-l border-gray-200 bg-[#f2f7ff] dark:bg-[#11233e] whitespace-nowrap shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">
                         <button
                           type="button"
                           onClick={() => handleSort("delivMtd")}
@@ -498,13 +501,13 @@ export default function MonitorSamedayPage() {
                           <SortIcon col="delivMtd" activeKey={sortKey} dir={sortDir} />
                         </button>
                       </th>
-                      <th className="py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e]">L1M</th>
-                      <th className="py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e]">WTD</th>
-                      <th className="py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e]">L1W</th>
-                      <th className="py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e]">L2W</th>
-                      <th className="py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e]">L3W</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">L1M</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">WTD</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">L1W</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">L2W</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#f2f7ff] dark:bg-[#11233e] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">L3W</th>
 
-                      <th className="py-2 px-2.5 text-center border-l border-gray-200 bg-[#effbf5] dark:bg-[#0e2921] whitespace-nowrap">
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center border-l border-gray-200 bg-[#effbf5] dark:bg-[#0e2921] whitespace-nowrap shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">
                         <button
                           type="button"
                           onClick={() => handleSort("delvdMtd")}
@@ -514,13 +517,13 @@ export default function MonitorSamedayPage() {
                           <SortIcon col="delvdMtd" activeKey={sortKey} dir={sortDir} />
                         </button>
                       </th>
-                      <th className="py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921]">L1M</th>
-                      <th className="py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921]">WTD</th>
-                      <th className="py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921]">L1W</th>
-                      <th className="py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921]">L2W</th>
-                      <th className="py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921]">L3W</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">L1M</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">WTD</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">L1W</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">L2W</th>
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#effbf5] dark:bg-[#0e2921] shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">L3W</th>
 
-                      <th className="py-2 px-2.5 text-center border-l border-gray-200 bg-[#fff9ef] dark:bg-[#241b12] whitespace-nowrap">
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center border-l border-gray-200 bg-[#fff9ef] dark:bg-[#241b12] whitespace-nowrap shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">
                         <button
                           type="button"
                           onClick={() => handleSort("achvMtd")}
@@ -530,7 +533,7 @@ export default function MonitorSamedayPage() {
                           <SortIcon col="achvMtd" activeKey={sortKey} dir={sortDir} />
                         </button>
                       </th>
-                      <th className="py-2 px-2.5 text-center bg-[#fff9ef] dark:bg-[#241b12] whitespace-nowrap">
+                      <th className="sticky top-9 z-20 py-2 px-2.5 text-center bg-[#fff9ef] dark:bg-[#241b12] whitespace-nowrap shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">
                         <button
                           type="button"
                           onClick={() => handleSort("achvLast")}
@@ -544,21 +547,21 @@ export default function MonitorSamedayPage() {
                   </>
                 ) : (
                   <tr className="bg-gray-50 border-b border-gray-200 text-[11px] font-bold text-gray-600 uppercase">
-                    <th className="py-3 px-3 text-center w-11">No</th>
-                    <th className="sticky left-0 z-10 bg-gray-50 py-3 px-4 text-left border-l border-gray-200 whitespace-nowrap">
+                    <th className="sticky top-0 z-20 bg-gray-50 py-3 px-3 text-center w-11 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">No</th>
+                    <th className="sticky left-0 top-0 z-30 bg-gray-50 py-3 px-4 text-left border-l border-gray-200 whitespace-nowrap shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">
                       Nama Hub
                     </th>
-                    <th className="py-3 px-3 text-center border-l border-gray-200">Tier</th>
-                    <th className="py-3 px-3 text-center border-l border-gray-200">Target</th>
-                    <th className="py-3 px-3 text-center border-l border-gray-200">MTD</th>
-                    <th className="py-3 px-3 text-center">WTD</th>
+                    <th className="sticky top-0 z-20 bg-gray-50 py-3 px-3 text-center border-l border-gray-200 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">Tier</th>
+                    <th className="sticky top-0 z-20 bg-gray-50 py-3 px-3 text-center border-l border-gray-200 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">Target</th>
+                    <th className="sticky top-0 z-20 bg-gray-50 py-3 px-3 text-center border-l border-gray-200 shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">MTD</th>
+                    <th className="sticky top-0 z-20 bg-gray-50 py-3 px-3 text-center shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]">WTD</th>
                     {(viewMode === "delivering_daily"
                       ? data?.deliveringDailyCols || []
                       : data?.deliveredDailyCols || []
                     ).map((col) => (
                       <th
                         key={col.key}
-                        className="py-3 px-2.5 text-center border-l border-gray-200 whitespace-nowrap"
+                        className="sticky top-0 z-20 bg-gray-50 py-3 px-2.5 text-center border-l border-gray-200 whitespace-nowrap shadow-[inset_0_-1px_0_0_#e2e8f0] dark:shadow-[inset_0_-1px_0_0_#334155]"
                       >
                         {col.label}
                       </th>
