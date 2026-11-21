@@ -30,7 +30,11 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [runningCron, setRunningCron] = useState<string | null>(null);
-  const [cronPreview, setCronPreview] = useState<{ title: string; text: string } | null>(null);
+  const [cronPreview, setCronPreview] = useState<{
+    title: string;
+    text: string;
+    imageDataUrl?: string;
+  } | null>(null);
   const [statusBanner, setStatusBanner] = useState<{
     type: "success" | "error";
     msg: string;
@@ -91,12 +95,15 @@ function setupSeatalkScheduleTriggers() {
               ? `Preview Reminder 23:20 WIB (${json.targetDate})`
               : `Preview Daily Summary 00:05 WIB (${json.targetDate})`,
           text: json.preview,
+          imageDataUrl: json.previewImageDataUrl,
         });
       }
       toast.success(
         dryRun
-          ? `Preview berhasil dimuat (${json.mentionedCount || 0} PIC akan di-tag).`
-          : `Pesan berhasil dikirim ke SeaTalk (${json.mentionedCount || 0} PIC di-tag)!`
+          ? `Preview berhasil dimuat (${json.mentionedCount || 0} PIC tercantum).`
+          : endpoint === "daily-summary"
+          ? `Gambar report & caption berhasil dikirim ke SeaTalk (${json.mentionedCount || 0} PIC tercantum)!`
+          : `Pesan berhasil dikirim ke SeaTalk (${json.mentionedCount || 0} PIC tercantum)!`
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gagal memproses request");
@@ -363,7 +370,7 @@ function setupSeatalkScheduleTriggers() {
               <Badge variant="blue">00:05 WIB</Badge>
             </div>
             <p className="text-xs text-gray-600">
-              Merangkum keseluruhan Hub kemarin &amp; men-tag PIC untuk: belum isi report, report/Productivity kosong, Top 5 % Parcel Sweeper, gantungan Delivering, &amp; On-Hold.
+              Mengirim gambar report + caption ringkasan keseluruhan Hub kemarin serta mencantumkan PIC untuk: belum isi report, report/Productivity kosong, gantungan Delivering, &amp; On-Hold.
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               <Button
@@ -403,6 +410,16 @@ function setupSeatalkScheduleTriggers() {
                 Tutup
               </button>
             </div>
+            {cronPreview.imageDataUrl && (
+              <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-2 overflow-x-auto">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={cronPreview.imageDataUrl}
+                  alt="Preview Gambar Daily Summary Report"
+                  className="w-full max-w-3xl rounded border border-slate-700 mx-auto"
+                />
+              </div>
+            )}
             <pre className="text-xs whitespace-pre-wrap font-sans leading-relaxed max-h-80 overflow-y-auto">
               {cronPreview.text}
             </pre>

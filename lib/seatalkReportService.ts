@@ -7,6 +7,10 @@ import { getSeaTalkWebhookUrl, getSetting, setSetting } from "./settingsService"
 import { getSheetData } from "./sheets";
 import { getAllHubs, getAllUserMappings, splitHubList } from "./userMapping";
 import { detectAnomalies, formatDate, formatNumber, rowToClosingData } from "./utils";
+import {
+  DailySummaryHubRow,
+  generateDailySummaryImageBase64,
+} from "./seatalkSummaryImage";
 import { ClosingData } from "@/types/closing";
 
 const DATA_CLOSING_SHEET = "DATA_CLOSING";
@@ -86,13 +90,9 @@ async function buildHubPicMap(): Promise<Map<string, HubPicInfo>> {
   return out;
 }
 
-function formatPicNames(info?: HubPicInfo): string {
-  if (!info) return "-";
-  if (info.names.length > 0) return info.names.join(", ");
-  if (info.emails.length > 0) {
-    return info.emails.map((e) => e.split("@")[0]).join(", ");
-  }
-  return "-";
+function formatPicMentions(info?: HubPicInfo): string {
+  if (!info || info.emails.length === 0) return "";
+  return " " + info.emails.map((e) => `@${e}`).join(" ");
 }
 
 function splitUtf8Chunks(text: string, maxBytes: number): string[] {
@@ -118,38 +118,55 @@ function splitUtf8Chunks(text: string, maxBytes: number): string[] {
   return chunks;
 }
 
+async function sendSeaTalkImageMessage(
+  webhookUrl: string,
+  base64Content: string
+): Promise<void> {
+  const res = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tag: "image",
+      image_base64: {
+        content: base64Content,
+      },
+    }),
+  });
+
+  const text = await res.text();
+  let json: { code?: number; message?: string } | null = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // Abaikan response non-JSON
+  }
+
+  if (!res.ok || (json?.code !== undefined && json.code !== 0)) {
+    throw new Error(
+      `SeaTalk webhook image error (${res.status}): ${json?.message || text || "Unknown"}`
+    );
+  }
+}
+
 async function sendSeaTalkTextMessage(
   webhookUrl: string,
-  content: string,
-  mentionedEmails: string[]
-): Promise<{ ok: boolean; mentionFallbackUsed: boolean }> {
+  content: string
+): Promise<{ ok: boolean }> {
   const chunks = splitUtf8Chunks(content, SEATALK_MAX_TEXT_BYTES);
-  let mentionFallbackUsed = false;
 
   for (let i = 0; i < chunks.length; i++) {
-    const uniqueEmails = Array.from(new Set(mentionedEmails.filter(Boolean)));
-    const payload: {
-      tag: "text";
-      text: {
-        content: string;
-        mentioned_email_list?: string[];
-        at_all: boolean;
-      };
-    } = {
-      tag: "text",
-      text: {
-        content: chunks[i],
-        at_all: false,
-      },
-    };
-    if (i === 0 && uniqueEmails.length > 0) {
-      payload.text.mentioned_email_list = uniqueEmails;
-    }
-
+    // Jangan kirim mentioned_email_list agar SeaTalk tidak menaruh daftar @mention di bagian atas pesan;
+    // mention @email sudah ditampilkan inline tepat di samping nama masing-masing Hub.
     const res = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        tag: "text",
+        text: {
+          content: chunks[i],
+          at_all: false,
+        },
+      }),
     });
 
     const text = await res.text();
@@ -160,42 +177,14 @@ async function sendSeaTalkTextMessage(
       // Abaikan response non-JSON
     }
 
-    const failed = !res.ok || (json?.code !== undefined && json.code !== 0);
-    if (failed) {
-      // Jika gagal karena ada email yang belum terdaftar / bukan anggota grup SeaTalk,
-      // kirim ulang pesan tanpa mentioned_email_list agar laporan tetap terkirim.
-      if (payload.text.mentioned_email_list?.length) {
-        mentionFallbackUsed = true;
-        const retryRes = await fetch(webhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tag: "text",
-            text: {
-              content: chunks[i],
-              at_all: false,
-            },
-          }),
-        });
-        const retryText = await retryRes.text();
-        let retryJson: { code?: number; message?: string } | null = null;
-        try {
-          retryJson = JSON.parse(retryText);
-        } catch {}
-        if (!retryRes.ok || (retryJson?.code !== undefined && retryJson.code !== 0)) {
-          throw new Error(
-            `SeaTalk webhook error (${retryRes.status}): ${retryJson?.message || retryText || "Unknown"}`
-          );
-        }
-      } else {
-        throw new Error(
-          `SeaTalk webhook error (${res.status}): ${json?.message || text || "Unknown"}`
-        );
-      }
+    if (!res.ok || (json?.code !== undefined && json.code !== 0)) {
+      throw new Error(
+        `SeaTalk webhook error (${res.status}): ${json?.message || text || "Unknown"}`
+      );
     }
   }
 
-  return { ok: true, mentionFallbackUsed };
+  return { ok: true };
 }
 
 async function loadClosingSnapshotForDate(targetDate: string): Promise<{
@@ -290,7 +279,7 @@ export async function runClosingReminderJob(options?: {
       for (const em of pic?.emails || []) mentionEmails.add(em);
       missingHubs.push({
         hub: hubName,
-        picText: formatPicNames(pic),
+        picText: formatPicMentions(pic),
         emails: pic?.emails || [],
       });
     }
@@ -311,16 +300,14 @@ export async function runClosingReminderJob(options?: {
           `Progres Saat Ini: ${closedCount}/${allHubs.length} Hub Sudah Closing • ${missingHubs.length} Hub Belum Closing`,
           "",
           `⚠️ HUB BELUM CLOSING (Mohon segera submit sebelum 23:59 WIB):`,
-          ...missingHubs.map(
-            (item, idx) => `${idx + 1}. ${item.hub} — PIC: ${item.picText}`
-          ),
+          ...missingHubs.map((item, idx) => `${idx + 1}. ${item.hub}${item.picText}`),
         ];
 
   const messageText = lines.join("\n");
   const mentionList = Array.from(mentionEmails);
 
   if (!options?.dryRun) {
-    await sendSeaTalkTextMessage(webhookUrl, messageText, mentionList);
+    await sendSeaTalkTextMessage(webhookUrl, messageText);
     await setSetting({
       key: LAST_REMINDER_KEY,
       value: targetDate,
@@ -340,10 +327,9 @@ export async function runClosingReminderJob(options?: {
 }
 
 /**
- * Job 2 (00:05 WIB): Summary otomatis keseluruhan Hub (kemarin), termasuk tag PIC untuk:
+ * Job 2 (00:05 WIB): Summary otomatis keseluruhan Hub (kemarin), termasuk mention PIC untuk:
  * - Belum mengisi report Closing
  * - Report tidak lengkap / ada kolom kosong (termasuk Productivity kosong)
- * - Top 5 % Parcel Sweeper paling tinggi
  * - Masih ada gantungan Delivering (fleet_delivering > 0)
  * - Masih ada gantungan On-Hold (fleet_oh_volume > 0)
  */
@@ -380,12 +366,13 @@ export async function runDailySummaryJob(options?: {
   let totalDeliveredAll = 0;
   let totalBacklogAll = 0;
   let totalExpediteAll = 0;
+  let totalDeliveringAll = 0;
   let totalOhVolAll = 0;
   let prodFilledCount = 0;
 
+  const hubRows: DailySummaryHubRow[] = [];
   const missingClosing: { hub: string; picText: string; hasProd: boolean }[] = [];
   const incompleteOrEmpty: { hub: string; picText: string; note: string }[] = [];
-  const psCandidates: { hub: string; picText: string; pct: number; total: number }[] = [];
   const deliveringGantungan: { hub: string; picText: string; count: number }[] = [];
   const onholdGantungan: { hub: string; picText: string; vol: number; total: number }[] = [];
 
@@ -403,11 +390,22 @@ export async function runDailySummaryJob(options?: {
     if (hasProd) prodFilledCount++;
 
     const pic = picByHub.get(key);
-    const picText = formatPicNames(pic);
+    const picText = formatPicMentions(pic);
 
     if (!row || !row.submitted_at) {
       addHubPics(key);
       missingClosing.push({ hub: hubName, picText, hasProd });
+      hubRows.push({
+        hub: hubName,
+        closingStatus: "Belum",
+        missingCols: 0,
+        hasProd,
+        volume: 0,
+        delivered: 0,
+        delivering: 0,
+        ohVol: 0,
+        backlog: 0,
+      });
       continue;
     }
 
@@ -426,10 +424,22 @@ export async function runDailySummaryJob(options?: {
     totalDeliveredAll += row.fleet_delivered || 0;
     totalBacklogAll += row.backlog_total || 0;
     totalExpediteAll += row.total_expedite || 0;
+    totalDeliveringAll += row.fleet_delivering || 0;
     totalOhVolAll += row.fleet_oh_volume || 0;
 
     // Cek report kosong / kurang (kolom closing wajib kosong atau belum upload productivity)
     const anomalies = detectAnomalies(row);
+    hubRows.push({
+      hub: hubName,
+      closingStatus: anomalies.length > 0 ? "Kurang" : "OK",
+      missingCols: anomalies.length,
+      hasProd,
+      volume: vol,
+      delivered: row.fleet_delivered || 0,
+      delivering: row.fleet_delivering || 0,
+      ohVol: row.fleet_oh_volume || 0,
+      backlog: row.backlog_total || 0,
+    });
     const missingNotes: string[] = [];
     if (anomalies.length > 0) {
       missingNotes.push(`Closing belum lengkap (${anomalies.length} kolom)`);
@@ -443,15 +453,6 @@ export async function runDailySummaryJob(options?: {
         hub: hubName,
         picText,
         note: missingNotes.join(" & "),
-      });
-    }
-
-    if (row.parcel_sweeper_scanned_pct !== null && row.parcel_sweeper_scanned_pct !== undefined) {
-      psCandidates.push({
-        hub: hubName,
-        picText,
-        pct: row.parcel_sweeper_scanned_pct,
-        total: row.parcel_sweeper_total || 0,
       });
     }
 
@@ -475,17 +476,11 @@ export async function runDailySummaryJob(options?: {
     }
   }
 
+  hubRows.sort((a, b) => a.hub.localeCompare(b.hub, "id"));
   missingClosing.sort((a, b) => a.hub.localeCompare(b.hub, "id"));
   incompleteOrEmpty.sort((a, b) => a.hub.localeCompare(b.hub, "id"));
   deliveringGantungan.sort((a, b) => b.count - a.count || a.hub.localeCompare(b.hub, "id"));
   onholdGantungan.sort((a, b) => b.vol - a.vol || a.hub.localeCompare(b.hub, "id"));
-
-  const top5ParcelSweeper = [...psCandidates]
-    .sort((a, b) => b.pct - a.pct || b.total - a.total || a.hub.localeCompare(b.hub, "id"))
-    .slice(0, 5);
-  for (const top of top5ParcelSweeper) {
-    addHubPics(top.hub.toLowerCase().trim());
-  }
 
   const backlogPctAll =
     totalVolumeAll > 0 ? ((totalBacklogAll / totalVolumeAll) * 100).toFixed(1) : "0.0";
@@ -500,27 +495,19 @@ export async function runDailySummaryJob(options?: {
     ...(missingClosing.length > 0
       ? missingClosing.map(
           (h, idx) =>
-            `${idx + 1}. ${h.hub}${h.hasProd ? " (Closing kosong)" : " (Closing & Productivity kosong)"} — PIC: ${h.picText}`
+            `${idx + 1}. ${h.hub}${h.picText}${h.hasProd ? " (Closing kosong)" : " (Closing & Productivity kosong)"}`
         )
       : ["- Semua Hub sudah mengisi Closing -"]),
     "",
     `⚠️ REPORT KOSONG / BELUM LENGKAP (${incompleteOrEmpty.length} Hub):`,
     ...(incompleteOrEmpty.length > 0
-      ? incompleteOrEmpty.map((h, idx) => `${idx + 1}. ${h.hub} [${h.note}] — PIC: ${h.picText}`)
+      ? incompleteOrEmpty.map((h, idx) => `${idx + 1}. ${h.hub}${h.picText} [${h.note}]`)
       : ["- Semua Hub yang closing datanya lengkap termasuk Productivity -"]),
-    "",
-    `🏆 TOP 5 % PARCEL SWEEPER TERTINGGI:`,
-    ...(top5ParcelSweeper.length > 0
-      ? top5ParcelSweeper.map(
-          (h, idx) =>
-            `${idx + 1}. ${h.hub}: ${h.pct.toFixed(1)}% (${formatNumber(h.total)} pkt) — PIC: ${h.picText}`
-        )
-      : ["- Belum ada data Parcel Sweeper -"]),
     "",
     `🚚 MASIH ADA GANTUNGAN DELIVERING (${deliveringGantungan.length} Hub):`,
     ...(deliveringGantungan.length > 0
       ? deliveringGantungan.map(
-          (h, idx) => `${idx + 1}. ${h.hub}: ${formatNumber(h.count)} pkt — PIC: ${h.picText}`
+          (h, idx) => `${idx + 1}. ${h.hub}${h.picText}: ${formatNumber(h.count)} pkt`
         )
       : ["- Clear, tidak ada gantungan Delivering (0) -"]),
     "",
@@ -528,7 +515,7 @@ export async function runDailySummaryJob(options?: {
     ...(onholdGantungan.length > 0
       ? onholdGantungan.map(
           (h, idx) =>
-            `${idx + 1}. ${h.hub}: ${formatNumber(h.vol)} pkt (OH Total ${formatNumber(h.total)}) — PIC: ${h.picText}`
+            `${idx + 1}. ${h.hub}${h.picText}: ${formatNumber(h.vol)} pkt (OH Total ${formatNumber(h.total)})`
         )
       : ["- Clear, tidak ada gantungan On-Hold (0) -"]),
   ];
@@ -536,8 +523,29 @@ export async function runDailySummaryJob(options?: {
   const messageText = lines.join("\n");
   const mentionList = Array.from(mentionEmails);
 
+  const summaryImage = await generateDailySummaryImageBase64({
+    targetDate,
+    totalHubs: allHubs.length,
+    closedCount,
+    prodFilledCount,
+    totalVolumeAll,
+    totalDeliveredAll,
+    totalBacklogAll,
+    backlogPctAll,
+    totalExpediteAll,
+    totalDeliveringAll,
+    totalOhVolAll,
+    missingClosingCount: missingClosing.length,
+    incompleteCount: incompleteOrEmpty.length,
+    deliveringGantunganCount: deliveringGantungan.length,
+    onholdGantunganCount: onholdGantungan.length,
+    hubRows,
+  });
+
   if (!options?.dryRun) {
-    await sendSeaTalkTextMessage(webhookUrl, messageText, mentionList);
+    // Kirim gambar report summary terlebih dahulu, lalu diikuti text caption detailnya
+    await sendSeaTalkImageMessage(webhookUrl, summaryImage.base64);
+    await sendSeaTalkTextMessage(webhookUrl, messageText);
     await setSetting({
       key: LAST_SUMMARY_KEY,
       value: targetDate,
@@ -553,10 +561,13 @@ export async function runDailySummaryJob(options?: {
     prodFilledCount,
     missingClosingCount: missingClosing.length,
     incompleteCount: incompleteOrEmpty.length,
-    top5ParcelSweeperCount: top5ParcelSweeper.length,
     deliveringGantunganCount: deliveringGantungan.length,
     onholdGantunganCount: onholdGantungan.length,
     mentionedCount: mentionList.length,
+    imageSent: !options?.dryRun,
     preview: messageText,
+    ...(options?.dryRun
+      ? { previewImageDataUrl: `data:image/png;base64,${summaryImage.base64}` }
+      : {}),
   };
 }
