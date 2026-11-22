@@ -6,17 +6,64 @@ import {
   Camera,
   CheckCircle2,
   Eye,
+  Maximize2,
   Monitor,
   ScanText,
   XCircle,
 } from "lucide-react";
 
+interface OcrExampleItem {
+  id: string;
+  step: number;
+  title: string;
+  badge: string;
+  badgeClass: string;
+  src: string;
+  description: string;
+}
+
+const OCR_EXAMPLES: OcrExampleItem[] = [
+  {
+    id: "operation-progress",
+    step: 1,
+    title: "Ringkasan Hub — In Hub, Fleet & Head Counts",
+    badge: "Bagian Atas FMS",
+    badgeClass:
+      "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
+    src: "/images/ocr-examples/fms-operation-progress.jpg",
+    description:
+      "Pastikan tabel In Hub Status, Fleet Status, dan Fleet Head Counts (2WH/4WH Dedicated, Kurir Plus, Mitra) terlihat utuh dari kiri ke kanan.",
+  },
+  {
+    id: "backlog-expedite",
+    step: 2,
+    title: "Ringkasan Hub — Backlog & To Expedite",
+    badge: "Bagian Bawah FMS",
+    badgeClass:
+      "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
+    src: "/images/ocr-examples/fms-backlog-expedite.jpg",
+    description:
+      "Scroll ke bagian Backlog (LM Hub Aging) & To Expedite pada tab Ringkasan Hub, pastikan angka total Backlog & Expedite terbaca jelas.",
+  },
+  {
+    id: "parcel-sweeper",
+    step: 3,
+    title: "Parcel Sweeper View (Tanggal Wajib Terlihat)",
+    badge: "Validasi Tanggal",
+    badgeClass: "bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-300",
+    src: "/images/ocr-examples/fms-parcel-sweeper.jpg",
+    description:
+      "Pastikan Task ID (PS...) & Tanggal serta kartu kiri (% Expected Order Scanned, Total, Unscanned, Scanned) terlihat jelas dan cocok dengan tanggal Closing.",
+  },
+];
+
 /**
- * Panduan visual & modal contoh framing Screenshot FMS yang benar
+ * Panduan visual & modal contoh Screenshot FMS asli yang dibutuhkan
  * agar pembacaan OCR di halaman Input Data berjalan akurat.
  */
 export function OcrExampleGuide() {
   const [open, setOpen] = useState(false);
+  const [zoomed, setZoomed] = useState<OcrExampleItem | null>(null);
 
   return (
     <>
@@ -30,8 +77,8 @@ export function OcrExampleGuide() {
             <span className="font-bold text-sky-900 dark:text-sky-200">
               Panduan Screenshot OCR:
             </span>{" "}
-            Sertakan screenshot penuh <strong>Operation Progress</strong>,{" "}
-            <strong>Ringkasan Hub (Backlog &amp; To Expedite)</strong>, dan{" "}
+            Sertakan 3 screenshot FMS: <strong>In Hub &amp; Fleet</strong>,{" "}
+            <strong>Backlog &amp; To Expedite</strong>, serta{" "}
             <strong>Parcel Sweeper</strong> (dengan tanggal terlihat jelas).
           </div>
         </div>
@@ -46,217 +93,60 @@ export function OcrExampleGuide() {
         </button>
       </div>
 
-      {/* Modal Contoh Screenshot */}
+      {/* Modal Contoh Screenshot Asli */}
       <Modal
         open={open}
         onOpenChange={setOpen}
         title="Contoh Screenshot FMS yang Benar untuk OCR"
-        description="Ikuti framing di bawah ini saat melakukan screenshot (Win+Shift+S / Cmd+Shift+4) lalu Ctrl+V ke area input."
+        description="Gunakan 3 tampilan halaman FMS di bawah ini saat melakukan screenshot penuh lalu paste (Ctrl+V) ke area upload."
         className="max-w-5xl max-h-[90vh] overflow-y-auto p-5 sm:p-6 dark:border dark:border-slate-700"
       >
         <div className="space-y-5">
-          {/* 3 Contoh Mockup Framing FMS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Contoh 1: Operation Progress & Fleet Head Counts */}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-900/70 p-3.5 flex flex-col justify-between gap-3">
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-900 dark:text-white">
-                    <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">
-                      1
+            {OCR_EXAMPLES.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-900/70 p-3.5 flex flex-col justify-between gap-3"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="inline-flex items-start gap-1.5 text-xs font-extrabold text-slate-900 dark:text-white leading-snug">
+                      <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                        {item.step}
+                      </span>
+                      <span>{item.title}</span>
                     </span>
-                    Operation Progress
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
-                    FMS Utama
-                  </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap flex-shrink-0 ${item.badgeClass}`}
+                    >
+                      {item.badge}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setZoomed(item)}
+                    title="Klik untuk memperbesar gambar contoh"
+                    className="group relative block w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-2xs cursor-zoom-in"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.src}
+                      alt={item.title}
+                      className="w-full h-44 object-cover object-top transition-transform duration-200 group-hover:scale-[1.02]"
+                    />
+                    <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-slate-900/75 text-white px-2 py-1 text-[10px] font-semibold opacity-90 group-hover:opacity-100">
+                      <Maximize2 className="h-3 w-3" />
+                      Perbesar
+                    </span>
+                  </button>
                 </div>
 
-                {/* Mockup Wireframe FMS #1 */}
-                <div className="rounded-lg border-2 border-dashed border-emerald-500/75 dark:border-emerald-400/60 bg-white dark:bg-slate-950 p-3 space-y-2.5 text-[11px] font-mono shadow-2xs">
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1">
-                    <span className="font-sans font-bold text-slate-700 dark:text-slate-200">
-                      Operation Progress
-                    </span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-sans font-semibold">
-                      Frame Utuh ✓
-                    </span>
-                  </div>
-
-                  {/* In Hub Status */}
-                  <div className="rounded bg-slate-50 dark:bg-slate-900 p-2 border border-slate-200/80 dark:border-slate-800">
-                    <p className="font-sans font-bold text-[10px] text-sky-700 dark:text-sky-300 mb-1">
-                      In Hub Status
-                    </p>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px]">
-                      <span className="text-slate-500 dark:text-slate-400">Transported</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">140</span>
-                      <span className="text-slate-500 dark:text-slate-400">Received</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">2,317</span>
-                      <span className="text-slate-500 dark:text-slate-400">Assigning</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">0</span>
-                      <span className="text-slate-500 dark:text-slate-400">Assigned</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">0</span>
-                    </div>
-                  </div>
-
-                  {/* Fleet Status */}
-                  <div className="rounded bg-slate-50 dark:bg-slate-900 p-2 border border-slate-200/80 dark:border-slate-800">
-                    <p className="font-sans font-bold text-[10px] text-amber-700 dark:text-amber-300 mb-1">
-                      Fleet Status
-                    </p>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px]">
-                      <span className="text-slate-500 dark:text-slate-400">Delivering</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">0</span>
-                      <span className="text-slate-500 dark:text-slate-400">Delivered</span>
-                      <span className="text-right font-bold text-emerald-600 dark:text-emerald-400">2,543</span>
-                      <span className="text-slate-500 dark:text-slate-400">On-hold (Vol/Tot)</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">0 / 0</span>
-                    </div>
-                  </div>
-
-                  {/* Fleet Head Counts */}
-                  <div className="rounded bg-slate-50 dark:bg-slate-900 p-2 border border-slate-200/80 dark:border-slate-800">
-                    <p className="font-sans font-bold text-[10px] text-indigo-700 dark:text-indigo-300 mb-1">
-                      Fleet Head Counts
-                    </p>
-                    <div className="grid grid-cols-2 gap-x-2 text-[10px]">
-                      <span className="text-slate-500 dark:text-slate-400">Ded 2W / KP 2W</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">12 / 4</span>
-                      <span className="text-slate-500 dark:text-slate-400">Ded 4W / Mitra</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">2 / 3</span>
-                    </div>
-                  </div>
-                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {item.description}
+                </p>
               </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                Pastikan nama label dan angka dari <strong>In Hub Status</strong>, <strong>Fleet Status</strong>, dan <strong>Fleet Head Counts</strong> terlihat utuh tanpa terpotong.
-              </p>
-            </div>
-
-            {/* Contoh 2: Ringkasan Hub (Backlog & To Expedite) */}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-900/70 p-3.5 flex flex-col justify-between gap-3">
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-900 dark:text-white">
-                    <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">
-                      2
-                    </span>
-                    Ringkasan Hub
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
-                    Backlog &amp; Expedite
-                  </span>
-                </div>
-
-                {/* Mockup Wireframe FMS #2 */}
-                <div className="rounded-lg border-2 border-dashed border-emerald-500/75 dark:border-emerald-400/60 bg-white dark:bg-slate-950 p-3 space-y-2.5 text-[11px] font-mono shadow-2xs">
-                  <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-1">
-                    <span className="font-sans font-bold text-slate-700 dark:text-slate-200">
-                      Ringkasan Hub
-                    </span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-sans font-semibold">
-                      Frame Utuh ✓
-                    </span>
-                  </div>
-
-                  {/* LM Hub Aging / Backlog */}
-                  <div className="rounded bg-rose-50/70 dark:bg-rose-950/35 p-2.5 border border-rose-200 dark:border-rose-500/35 space-y-1.5">
-                    <div className="flex items-center justify-between font-sans">
-                      <span className="font-bold text-[10px] text-rose-800 dark:text-rose-200">
-                        LM Hub Aging / Backlog
-                      </span>
-                      <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white text-[9px] font-bold">
-                        Wajib
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-slate-600 dark:text-slate-300">Backlog Total</span>
-                      <span className="font-extrabold text-rose-700 dark:text-rose-300">110</span>
-                    </div>
-                  </div>
-
-                  {/* To Expedite */}
-                  <div className="rounded bg-amber-50/70 dark:bg-amber-950/35 p-2.5 border border-amber-200 dark:border-amber-500/35 space-y-1.5">
-                    <div className="flex items-center justify-between font-sans">
-                      <span className="font-bold text-[10px] text-amber-800 dark:text-amber-200">
-                        To Expedite
-                      </span>
-                      <span className="px-1.5 py-0.2 rounded bg-amber-600 text-white text-[9px] font-bold">
-                        Wajib
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-slate-600 dark:text-slate-300">To Expedite</span>
-                      <span className="font-extrabold text-amber-700 dark:text-amber-300">12</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                Jika bagian <strong>Backlog</strong> dan <strong>To Expedite</strong> berada di bagian bawah halaman FMS, scroll sedikit lalu screenshot penuh dan paste sebagai gambar tambahan.
-              </p>
-            </div>
-
-            {/* Contoh 3: Parcel Sweeper */}
-            <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/90 dark:bg-slate-900/70 p-3.5 flex flex-col justify-between gap-3">
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-900 dark:text-white">
-                    <span className="w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] font-bold flex items-center justify-center">
-                      3
-                    </span>
-                    Parcel Sweeper
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-300">
-                    Validasi Tanggal
-                  </span>
-                </div>
-
-                {/* Mockup Wireframe FMS #3 */}
-                <div className="rounded-lg border-2 border-dashed border-emerald-500/75 dark:border-emerald-400/60 bg-white dark:bg-slate-950 p-3 space-y-2.5 text-[11px] font-mono shadow-2xs">
-                  <div className="flex items-center justify-between text-[10px] border-b border-slate-100 dark:border-slate-800 pb-1">
-                    <span className="font-sans font-bold text-slate-700 dark:text-slate-200">
-                      Parcel Sweeper Task
-                    </span>
-                    <span className="text-emerald-600 dark:text-emerald-400 font-sans font-semibold">
-                      Frame Utuh ✓
-                    </span>
-                  </div>
-
-                  {/* Highlight Tanggal Wajib */}
-                  <div className="rounded bg-amber-50 dark:bg-amber-950/45 px-2.5 py-2 border-2 border-amber-400 dark:border-amber-500/70 space-y-1">
-                    <div className="flex items-center justify-between font-sans text-[10px]">
-                      <span className="font-extrabold text-amber-900 dark:text-amber-200">
-                        Tanggal / Task ID
-                      </span>
-                      <span className="px-1.5 py-0 rounded bg-red-600 text-white text-[9px] font-bold">
-                        HARUS TERLIHAT
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-700 dark:text-slate-200">
-                      Tanggal: 2026-11-22 • PS20261122...
-                    </div>
-                  </div>
-
-                  {/* Card Parcel Sweeper */}
-                  <div className="rounded bg-sky-50/80 dark:bg-sky-950/35 p-2.5 border border-sky-200 dark:border-sky-500/35 space-y-1.5">
-                    <p className="font-sans font-bold text-[10px] text-sky-800 dark:text-sky-200">
-                      Kartu Parcel Sweeper (Kiri)
-                    </p>
-                    <div className="grid grid-cols-2 gap-x-2 text-[10px]">
-                      <span className="text-slate-500 dark:text-slate-400">Total</span>
-                      <span className="text-right font-bold text-slate-800 dark:text-slate-100">111</span>
-                      <span className="text-slate-500 dark:text-slate-400">Expected Orders Scanned</span>
-                      <span className="text-right font-bold text-blue-700 dark:text-sky-300">100%</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-600 dark:text-slate-300">
-                <strong>Tanggal pada halaman Parcel Sweeper wajib terlihat jelas</strong> dan sesuai dengan <em>Tanggal Closing</em> yang dipilih agar tidak ditolak oleh validasi OCR.
-              </p>
-            </div>
+            ))}
           </div>
 
           {/* Checklist Benar vs Hindari */}
@@ -267,10 +157,24 @@ export function OcrExampleGuide() {
                 Yang Disarankan (Akurasi Tinggi)
               </div>
               <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-200 list-disc pl-4">
-                <li>Gunakan screenshot langsung dari komputer (<kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-[10px] font-mono">Win+Shift+S</kbd> lalu <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-[10px] font-mono">Ctrl+V</kbd>).</li>
-                <li>Atur zoom browser FMS pada <strong>100%</strong> agar angka dan pemisah ribuan tidak pecah.</li>
-                <li>Boleh menggabungkan beberapa screenshot sekaligus sebelum menekan <strong>Proses OCR</strong>.</li>
-                <li>Bisa juga copy teks langsung dari halaman FMS dan tekan <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-[10px] font-mono">Ctrl+V</kbd>.</li>
+                <li>
+                  Screenshot penuh tampilan web FMS dari komputer (
+                  <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-[10px] font-mono">
+                    Win+Shift+S
+                  </kbd>{" "}
+                  lalu{" "}
+                  <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-[10px] font-mono">
+                    Ctrl+V
+                  </kbd>
+                  ).
+                </li>
+                <li>
+                  Atur zoom browser FMS pada <strong>100%</strong> agar angka tidak pecah.
+                </li>
+                <li>
+                  Gabungkan ke-3 screenshot sekaligus sebelum klik{" "}
+                  <strong>Proses OCR</strong>.
+                </li>
               </ul>
             </div>
 
@@ -280,9 +184,18 @@ export function OcrExampleGuide() {
                 Yang Sebaiknya Dihindari
               </div>
               <ul className="space-y-1.5 text-xs text-slate-700 dark:text-slate-200 list-disc pl-4">
-                <li><strong>Jangan memotret layar monitor pakai kamera HP</strong> karena pantulan cahaya &amp; moire membuat angka sering salah baca.</li>
-                <li><strong>Jangan crop terlalu sempit</strong> hingga label nama bagian (seperti <em>In Hub Status</em>, <em>Fleet Status</em>, atau tanggal Parcel Sweeper) hilang.</li>
-                <li><strong>Jangan mengirim gambar kompresi rendah/buram</strong> dari chat WA yang sudah pecah resolusinya.</li>
+                <li>
+                  <strong>Jangan memotret layar monitor pakai kamera HP</strong>{" "}
+                  karena silau &amp; moire sering mengganggu OCR.
+                </li>
+                <li>
+                  <strong>Jangan crop terlalu sempit</strong> hingga label judul atau
+                  tanggal Parcel Sweeper terpotong.
+                </li>
+                <li>
+                  <strong>Hindari gambar buram hasil kirim ulang WA</strong>{" "}
+                  yang terkompresi rendah.
+                </li>
               </ul>
             </div>
           </div>
@@ -302,6 +215,28 @@ export function OcrExampleGuide() {
             </button>
           </div>
         </div>
+      </Modal>
+
+      {/* Modal Perbesar Gambar */}
+      <Modal
+        open={!!zoomed}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setZoomed(null);
+        }}
+        title={zoomed ? `Contoh #${zoomed.step}: ${zoomed.title}` : ""}
+        description={zoomed?.description}
+        className="max-w-6xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 dark:border dark:border-slate-700"
+      >
+        {zoomed && (
+          <div className="rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-950">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={zoomed.src}
+              alt={zoomed.title}
+              className="w-full h-auto block"
+            />
+          </div>
+        )}
       </Modal>
     </>
   );
