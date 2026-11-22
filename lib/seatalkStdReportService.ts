@@ -95,7 +95,13 @@ export async function runStdMonitorReportJob(options?: {
         ? [item.row.plEmail.trim().toLowerCase()]
         : [];
     const emails = mappedEmails.length > 0 ? mappedEmails : fallbackEmail;
-    const mentionInline = emails.length > 0 ? " " + emails.map((e) => `@${e}`).join(" ") : "";
+    const mentionInline =
+      emails.length > 0
+        ? " " +
+          emails
+            .map((e) => `<mention-tag target="seatalk://user?email=${e}"/>`)
+            .join(" ")
+        : "";
     const statusTag = item.gap >= -2 ? "Mendekati" : "Below";
 
     return `${idx + 1}. ${item.row.namaHub}${mentionInline}: ${fmtPct(item.mtd)} / Target ${fmtPct(item.target)} (${item.gap > 0 ? `+${item.gap}` : item.gap}% • ${statusTag})`;
@@ -120,11 +126,13 @@ export async function runStdMonitorReportJob(options?: {
   if (!options?.dryRun) {
     await sendSeaTalkImageMessage(webhookUrl, stdImage.base64);
     await sendSeaTalkTextMessage(webhookUrl, messageText);
-    await setSetting({
-      key: LAST_STD_REPORT_KEY,
-      value: targetDate,
-      updatedBy: "cron-std-0900",
-    });
+    if (!options?.force) {
+      await setSetting({
+        key: LAST_STD_REPORT_KEY,
+        value: targetDate,
+        updatedBy: "cron-std-0900",
+      });
+    }
   }
 
   return {

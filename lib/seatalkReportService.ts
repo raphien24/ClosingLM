@@ -95,7 +95,12 @@ async function buildHubPicMap(): Promise<Map<string, HubPicInfo>> {
 
 function formatPicMentions(info?: HubPicInfo): string {
   if (!info || info.emails.length === 0) return "";
-  return " " + info.emails.map((e) => `@${e}`).join(" ");
+  return (
+    " " +
+    info.emails
+      .map((e) => `<mention-tag target="seatalk://user?email=${e}"/>`)
+      .join(" ")
+  );
 }
 
 function splitUtf8Chunks(text: string, maxBytes: number): string[] {
@@ -311,11 +316,13 @@ export async function runClosingReminderJob(options?: {
 
   if (!options?.dryRun) {
     await sendSeaTalkTextMessage(webhookUrl, messageText);
-    await setSetting({
-      key: LAST_REMINDER_KEY,
-      value: targetDate,
-      updatedBy: "cron-reminder-2320",
-    });
+    if (!options?.force) {
+      await setSetting({
+        key: LAST_REMINDER_KEY,
+        value: targetDate,
+        updatedBy: "cron-reminder-2320",
+      });
+    }
   }
 
   return {
@@ -566,11 +573,13 @@ export async function runDailySummaryJob(options?: {
     // Kirim gambar report summary terlebih dahulu, lalu diikuti text caption detailnya
     await sendSeaTalkImageMessage(webhookUrl, summaryImage.base64);
     await sendSeaTalkTextMessage(webhookUrl, messageText);
-    await setSetting({
-      key: LAST_SUMMARY_KEY,
-      value: targetDate,
-      updatedBy: "cron-summary-0005",
-    });
+    if (!options?.force) {
+      await setSetting({
+        key: LAST_SUMMARY_KEY,
+        value: targetDate,
+        updatedBy: "cron-summary-0005",
+      });
+    }
   }
 
   return {
@@ -829,11 +838,13 @@ export async function runAutoConfirmSokoJob(options?: {
   if (!options?.dryRun) {
     await sendSeaTalkImageMessage(webhookUrl, hubImage.base64);
     await sendSeaTalkTextMessage(webhookUrl, prepared.caption);
-    await setSetting({
-      key: LAST_SOKO_CONFIRM_KEY,
-      value: targetDate,
-      updatedBy: "cron-soko-confirm-2319",
-    });
+    if (!options?.force) {
+      await setSetting({
+        key: LAST_SOKO_CONFIRM_KEY,
+        value: targetDate,
+        updatedBy: "cron-soko-confirm-2319",
+      });
+    }
   }
 
   return {
