@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ScreenshotZone, compressImageFile } from "@/components/input/ScreenshotZone";
+import { OcrExampleGuide } from "@/components/input/OcrExampleGuide";
 import { OcrPreviewTable } from "@/components/input/OcrPreviewTable";
 import { ProductivityInputSection } from "@/components/productivity/ProductivityInputSection";
 import { Button } from "@/components/ui/button";
@@ -1203,6 +1204,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
                   Ringkasan Hub + Parcel Sweeper)
                 </span>
               </div>
+              <OcrExampleGuide />
               <ScreenshotZone
                 screenshots={screenshots}
                 onAdd={(b) => setScreenshots((p) => [...p, b])}
