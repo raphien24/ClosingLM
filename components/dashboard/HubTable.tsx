@@ -1,10 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ClosingData } from "@/types/closing";
 import { formatNumber, getRowColor, getRowColorClass } from "@/lib/utils";
 import { parseTimestamp } from "@/lib/dateUtils";
-import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import {
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Compass,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface HubTableProps {
@@ -185,9 +194,143 @@ function DeliveryBadge({ delivered, transported, hasData }: {
   return <Badge variant="red">{label}</Badge>;
 }
 
+const TABLE_WAYPOINTS = [
+  { id: "in-hub", label: "In Hub", group: "In Hub Status" },
+  { id: "fleet", label: "Fleet & Vol", group: "Fleet Status" },
+  { id: "prod", label: "Productivity", group: "Daily Productivity" },
+  { id: "backlog", label: "Backlog & PS", group: "Backlog" },
+] as const;
+
 export function HubTable({ data, isLoading, onSelectHub }: HubTableProps) {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const stickyColRef = useRef<HTMLTableCellElement | null>(null);
+  const [scrollState, setScrollState] = useState({
+    left: 0,
+    max: 0,
+    activeGroup: "In Hub Status",
+  });
+  const holdDelayRef = useRef<number | null>(null);
+  const holdTimerRef = useRef<number | null>(null);
+  const didHoldPanRef = useRef(false);
+
+  const syncScrollState = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const max = Math.max(0, el.scrollWidth - el.clientWidth);
+    const left = Math.min(max, Math.max(0, el.scrollLeft));
+    const stickyW = stickyColRef.current?.offsetWidth ?? 144;
+
+    let activeGroup = "In Hub Status";
+    const tableEl = tableRef.current;
+    if (tableEl && max > 4) {
+      const probeX = left + stickyW + 32;
+      for (const wp of TABLE_WAYPOINTS) {
+        const th = tableEl.querySelector<HTMLElement>(
+          `th[data-group="${wp.group}"]`
+        );
+        if (th && probeX >= th.offsetLeft) {
+          activeGroup = wp.group;
+        }
+      }
+      if (left >= max - 6) {
+        activeGroup = "Backlog";
+      }
+    }
+
+    setScrollState((prev) =>
+      prev.left === Math.round(left) &&
+      prev.max === Math.round(max) &&
+      prev.activeGroup === activeGroup
+        ? prev
+        : { left: Math.round(left), max: Math.round(max), activeGroup }
+    );
+  }, []);
+
+  useEffect(() => {
+    syncScrollState();
+    const container = scrollContainerRef.current;
+    const table = tableRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+
+    const ro = new ResizeObserver(() => syncScrollState());
+    ro.observe(container);
+    if (table) ro.observe(table);
+    return () => ro.disconnect();
+  }, [syncScrollState, data.length, isLoading]);
+
+  const stopHoldPan = useCallback(() => {
+    if (holdDelayRef.current !== null) {
+      window.clearTimeout(holdDelayRef.current);
+      holdDelayRef.current = null;
+    }
+    if (holdTimerRef.current !== null) {
+      window.clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => stopHoldPan, [stopHoldPan]);
+
+  const scrollByStep = useCallback((delta: number) => {
+    if (didHoldPanRef.current) {
+      didHoldPanRef.current = false;
+      return;
+    }
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: delta, behavior: "smooth" });
+  }, []);
+
+  const startHoldPan = useCallback(
+    (direction: -1 | 1) => {
+      stopHoldPan();
+      didHoldPanRef.current = false;
+      holdDelayRef.current = window.setTimeout(() => {
+        didHoldPanRef.current = true;
+        holdTimerRef.current = window.setInterval(() => {
+          const el = scrollContainerRef.current;
+          if (!el) return;
+          el.scrollLeft += direction * 20;
+        }, 16);
+      }, 180);
+    },
+    [stopHoldPan]
+  );
+
+  const scrollToEdge = useCallback((edge: "start" | "end") => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const targetLeft = edge === "start" ? 0 : el.scrollWidth - el.clientWidth;
+    el.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
+  }, []);
+
+  const scrollToGroup = useCallback((groupName: string) => {
+    const el = scrollContainerRef.current;
+    const table = tableRef.current;
+    if (!el || !table) return;
+    if (groupName === "In Hub Status") {
+      el.scrollTo({ left: 0, behavior: "smooth" });
+      return;
+    }
+    const th = table.querySelector<HTMLElement>(`th[data-group="${groupName}"]`);
+    if (!th) return;
+    const stickyW = stickyColRef.current?.offsetWidth ?? 144;
+    const max = Math.max(0, el.scrollWidth - el.clientWidth);
+    const targetLeft = Math.min(max, Math.max(0, th.offsetLeft - stickyW));
+    el.scrollTo({ left: targetLeft, behavior: "smooth" });
+  }, []);
+
+  const handleSliderChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const el = scrollContainerRef.current;
+      if (!el) return;
+      el.scrollLeft = Number(e.target.value);
+    },
+    []
+  );
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -250,10 +393,161 @@ export function HubTable({ data, isLoading, onSelectHub }: HubTableProps) {
     );
   }
 
+  const canScroll = scrollState.max > 4;
+  const scrollPct = canScroll
+    ? Math.round((scrollState.left / scrollState.max) * 100)
+    : 0;
+  const atStart = !canScroll || scrollState.left <= 2;
+  const atEnd = !canScroll || scrollState.left >= scrollState.max - 2;
+
   return (
     <div className="relative z-0 rounded-xl border border-slate-300/75 dark:border-slate-700/80 border-t-[3px] border-t-[#0e3454] dark:border-t-cyan-500 overflow-hidden bg-white shadow-sm w-full">
-      <div className="overflow-auto max-h-[calc(100vh-15.5rem)]">
-      <table className="w-full text-xs border-separate border-spacing-0">
+      {/* Harbor Helm Horizontal Navigator Bar */}
+      <div className="px-2.5 py-1.5 bg-gradient-to-r from-[#0e3454]/[0.06] via-sky-50/85 to-[#0e3454]/[0.06] dark:from-slate-900 dark:via-[#0c2640] dark:to-slate-900 border-b border-slate-200 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-2 select-none">
+        {/* Kiri: Sektor Kolom (Quick Jump Waypoints) */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#0e3454] dark:text-cyan-300 pr-1">
+            <Compass className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
+            <span className="hidden sm:inline">Navigasi Tabel</span>
+          </span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {TABLE_WAYPOINTS.map((wp) => {
+              const isActive = canScroll && scrollState.activeGroup === wp.group;
+              const isProd = wp.group === "Daily Productivity";
+              return (
+                <button
+                  key={wp.id}
+                  type="button"
+                  disabled={!canScroll}
+                  onClick={() => scrollToGroup(wp.group)}
+                  title={`Lompat ke kolom ${wp.group}`}
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all border cursor-pointer disabled:opacity-45 disabled:cursor-default ${
+                    isActive
+                      ? isProd
+                        ? "bg-emerald-600 text-white border-emerald-700 shadow-2xs dark:bg-emerald-500 dark:border-emerald-400"
+                        : "bg-[#0e3454] text-amber-200 border-[#0e3454] shadow-2xs dark:bg-cyan-500 dark:text-slate-950 dark:border-cyan-400"
+                      : isProd
+                      ? "bg-emerald-50/90 text-emerald-800 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700/70"
+                      : "bg-white/90 text-slate-600 border-slate-200/90 hover:bg-sky-50 hover:text-[#0e3454] hover:border-sky-300 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700 dark:hover:border-cyan-500/60"
+                  }`}
+                >
+                  {wp.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Kanan: Helm Slider + Tombol Geser Kiri/Kanan */}
+        <div className="flex items-center gap-1.5 ml-auto w-full sm:w-auto justify-end">
+          <div className="inline-flex items-center rounded-lg border border-slate-200/90 dark:border-slate-700 bg-white/90 dark:bg-slate-800/90 p-0.5 shadow-2xs gap-0.5 w-full sm:w-auto">
+            <button
+              type="button"
+              disabled={atStart}
+              onClick={() => scrollToEdge("start")}
+              title="Geser ke paling kiri"
+              aria-label="Geser ke paling kiri"
+              className="p-1 rounded-md text-[#0e3454] dark:text-cyan-300 hover:bg-sky-100/80 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <ChevronsLeft className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={atStart}
+              onClick={() => scrollByStep(-280)}
+              onPointerDown={() => {
+                if (!atStart) startHoldPan(-1);
+              }}
+              onPointerUp={stopHoldPan}
+              onPointerLeave={stopHoldPan}
+              onPointerCancel={stopHoldPan}
+              title="Geser kiri (klik atau tahan)"
+              aria-label="Geser kiri"
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-[#0e3454] dark:text-cyan-200 hover:bg-sky-100/80 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Kiri</span>
+            </button>
+
+            {/* Track Slider Geser Horizontal */}
+            <div className="relative flex items-center flex-1 sm:w-36 md:w-44 px-1.5">
+              <div className="relative w-full h-2 rounded-full bg-slate-200/90 dark:bg-slate-700 pointer-events-none">
+                <div className="w-full h-full rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#0e3454] via-sky-600 to-cyan-500 dark:from-cyan-500 dark:to-amber-400"
+                    style={{ width: `${canScroll ? Math.max(6, scrollPct) : 100}%` }}
+                  />
+                </div>
+                {canScroll && (
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-[#0e3454] dark:bg-amber-400 border-2 border-white dark:border-slate-900 shadow-sm"
+                    style={{ left: `${scrollPct}%` }}
+                  />
+                )}
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={Math.max(1, scrollState.max)}
+                value={scrollState.left}
+                disabled={!canScroll}
+                onChange={handleSliderChange}
+                aria-label="Geser tabel secara horizontal"
+                title="Seret untuk menggeser tabel kiri/kanan (atau tahan Shift + Scroll)"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-grab active:cursor-grabbing disabled:cursor-default"
+              />
+            </div>
+
+            <span className="hidden lg:inline-block min-w-[2.1rem] text-center text-[10px] font-mono font-semibold text-slate-500 dark:text-slate-300 tabular-nums">
+              {canScroll ? `${scrollPct}%` : "Fit"}
+            </span>
+
+            <button
+              type="button"
+              disabled={atEnd}
+              onClick={() => scrollByStep(280)}
+              onPointerDown={() => {
+                if (!atEnd) startHoldPan(1);
+              }}
+              onPointerUp={stopHoldPan}
+              onPointerLeave={stopHoldPan}
+              onPointerCancel={stopHoldPan}
+              title="Geser kanan (klik atau tahan)"
+              aria-label="Geser kanan"
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold text-[#0e3454] dark:text-cyan-200 hover:bg-sky-100/80 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <span className="hidden md:inline">Kanan</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              disabled={atEnd}
+              onClick={() => scrollToEdge("end")}
+              title="Geser ke paling kanan"
+              aria-label="Geser ke paling kanan"
+              className="p-1 rounded-md text-[#0e3454] dark:text-cyan-300 hover:bg-sky-100/80 dark:hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            >
+              <ChevronsRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        ref={scrollContainerRef}
+        onScroll={syncScrollState}
+        onWheel={(e) => {
+          if (e.shiftKey && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+            const el = scrollContainerRef.current;
+            if (el) {
+              el.scrollLeft += e.deltaY;
+              e.preventDefault();
+            }
+          }
+        }}
+        className="overflow-auto max-h-[calc(100vh-17rem)]"
+      >
+      <table ref={tableRef} className="w-full text-xs border-separate border-spacing-0">
         <colgroup>
           {COLS.map((col) => (
             <col key={col.key} style={{ minWidth: col.w }} />
@@ -264,6 +558,7 @@ export function HubTable({ data, isLoading, onSelectHub }: HubTableProps) {
           {/* Baris 1: Nama Hub (rowSpan=2, terkunci di kiri-atas) + Group header */}
           <tr className="bg-gray-100">
             <th
+              ref={stickyColRef}
               rowSpan={2}
               onClick={() => handleSort("nama_hub")}
               title="Nama Hub"
@@ -278,6 +573,7 @@ export function HubTable({ data, isLoading, onSelectHub }: HubTableProps) {
               <th
                 key={i}
                 colSpan={g.span}
+                data-group={g.label || undefined}
                 className={`sticky top-0 z-20 h-[26px] py-1 text-center text-[10px] font-semibold uppercase tracking-wide border-b border-gray-200 ${
                   g.label === "Daily Productivity"
                     ? "border-x border-emerald-300 bg-emerald-100 text-emerald-900"
