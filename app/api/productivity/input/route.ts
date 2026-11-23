@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { resolveActiveHubForSession } from "@/lib/activeHub";
+import { denyIfReadOnlyAdmin, resolveActiveHubForSession } from "@/lib/activeHub";
 import { saveCourierRecordsBatch, checkExistingCourierRecords } from "@/lib/productivityService";
 import { CourierRecord } from "@/types/productivity";
 
@@ -11,6 +11,10 @@ export async function POST(req: NextRequest) {
   const access = await resolveActiveHubForSession(session);
   if (!access)
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  const readOnlyErr = denyIfReadOnlyAdmin(access, "menginput atau mengubah data Productivity");
+  if (readOnlyErr) {
+    return NextResponse.json({ error: readOnlyErr }, { status: 403 });
+  }
 
   let body: {
     records: Omit<CourierRecord, "nama_hub" | "submitted_at" | "submitted_by">[];

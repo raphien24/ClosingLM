@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useAuth } from "@/hooks/useAuth";
+import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   Trash2,
@@ -79,7 +79,7 @@ const FLEET_TYPES_TARGET = [
 ];
 
 function AdjustTargetContent() {
-  const { hubName } = useAuth();
+  const { hubName, isReadOnlyAdmin } = useUserProfileDisplay();
   const searchParams = useSearchParams();
   const weekFromUrl = searchParams.get("week");
 
@@ -212,8 +212,23 @@ function AdjustTargetContent() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* Form Kalibrasi Target */}
-          <div className="lg:col-span-5 bg-white/95 rounded-2xl border border-slate-200/90 dark:border-slate-800 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 shadow-sm overflow-hidden">
+          {/* Form Kalibrasi Target (Hanya untuk user dengan hak tulis / Owner) */}
+          {isReadOnlyAdmin ? (
+            <div className="lg:col-span-5 bg-white/95 rounded-2xl border border-sky-200 dark:border-sky-500/35 border-t-[3px] border-t-sky-500 shadow-sm p-6 space-y-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 flex items-center justify-center flex-shrink-0">
+                  <Target className="h-4 w-4" />
+                </div>
+                <h2 className="text-sm sm:text-base font-bold text-slate-800">
+                  Mode View Only ({hubName})
+                </h2>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                Untuk Hub <strong>{hubName}</strong> Anda hanya memiliki akses <strong>View</strong> (tidak dapat menambah, mengubah, atau menghapus Target Produktivitas). Pindah ke Hub milik Anda sendiri lewat menu profil jika ingin mengubah target.
+              </p>
+            </div>
+          ) : (
+            <div className="lg:col-span-5 bg-white/95 rounded-2xl border border-slate-200/90 dark:border-slate-800 border-t-[3px] border-t-amber-500 dark:border-t-amber-400 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 bg-gradient-to-r from-slate-50 to-amber-50/60 dark:from-slate-800/80 dark:to-amber-950/25 border-b border-slate-200/80 dark:border-slate-700/80 flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-amber-100/90 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 flex items-center justify-center ring-1 ring-amber-200/80 dark:ring-amber-700/40 flex-shrink-0">
                 <Target className="h-4 w-4" />
@@ -329,7 +344,8 @@ function AdjustTargetContent() {
                 <Save className="h-4 w-4" /> Simpan Target
               </Button>
             </form>
-          </div>
+            </div>
+          )}
 
           {/* Tabel Target Tersimpan */}
           <div className="lg:col-span-7 bg-white/95 rounded-2xl border border-slate-200/90 dark:border-slate-800 border-t-[3px] border-t-[#134074] dark:border-t-sky-500 shadow-sm overflow-hidden">
@@ -370,7 +386,14 @@ function AdjustTargetContent() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-[#eff4fa] dark:bg-slate-800/85 border-b border-slate-200 dark:border-slate-700">
-                      {["Minggu", "Contract", "Kendaraan", "Target", "Dibuat", "Hapus"].map(
+                      {[
+                        "Minggu",
+                        "Contract",
+                        "Kendaraan",
+                        "Target",
+                        "Dibuat",
+                        ...(!isReadOnlyAdmin ? ["Hapus"] : []),
+                      ].map(
                         (h) => (
                           <th
                             key={h}
@@ -421,15 +444,17 @@ function AdjustTargetContent() {
                               }) ?? a.created_at
                             : "-"}
                         </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => handleDelete(a)}
-                            title="Hapus target"
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
+                        {!isReadOnlyAdmin && (
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => handleDelete(a)}
+                              title="Hapus target"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>

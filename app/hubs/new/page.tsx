@@ -23,7 +23,7 @@ interface HubSummary {
 }
 
 export default function AddHubPage() {
-  const { isLoading: authLoading, isSuperAdmin } = useAuth();
+  const { isLoading: authLoading, isOwnerAdmin } = useAuth();
 
   const [hubs, setHubs] = useState<HubSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,10 +53,10 @@ export default function AddHubPage() {
   }, []);
 
   useEffect(() => {
-    if (!authLoading && isSuperAdmin) {
+    if (!authLoading && isOwnerAdmin) {
       fetchHubs();
     }
-  }, [authLoading, isSuperAdmin, fetchHubs]);
+  }, [authLoading, isOwnerAdmin, fetchHubs]);
 
   const filteredHubs = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -100,7 +100,7 @@ export default function AddHubPage() {
     }
   };
 
-  if (!authLoading && !isSuperAdmin) {
+  if (!authLoading && !isOwnerAdmin) {
     return (
       <div className="w-full px-3 sm:px-6 py-12 flex justify-center">
         <div className="max-w-md w-full bg-white rounded-xl border border-red-200 p-6 text-center space-y-3">
@@ -109,7 +109,7 @@ export default function AddHubPage() {
           </div>
           <h1 className="text-lg font-bold text-gray-900">Akses Dibatasi</h1>
           <p className="text-sm text-gray-500">
-            Halaman penambahan Hub Baru hanya tersedia untuk akun Super Admin.
+            Penambahan Hub Baru hanya tersedia untuk akun Owner. Akun Admin hanya memiliki akses View.
           </p>
         </div>
       </div>

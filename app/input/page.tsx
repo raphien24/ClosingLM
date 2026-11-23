@@ -8,7 +8,7 @@ import { OcrPreviewTable } from "@/components/input/OcrPreviewTable";
 import { ProductivityInputSection } from "@/components/productivity/ProductivityInputSection";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { useAuth } from "@/hooks/useAuth";
+import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { formatDate, detectAnomalies } from "@/lib/utils";
 import { todayWIB } from "@/lib/dateUtils";
 import { parseOcrText, detectParcelSweeperDates, extractBacklogSparse, extractExpediteSparse, isParcelSweeperPage } from "@/lib/ocrParser";
@@ -27,6 +27,7 @@ import {
   Loader2,
   Clock,
   XCircle,
+  ShieldAlert,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -119,7 +120,7 @@ function computeFieldConfidenceScore(
 }
 
 function UnifiedInputContent() {
-  const { hubName } = useAuth();
+  const { hubName, isReadOnlyAdmin, isLoading: authLoading } = useUserProfileDisplay();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -944,6 +945,37 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
       localStorage.removeItem(DRAFT_STORAGE_KEY);
     } catch {}
   };
+
+  if (!authLoading && isReadOnlyAdmin) {
+    return (
+      <div className="min-h-screen bg-[#e8eef5] dark:bg-transparent py-12 px-4 flex items-start justify-center">
+        <div className="max-w-lg w-full bg-white rounded-2xl border border-sky-200 dark:border-sky-500/35 shadow-sm p-7 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-300 flex items-center justify-center mx-auto">
+            <ShieldAlert className="h-6 w-6" />
+          </div>
+          <div className="space-y-1.5">
+            <h1 className="text-lg font-extrabold text-slate-900">
+              Mode View Only ({hubName || "Hub Lain"})
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              Untuk Hub <strong>{hubName || "ini"}</strong> Anda hanya memiliki akses <strong>View</strong>. Input dan edit data Closing maupun Productivity hanya dapat dilakukan di Hub milik Anda sendiri.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+            <Link href="/dashboard">
+              <Button>Dashboard Closing</Button>
+            </Link>
+            <Link href="/productivity/weekly">
+              <Button variant="outline">Weekly Productivity</Button>
+            </Link>
+            <Link href="/monitor-sameday">
+              <Button variant="outline">Monitor STD</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#e8eef5] dark:bg-transparent">

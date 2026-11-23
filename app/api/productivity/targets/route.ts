@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { resolveActiveHubForSession } from "@/lib/activeHub";
+import { denyIfReadOnlyAdmin, resolveActiveHubForSession } from "@/lib/activeHub";
 import { getTargetAppeals, submitTargetAppeal, deleteTargetAppeal } from "@/lib/productivityService";
 
 export async function GET(req: NextRequest) {
@@ -26,6 +26,10 @@ export async function POST(req: NextRequest) {
   const access = await resolveActiveHubForSession(session);
   if (!access)
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  const readOnlyErr = denyIfReadOnlyAdmin(access, "menambah atau mengubah target produktivitas");
+  if (readOnlyErr) {
+    return NextResponse.json({ error: readOnlyErr }, { status: 403 });
+  }
 
   let body: { week_start: string; contract_type: string; vehicle_type: string; target: number };
   try { body = await req.json(); }
@@ -56,6 +60,10 @@ export async function DELETE(req: NextRequest) {
   const access = await resolveActiveHubForSession(session);
   if (!access)
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  const readOnlyErr = denyIfReadOnlyAdmin(access, "menghapus target produktivitas");
+  if (readOnlyErr) {
+    return NextResponse.json({ error: readOnlyErr }, { status: 403 });
+  }
 
   let body: { week_start: string; contract_type: string; vehicle_type: string };
   try { body = await req.json(); }

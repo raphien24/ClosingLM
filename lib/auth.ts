@@ -1,8 +1,9 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import { getUserHubs } from "./userMapping";
+import { getAllHubs, getUserHubs } from "./userMapping";
 import { isOwnerAdminEmail, isSuperAdminEmail } from "./authConstants";
 import { isAdminEmail } from "./adminService";
+import { mergeAdminAllowedHubs } from "./activeHub";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -32,11 +33,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const extendedUser = session.user as typeof session.user & {
           hubName: string | null;
           hubs: string[];
+          writableHubs: string[];
           hubUser: string | null;
           isAuthorized: boolean;
           isExpired: boolean;
           isSuperAdmin: boolean;
           isOwnerAdmin: boolean;
+          isReadOnlyAdmin: boolean;
         };
         const userEmail = (session.user.email || token.email) as string | undefined;
         const hubs = Array.isArray(token.hubs)
@@ -44,17 +47,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           : token.hubName
             ? [token.hubName as string]
             : [];
-        extendedUser.hubName = (token.hubName as string | null) ?? hubs[0] ?? null;
-        extendedUser.hubs = hubs;
-        extendedUser.hubUser = (token.hubUser as string | null) ?? null;
-        extendedUser.isAuthorized = !isExpired && ((token.isAuthorized as boolean) ?? false);
-        extendedUser.isExpired = isExpired;
-        extendedUser.isSuperAdmin =
+        const resolvedIsAdmin =
           !isExpired &&
           (typeof token.isAdmin === "boolean"
             ? token.isAdmin
             : isSuperAdminEmail(userEmail));
-        extendedUser.isOwnerAdmin = !isExpired && isOwnerAdminEmail(userEmail);
+        const resolvedIsOwner = !isExpired && isOwnerAdminEmail(userEmail);
+        const activeHub = (token.hubName as string | null) ?? hubs[0] ?? null;
+        const writableHubs = Array.isArray(token.writableHubs)
+          ? (token.writableHubs as string[])
+          : !resolvedIsAdmin
+            ? hubs
+            : [];
+        const canEditActiveHub =
+          !resolvedIsAdmin ||
+          (Boolean(activeHub) &&
+            writableHubs.some(
+              (h) => h.toLowerCase() === activeHub!.toLowerCase()
+            ));
+
+        extendedUser.hubName = activeHub;
+        extendedUser.hubs = hubs;
+        extendedUser.writableHubs = writableHubs;
+        extendedUser.hubUser = (token.hubUser as string | null) ?? null;
+        extendedUser.isAuthorized = !isExpired && ((token.isAuthorized as boolean) ?? false);
+        extendedUser.isExpired = isExpired;
+        extendedUser.isSuperAdmin = resolvedIsAdmin;
+        extendedUser.isOwnerAdmin = resolvedIsOwner;
+        extendedUser.isReadOnlyAdmin = resolvedIsAdmin && !canEditActiveHub;
       }
       return session;
     },
@@ -86,9 +106,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (email && shouldFetch) {
         const isSuper = await isAdminEmail(email);
         try {
-          const hubInfo = await getUserHubs(email);
-          const hubs =
-            hubInfo.hubs.length > 0 ? hubInfo.hubs : isSuper ? ["Soko Hub"] : [];
+          const [hubInfo, allHubs] = await Promise.all([
+            getUserHubs(email),
+            isSuper ? getAllHubs().catch(() => [] as string[]) : Promise.resolve([] as string[]),
+          ]);
+          const hubs = isSuper
+            ? mergeAdminAllowedHubs(hubInfo.hubs, allHubs)
+            : hubInfo.hubs;
 
           const requestedHub =
             isUpdateTrigger &&
@@ -106,6 +130,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               : null;
 
           token.hubs = hubs;
+          token.writableHubs = hubInfo.hubs;
           token.hubName = matchedRequested ?? previousHub ?? hubs[0] ?? null;
           token.hubUser = hubInfo.nama_user ?? (isSuper ? (user?.name || "Admin") : null);
           token.isAuthorized = hubs.length > 0 || isSuper;
@@ -115,6 +140,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           console.error("Error looking up user hub:", error);
           if (isSuper) {
             token.hubs = ["Soko Hub"];
+            token.writableHubs = [];
             token.hubName = "Soko Hub";
             token.hubUser = user?.name || "Admin";
             token.isAuthorized = true;
@@ -122,6 +148,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             token.checkedAt = now;
           } else if (user) {
             token.hubs = [];
+            token.writableHubs = [];
             token.hubName = null;
             token.hubUser = null;
             token.isAuthorized = false;
@@ -148,11 +175,13 @@ declare module "next-auth" {
       image?: string | null;
       hubName: string | null;
       hubs?: string[];
+      writableHubs?: string[];
       hubUser: string | null;
       isAuthorized: boolean;
       isExpired?: boolean;
       isSuperAdmin?: boolean;
       isOwnerAdmin?: boolean;
+      isReadOnlyAdmin?: boolean;
     };
   }
 }

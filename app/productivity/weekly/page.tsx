@@ -10,7 +10,7 @@ import {
   NauticalChartBackdrop,
   SailorHelmVesselIcon,
 } from "@/components/productivity/MaritimeAnimations";
-import { useAuth } from "@/hooks/useAuth";
+import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { ProductivityKpi, CourierScheduleRow } from "@/types/productivity";
 import { format, startOfWeek, addWeeks, subWeeks } from "date-fns";
 import { ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Anchor } from "lucide-react";
@@ -49,7 +49,7 @@ function formatWeekLabel(weekStart: string): string {
 function DashboardWeeklyContent() {
   const searchParams = useSearchParams();
   const router       = useRouter();
-  const { hubName }  = useAuth();
+  const { hubName, isReadOnlyAdmin } = useUserProfileDisplay();
 
   const [weekStart, setWeekStart]   = useState(searchParams.get("week") || getMonday(new Date()));
   const [fleetType, setFleetType]   = useState<FleetTypeValue>(
@@ -194,7 +194,9 @@ function DashboardWeeklyContent() {
                 href={`/productivity/targets?week=${weekStart}`}
                 className="font-bold text-amber-800 underline hover:text-amber-950 transition-colors"
               >
-                Klik disini untuk menentukan target pada week tanggal {formatWeekLabel(weekStart)}
+                {isReadOnlyAdmin
+                  ? `Lihat daftar target pada week tanggal ${formatWeekLabel(weekStart)}`
+                  : `Klik disini untuk menentukan target pada week tanggal ${formatWeekLabel(weekStart)}`}
               </Link>
             </div>
           </div>
@@ -244,6 +246,7 @@ function DashboardWeeklyContent() {
               isLoading={schLoading}
               weekStart={weekStart}
               weekLabel={formatWeekLabel(weekStart)}
+              readOnly={isReadOnlyAdmin}
               onLeaveChange={() => fetchData({ silent: true })}
             />
           </div>

@@ -3,6 +3,7 @@ import type { Session } from "next-auth";
 import { auth } from "@/lib/auth";
 import {
   INVALID_HUB_NAME_CHARS,
+  isOwnerAdminEmail,
   isValidEmail,
 } from "@/lib/authConstants";
 import { isAdminEmail } from "@/lib/adminService";
@@ -20,6 +21,18 @@ async function requireSuperAdmin(session: Session | null) {
   if (!user.isAuthorized || !(await isAdminEmail(user.email))) {
     return NextResponse.json(
       { error: "Akses ditolak. Menu ini khusus Admin." },
+      { status: 403 }
+    );
+  }
+  return null;
+}
+
+async function requireOwnerAdmin(session: Session | null) {
+  const denied = await requireSuperAdmin(session);
+  if (denied) return denied;
+  if (!isOwnerAdminEmail(session?.user?.email)) {
+    return NextResponse.json(
+      { error: "Akses ditolak: Akun Admin hanya memiliki akses View (penambahan Hub baru khusus Owner)." },
       { status: 403 }
     );
   }
@@ -44,7 +57,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const session = await auth();
-  const denied = await requireSuperAdmin(session);
+  const denied = await requireOwnerAdmin(session);
   if (denied) return denied;
 
   let body: { nama_hub?: string; pic_email?: string; pic_name?: string };

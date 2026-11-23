@@ -65,7 +65,7 @@ export default function DashboardPage() {
 function DashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user, displayName, hubName, consistency } = useUserProfileDisplay();
+  const { user, displayName, hubName, consistency, isReadOnlyAdmin } = useUserProfileDisplay();
 
   const today = todayWIB();
   const [selectedDate, setSelectedDate] = useState(
@@ -371,6 +371,11 @@ function DashboardContent() {
                         {consistency.isConsistent && (
                           <ConsistentBadgePill reason={consistency.reason} />
                         )}
+                        {isReadOnlyAdmin && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-100 text-sky-800 border border-sky-200 dark:bg-sky-500/20 dark:text-sky-200 dark:border-sky-400/35">
+                            View Only ({hubName})
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-2 flex-wrap font-medium">
                         <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-semibold">
@@ -411,7 +416,7 @@ function DashboardContent() {
                           <span>Summary Today</span>
                         </button>
 
-                        {isToday && (
+                        {isToday && !isReadOnlyAdmin && (
                           <button
                             type="button"
                             onClick={handleConfirmAndSendSeaTalk}

@@ -62,8 +62,10 @@ export async function GET() {
       profile,
       isAdmin,
       isOwner,
+      isReadOnlyAdmin: access.isReadOnlyAdmin,
       activeHub,
       hubs: allowedHubs,
+      writableHubs: access.writableHubs,
       consistency: effectiveConsistency,
     });
   } catch (err) {

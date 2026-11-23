@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useUserProfileDisplay } from "@/hooks/useAuth";
 import { UserMapping } from "@/types/closing";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 
 export default function UsersPage() {
-  const { user, hubName } = useAuth();
+  const { user, hubName, isReadOnlyAdmin } = useUserProfileDisplay();
   const currentUserEmail = String(user?.email ?? "").trim().toLowerCase();
 
   const [users, setUsers] = useState<UserMapping[]>([]);
@@ -143,7 +143,9 @@ export default function UsersPage() {
             <UserPlus className="h-5 w-5 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Tambahkan Pengguna</h1>
+            <h1 className="text-xl font-bold text-gray-900">
+              {isReadOnlyAdmin ? "Daftar Pengguna Hub" : "Tambahkan Pengguna"}
+            </h1>
             <p className="text-sm text-gray-500">
               Kelola akses anggota tim untuk Hub:{" "}
               <span className="font-semibold text-blue-600">{hubName || "-"}</span>
@@ -153,8 +155,21 @@ export default function UsersPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Form Tambah Pengguna */}
-        <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+        {/* Form Tambah Pengguna (tersembunyi untuk Admin View-Only) */}
+        {isReadOnlyAdmin ? (
+          <div className="lg:col-span-5 bg-white rounded-xl border border-sky-200 dark:border-sky-500/35 shadow-sm p-6 space-y-2.5">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-sky-600 dark:text-sky-400" />
+              <h2 className="text-base font-semibold text-gray-800">
+                Mode View Only ({hubName || "-"})
+              </h2>
+            </div>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-300 leading-relaxed">
+              Untuk Hub <strong>{hubName || "ini"}</strong> Anda hanya memiliki akses <strong>View</strong> dan tidak dapat menambah, menonaktifkan, atau menghapus pengguna Hub.
+            </p>
+          </div>
+        ) : (
+          <div className="lg:col-span-5 bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
           <div>
             <h2 className="text-base font-semibold text-gray-800">
               Tambah Anggota Tim Hub
@@ -241,7 +256,8 @@ export default function UsersPage() {
               Tambahkan Pengguna
             </Button>
           </form>
-        </div>
+          </div>
+        )}
 
         {/* Daftar Pengguna Hub */}
         <div className="lg:col-span-7 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -275,9 +291,11 @@ export default function UsersPage() {
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">
                       Status
                     </th>
-                    <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase">
-                      Aksi
-                    </th>
+                    {!isReadOnlyAdmin && (
+                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase">
+                        Aksi
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -319,50 +337,52 @@ export default function UsersPage() {
                             {u.status === "active" ? "Active" : "Inactive"}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              disabled={isSelf || isBusy}
-                              onClick={() => handleToggleStatus(u)}
-                              title={
-                                isSelf
-                                  ? "Tidak dapat mengubah status akun Anda sendiri"
-                                  : u.status === "active"
-                                  ? "Nonaktifkan akses akun ini"
-                                  : "Aktifkan kembali akun ini"
-                              }
-                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                                isSelf
-                                  ? "opacity-40 cursor-not-allowed border-gray-200 text-gray-400"
-                                  : u.status === "active"
-                                  ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 cursor-pointer"
-                                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer"
-                              }`}
-                            >
-                              <Power className="h-3.5 w-3.5" />
-                              {u.status === "active" ? "Nonaktifkan" : "Aktifkan"}
-                            </button>
+                        {!isReadOnlyAdmin && (
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={isSelf || isBusy}
+                                onClick={() => handleToggleStatus(u)}
+                                title={
+                                  isSelf
+                                    ? "Tidak dapat mengubah status akun Anda sendiri"
+                                    : u.status === "active"
+                                    ? "Nonaktifkan akses akun ini"
+                                    : "Aktifkan kembali akun ini"
+                                }
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                                  isSelf
+                                    ? "opacity-40 cursor-not-allowed border-gray-200 text-gray-400"
+                                    : u.status === "active"
+                                    ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 cursor-pointer"
+                                    : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+                                }`}
+                              >
+                                <Power className="h-3.5 w-3.5" />
+                                {u.status === "active" ? "Nonaktifkan" : "Aktifkan"}
+                              </button>
 
-                            <button
-                              type="button"
-                              disabled={isSelf || isBusy}
-                              onClick={() => handleDelete(u)}
-                              title={
-                                isSelf
-                                  ? "Tidak dapat menghapus akun Anda sendiri"
-                                  : "Hapus pengguna dari hub"
-                              }
-                              className={`p-1.5 rounded-lg border transition-colors ${
-                                isSelf
-                                  ? "opacity-40 cursor-not-allowed border-gray-200 text-gray-300"
-                                  : "border-gray-200 text-gray-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 cursor-pointer"
-                              }`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        </td>
+                              <button
+                                type="button"
+                                disabled={isSelf || isBusy}
+                                onClick={() => handleDelete(u)}
+                                title={
+                                  isSelf
+                                    ? "Tidak dapat menghapus akun Anda sendiri"
+                                    : "Hapus pengguna dari hub"
+                                }
+                                className={`p-1.5 rounded-lg border transition-colors ${
+                                  isSelf
+                                    ? "opacity-40 cursor-not-allowed border-gray-200 text-gray-300"
+                                    : "border-gray-200 text-gray-400 hover:text-red-600 hover:bg-red-50 hover:border-red-200 cursor-pointer"
+                                }`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     );
                   })}

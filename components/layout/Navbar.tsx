@@ -213,9 +213,11 @@ export function Navbar() {
     user,
     hubName,
     hubs,
+    writableHubs,
     switchHub,
     isSuperAdmin,
     isOwnerAdmin,
+    isReadOnlyAdmin,
     consistency,
     displayName,
     avatarSrc,
@@ -226,6 +228,11 @@ export function Navbar() {
   const [isDark, setIsDark] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [switchingHub, setSwitchingHub] = useState<string | null>(null);
+  const [hubSearch, setHubSearch] = useState("");
+
+  const filteredSwitcherHubs = hubSearch.trim()
+    ? hubs.filter((h) => h.toLowerCase().includes(hubSearch.trim().toLowerCase()))
+    : hubs;
 
   const handleSwitchHub = async (targetHub: string) => {
     if (!targetHub || switchingHub) return;
@@ -283,18 +290,26 @@ export function Navbar() {
 
   const isProdActive = pathname.startsWith("/productivity");
 
-  const visibleProductivityLinks = productivityLinks.filter(
-    (item) => item.href !== "/productivity/all-hubs" || isSuperAdmin
+  const visibleMainLinks = mainLinks.filter(
+    (item) => !isReadOnlyAdmin || item.href !== "/input"
   );
+
+  const visibleProductivityLinks = productivityLinks.filter((item) => {
+    if (item.href === "/productivity/all-hubs" && !isSuperAdmin) return false;
+    if (isReadOnlyAdmin && item.href === "/input?tab=productivity") return false;
+    return true;
+  });
 
   const accessLinks: NavItem[] = [
     { href: "/profile", label: "Edit Profil", iconId: "profile" },
-    { href: "/users", label: "Tambahkan Pengguna", iconId: "users" },
-    ...(isSuperAdmin
-      ? [{ href: "/hubs/new", label: "Tambahkan Hub Baru", iconId: "hubs" as const, badge: "Admin" }]
-      : []),
+    {
+      href: "/users",
+      label: isReadOnlyAdmin ? "Daftar Pengguna Hub" : "Tambahkan Pengguna",
+      iconId: "users",
+    },
     ...(isOwnerAdmin
       ? [
+          { href: "/hubs/new", label: "Tambahkan Hub Baru", iconId: "hubs" as const, badge: "Owner" },
           { href: "/admin/manage", label: "Manage Admin", iconId: "admin" as const, badge: "Owner" },
           { href: "/settings", label: "Settings", iconId: "settings" as const, badge: "Owner" },
         ]
@@ -357,7 +372,7 @@ export function Navbar() {
 
           {/* Navigasi Utama Desktop */}
           <nav className="hidden md:flex items-center gap-1 min-[1680px]:gap-1.5 flex-1 min-w-0">
-            {mainLinks.map(({ href, label, compactLabel, iconId }) => {
+            {visibleMainLinks.map(({ href, label, compactLabel, iconId }) => {
               const active = isRouteActive(href, pathname);
               return (
                 <Link key={href} href={href} className={getDesktopTabClasses(active)}>
@@ -547,6 +562,11 @@ export function Navbar() {
                           </span>
                         )}
                       </span>
+                      {isReadOnlyAdmin && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-sky-500/20 text-sky-200 border border-sky-400/40">
+                          View Only
+                        </span>
+                      )}
                       {consistency.isConsistent && (
                         <ConsistentBadgePill compact reason={consistency.reason} />
                       )}
@@ -555,15 +575,32 @@ export function Navbar() {
 
                   {hubs.length > 1 && (
                     <div className="px-3 py-2.5 bg-[#0a1220] border-b border-amber-400/15">
-                      <p className="flex items-center gap-1.5 px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-300/80">
-                        <ArrowLeftRight className="h-3 w-3" />
-                        Ganti Hub Aktif ({hubs.length})
+                      <p className="flex items-center justify-between gap-1.5 px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-amber-300/80">
+                        <span className="inline-flex items-center gap-1.5">
+                          <ArrowLeftRight className="h-3 w-3" />
+                          {isReadOnlyAdmin ? `Lihat Hub (${hubs.length})` : `Ganti Hub Aktif (${hubs.length})`}
+                        </span>
+                        {isReadOnlyAdmin && (
+                          <span className="text-[9px] text-sky-300 font-semibold">View Only</span>
+                        )}
                       </p>
-                      <div className="space-y-1 max-h-36 overflow-y-auto pr-0.5">
-                        {hubs.map((h) => {
+                      {hubs.length > 6 && (
+                        <input
+                          type="text"
+                          value={hubSearch}
+                          onChange={(e) => setHubSearch(e.target.value)}
+                          placeholder="Cari nama Hub..."
+                          className="w-full mb-1.5 px-2.5 py-1 text-xs rounded-lg bg-[#0d1727] border border-amber-400/25 text-amber-50 placeholder:text-slate-400 focus:outline-none focus:border-amber-300"
+                        />
+                      )}
+                      <div className="space-y-1 max-h-52 overflow-y-auto pr-0.5">
+                        {filteredSwitcherHubs.map((h) => {
                           const isActiveHub =
                             hubName?.toLowerCase() === h.toLowerCase();
                           const isSwitching = switchingHub === h;
+                          const isOwnHub =
+                            isSuperAdmin &&
+                            writableHubs.some((w) => w.toLowerCase() === h.toLowerCase());
                           return (
                             <button
                               key={h}
@@ -577,7 +614,21 @@ export function Navbar() {
                                   : "text-slate-300 hover:bg-amber-400/10 hover:text-amber-100 border border-transparent"
                               )}
                             >
-                              <span className="truncate">{h}</span>
+                              <span className="truncate flex items-center gap-1.5">
+                                <span className="truncate">{h}</span>
+                                {isSuperAdmin && (
+                                  <span
+                                    className={cn(
+                                      "text-[9px] px-1.5 py-0 rounded font-bold uppercase flex-shrink-0",
+                                      isOwnHub
+                                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/35"
+                                        : "bg-slate-700/80 text-slate-300 border border-slate-600/70"
+                                    )}
+                                  >
+                                    {isOwnHub ? "Edit" : "View"}
+                                  </span>
+                                )}
+                              </span>
                               {isSwitching ? (
                                 <span className="text-[10px] text-amber-300 flex-shrink-0">
                                   ...
@@ -726,7 +777,7 @@ export function Navbar() {
                       <span className="font-bold">{hubName}</span>
                     </div>
                     {hubs.length > 1 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-amber-400/20">
+                      <div className="flex flex-wrap gap-1.5 pt-1 border-t border-amber-400/20 max-h-32 overflow-y-auto">
                         {hubs.map((h) => {
                           const isActiveHub =
                             hubName.toLowerCase() === h.toLowerCase();
@@ -763,7 +814,7 @@ export function Navbar() {
               <div className="flex-1 overflow-y-auto px-3 py-3.5 space-y-4">
                 <DrawerNavSection
                   title="Dek Utama"
-                  items={mainLinks}
+                  items={visibleMainLinks}
                   pathname={pathname}
                   isDark={isDark}
                   onNavigate={() => setMobileOpen(false)}

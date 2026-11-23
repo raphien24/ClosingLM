@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { resolveActiveHubForSession } from "@/lib/activeHub";
+import { denyIfReadOnlyAdmin, resolveActiveHubForSession } from "@/lib/activeHub";
 import { getSeaTalkWebhookUrl } from "@/lib/settingsService";
 import {
   prepareConfirmClosingForHub,
@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
   const access = await resolveActiveHubForSession(session);
   if (!access) {
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  }
+  const readOnlyErr = denyIfReadOnlyAdmin(access, "melakukan Confirm Closing & kirim ke SeaTalk");
+  if (readOnlyErr) {
+    return NextResponse.json({ error: readOnlyErr }, { status: 403 });
   }
 
   let body: { date?: string; imageDataUrl?: string };

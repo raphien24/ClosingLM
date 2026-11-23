@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { resolveActiveHubForSession } from "@/lib/activeHub";
+import { denyIfReadOnlyAdmin, resolveActiveHubForSession } from "@/lib/activeHub";
 import { appendRow, getSheetData, sortSheetByDateKey, updateRow } from "@/lib/sheets";
 import { closingDataToRow, detectAnomalies, rowToClosingData } from "@/lib/utils";
 import { normalizeToYMD, nowWIBTimestamp, todayWIB } from "@/lib/dateUtils";
@@ -52,6 +52,10 @@ export async function POST(req: NextRequest) {
   const access = await resolveActiveHubForSession(session);
   if (!access)
     return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  const readOnlyErr = denyIfReadOnlyAdmin(access, "menginput atau mengubah data Closing");
+  if (readOnlyErr) {
+    return NextResponse.json({ error: readOnlyErr }, { status: 403 });
+  }
 
   let body: { data: ClosingData; overwrite?: boolean };
   try { body = await req.json(); }
@@ -89,18 +93,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Otorisasi hub — user bisa mengisi salah satu hub yang terdaftar untuk emailnya
-  const matchedAllowedHub = access.allowedHubs.find(
+  // Otorisasi tulis hub — Admin non-Owner hanya boleh menulis ke Hub miliknya (writableHubs)
+  const matchedWritableHub = access.writableHubs.find(
     (h) => h.toLowerCase().trim() === data.nama_hub.toLowerCase().trim()
   );
-  if (!matchedAllowedHub)
+  if (!matchedWritableHub)
     return NextResponse.json(
       {
-        error: `Tidak bisa isi data hub "${data.nama_hub}". Hub yang tersedia: "${access.allowedHubs.join(", ")}"`,
+        error: `Tidak bisa isi data hub "${data.nama_hub}". Anda hanya dapat input di Hub milik Anda (${access.writableHubs.length > 0 ? access.writableHubs.join(", ") : "tidak ada"}).`,
       },
       { status: 403 }
     );
-  data.nama_hub = matchedAllowedHub;
+  data.nama_hub = matchedWritableHub;
 
   try {
     const sheetData = await getSheetData(SHEET, { skipCache: true });

@@ -10,10 +10,12 @@ export interface AuthUser {
   image: string | null | undefined;
   hubName: string | null;
   hubs?: string[];
+  writableHubs?: string[];
   hubUser: string | null;
   isAuthorized: boolean;
   isSuperAdmin?: boolean;
   isOwnerAdmin?: boolean;
+  isReadOnlyAdmin?: boolean;
 }
 
 export function useAuth() {
@@ -41,15 +43,25 @@ export function useAuth() {
     window.location.reload();
   };
 
+  const isOwnerAdmin = user?.isOwnerAdmin ?? isOwnerAdminEmail(user?.email);
+  const isSuperAdmin = user?.isSuperAdmin ?? isSuperAdminEmail(user?.email);
+
   return {
     user: user ?? null,
     isLoading: status === "loading",
     isAuthenticated: status === "authenticated",
     isAuthorized: user?.isAuthorized ?? false,
-    isSuperAdmin: user?.isSuperAdmin ?? isSuperAdminEmail(user?.email),
-    isOwnerAdmin: user?.isOwnerAdmin ?? isOwnerAdminEmail(user?.email),
+    isSuperAdmin,
+    isOwnerAdmin,
+    isReadOnlyAdmin: user?.isReadOnlyAdmin ?? (isSuperAdmin && !isOwnerAdmin),
     hubName: user?.hubName ?? null,
     hubs,
+    writableHubs:
+      Array.isArray(user?.writableHubs)
+        ? user.writableHubs
+        : !isSuperAdmin
+          ? hubs
+          : [],
     hubUser: user?.hubUser ?? null,
     refreshSession: update,
     switchHub,
@@ -84,16 +96,20 @@ export function useUserProfileDisplay() {
   const [customAvatar, setCustomAvatar] = useState<string>("");
   const [customName, setCustomName] = useState<string | null>(null);
   const [liveIsAdmin, setLiveIsAdmin] = useState<boolean | null>(null);
+  const [liveIsReadOnlyAdmin, setLiveIsReadOnlyAdmin] = useState<boolean | null>(null);
   const [liveActiveHub, setLiveActiveHub] = useState<string | null>(null);
   const [liveHubs, setLiveHubs] = useState<string[] | null>(null);
+  const [liveWritableHubs, setLiveWritableHubs] = useState<string[] | null>(null);
   const [consistency, setConsistency] = useState<HubConsistencyStatus>(DEFAULT_CONSISTENCY);
 
   useEffect(() => {
     setCustomAvatar("");
     setCustomName(null);
     setLiveIsAdmin(null);
+    setLiveIsReadOnlyAdmin(null);
     setLiveActiveHub(null);
     setLiveHubs(null);
+    setLiveWritableHubs(null);
     setConsistency(DEFAULT_CONSISTENCY);
     if (!auth.user?.email) return;
     let active = true;
@@ -104,11 +120,17 @@ export function useUserProfileDisplay() {
         setCustomAvatar(json.profile.avatar_url || "");
         if (json.profile.nama_user) setCustomName(json.profile.nama_user);
         if (typeof json.isAdmin === "boolean") setLiveIsAdmin(json.isAdmin);
+        if (typeof json.isReadOnlyAdmin === "boolean") {
+          setLiveIsReadOnlyAdmin(json.isReadOnlyAdmin);
+        }
         if (typeof json.activeHub === "string" && json.activeHub) {
           setLiveActiveHub(json.activeHub);
         }
         if (Array.isArray(json.hubs) && json.hubs.length > 0) {
           setLiveHubs(json.hubs);
+        }
+        if (Array.isArray(json.writableHubs)) {
+          setLiveWritableHubs(json.writableHubs);
         }
         if (json.consistency && typeof json.consistency.isConsistent === "boolean") {
           setConsistency({
@@ -159,7 +181,9 @@ export function useUserProfileDisplay() {
     ...auth,
     hubName: liveActiveHub ?? auth.hubName,
     hubs: liveHubs ?? auth.hubs,
+    writableHubs: liveWritableHubs ?? auth.writableHubs,
     isSuperAdmin: liveIsAdmin ?? auth.isSuperAdmin,
+    isReadOnlyAdmin: liveIsReadOnlyAdmin ?? auth.isReadOnlyAdmin,
     consistency,
     displayName,
     avatarSrc,

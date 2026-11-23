@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Session } from "next-auth";
 import { auth } from "@/lib/auth";
-import { resolveActiveHubForSession } from "@/lib/activeHub";
+import { denyIfReadOnlyAdmin, resolveActiveHubForSession } from "@/lib/activeHub";
 import { addCourierLeave, removeCourierLeave } from "@/lib/productivityService";
 
-async function getAuthorizedUser(session: Session | null) {
+async function getWritableLeaveUser(session: Session | null) {
   const access = await resolveActiveHubForSession(session);
-  if (!access) return null;
+  if (!access) return { error: "Akses ditolak", status: 403 as const };
+  const readOnlyErr = denyIfReadOnlyAdmin(access, "mengubah status cuti kurir");
+  if (readOnlyErr) return { error: readOnlyErr, status: 403 as const };
   return {
     email: access.email,
     hubName: access.activeHub,
@@ -17,8 +19,8 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await getAuthorizedUser(session);
-  if (!user) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  const user = await getWritableLeaveUser(session);
+  if ("error" in user) return NextResponse.json({ error: user.error }, { status: user.status });
 
   let body: { courier_id?: string; courier_name?: string; date?: string };
   try {
@@ -62,8 +64,8 @@ export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const user = await getAuthorizedUser(session);
-  if (!user) return NextResponse.json({ error: "Akses ditolak" }, { status: 403 });
+  const user = await getWritableLeaveUser(session);
+  if ("error" in user) return NextResponse.json({ error: user.error }, { status: user.status });
 
   let body: { courier_id?: string; date?: string };
   try {

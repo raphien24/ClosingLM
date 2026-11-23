@@ -25,6 +25,7 @@ interface Props {
   isLoading?: boolean;
   weekStart?: string;
   weekLabel?: string;
+  readOnly?: boolean;
   onLeaveChange?: () => void | Promise<void>;
 }
 
@@ -147,7 +148,7 @@ function DayDots({
   );
 }
 
-export function CourierTable({ data, isLoading, weekStart, weekLabel, onLeaveChange }: Props) {
+export function CourierTable({ data, isLoading, weekStart, weekLabel, readOnly = false, onLeaveChange }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("productivityPct");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedCourier, setSelectedCourier] = useState<CourierScheduleRow | null>(null);
@@ -176,7 +177,7 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel, onLeaveCha
     dayIdx: number,
     isCurrentlyLeave: boolean
   ) => {
-    if (!weekStart) return;
+    if (readOnly || !weekStart) return;
     const baseMonday = new Date(`${weekStart}T00:00:00`);
     if (isNaN(baseMonday.getTime())) return;
     const targetDate = addDays(baseMonday, dayIdx);
@@ -379,7 +380,7 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel, onLeaveCha
                   <DayDots
                     activeDays={row.activeDays}
                     leaveDays={row.leaveDays}
-                    interactive={Boolean(weekStart && isRiderDedicatedRow(row))}
+                    interactive={Boolean(!readOnly && weekStart && isRiderDedicatedRow(row))}
                     onDayClick={(dayKey, dayIdx, isLeave) =>
                       handleOpenLeaveModal(row, dayKey, dayIdx, isLeave)
                     }
@@ -429,7 +430,9 @@ export function CourierTable({ data, isLoading, weekStart, weekLabel, onLeaveCha
       <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 text-xs text-gray-500 flex items-center justify-between flex-wrap gap-2">
         <span>{data.length} kurir · Sorted by produktivitas</span>
         <span className="text-gray-400">
-          💡 Klik nama kurir untuk detail · Klik hari abu pada Rider Dedicated untuk tandai cuti
+          {readOnly
+            ? "💡 Klik nama kurir untuk detail (Mode View Only)"
+            : "💡 Klik nama kurir untuk detail · Klik hari abu pada Rider Dedicated untuk tandai cuti"}
         </span>
       </div>
 
