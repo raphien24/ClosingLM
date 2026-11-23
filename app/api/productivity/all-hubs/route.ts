@@ -3,8 +3,7 @@ import { auth } from "@/lib/auth";
 import { isAdminEmail } from "@/lib/adminService";
 import { getAllHubs } from "@/lib/userMapping";
 import { getAllHubsProductivitySummary } from "@/lib/productivityService";
-import { format, startOfWeek } from "date-fns";
-import { nowWIBDate } from "@/lib/dateUtils";
+import { getWIBMondayYMD, todayWIB } from "@/lib/dateUtils";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -24,11 +23,11 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const today = nowWIBDate();
-  const defaultMonday = format(startOfWeek(today, { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const [wibYear, wibMonth] = todayWIB().split("-").map(Number);
+  const defaultMonday = getWIBMondayYMD();
   const weekStart = searchParams.get("week_start") || defaultMonday;
-  const year = parseInt(searchParams.get("year") || String(today.getUTCFullYear()), 10);
-  const month = parseInt(searchParams.get("month") || String(today.getUTCMonth() + 1), 10);
+  const year = parseInt(searchParams.get("year") || String(wibYear), 10);
+  const month = parseInt(searchParams.get("month") || String(wibMonth), 10);
   const excludeNew = searchParams.get("exclude_new") === "true";
 
   try {

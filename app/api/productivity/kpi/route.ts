@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { resolveActiveHubForSession } from "@/lib/activeHub";
 import { getKpiMetrics } from "@/lib/productivityService";
-import { format, startOfWeek, endOfWeek } from "date-fns";
-import { nowWIBDate } from "@/lib/dateUtils";
+import { getWIBMondayYMD } from "@/lib/dateUtils";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -15,9 +14,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   // week_start: YYYY-MM-DD (Senin), default minggu ini (WIB)
-  const today = nowWIBDate();
-  const defaultMonday = startOfWeek(today, { weekStartsOn: 1 });
-  const weekStartParam = searchParams.get("week_start") || format(defaultMonday, "yyyy-MM-dd");
+  const weekStartParam = searchParams.get("week_start") || getWIBMondayYMD();
   const contract       = searchParams.get("contract")   || "all";
   const vehicle        = searchParams.get("vehicle")    || "all";
   const excludeNew     = searchParams.get("exclude_new") === "true";

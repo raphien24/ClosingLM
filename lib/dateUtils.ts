@@ -64,6 +64,34 @@ export function parseYMD(ymd: string): Date {
 }
 
 /**
+ * Ambil string YYYY-MM-DD hari Senin (Senin–Minggu) dari string YYYY-MM-DD.
+ * Memakai aritmetika tanggal kalender UTC agar hasilnya sama persis baik di
+ * local (WIB UTC+7) maupun server deploy (UTC+0).
+ */
+export function getMondayYMD(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return ymd;
+  const utc = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const day = utc.getUTCDay(); // 0 = Minggu, 1 = Senin, ..., 6 = Sabtu
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  utc.setUTCDate(utc.getUTCDate() + diffToMonday);
+  return utc.toISOString().slice(0, 10);
+}
+
+/**
+ * Ambil string YYYY-MM-DD hari Senin untuk waktu saat ini dalam timezone Asia/Jakarta (WIB).
+ */
+export function getWIBMondayYMD(date: Date = new Date()): string {
+  const wibYMD = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+  return getMondayYMD(wibYMD);
+}
+
+/**
  * Konversi Google Sheets serial date number (misal 46333) ke YYYY-MM-DD
  */
 export function serialToYMD(serial: number): string {

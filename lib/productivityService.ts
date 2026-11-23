@@ -14,8 +14,8 @@ import {
   WeeklyActionPlanItem,
   getDefaultTarget,
 } from "@/types/productivity";
-import { format, startOfWeek } from "date-fns";
-import { formatDateForSheet, nowWIBTimestamp, parseTimestamp, serialToYMD } from "./dateUtils";
+import { format } from "date-fns";
+import { getMondayYMD, nowWIBTimestamp, parseTimestamp, serialToYMD } from "./dateUtils";
 import { parseSheetNumber } from "./utils";
 import { normalizeContractType, normalizeVehicleType } from "./fmsParser";
 
@@ -513,12 +513,10 @@ function buildAppealMap(appeals: TargetAppeal[]): Map<string, number> {
 function buildMondayTargetMap(records: CourierRecord[]): Map<string, number> {
   const map = new Map<string, number>();
   for (const r of records) {
-    const d = parseDate(r.date);
-    if (!d) continue;
-    const dayOfWeek = d.getDay();
-    if (dayOfWeek === 1 && r.assigned_target && r.assigned_target > 0) {
-      const weekMondayStr = format(d, "yyyy-MM-dd");
-      const key = `${weekMondayStr}_${r.contract_type}_${r.vehicle_type}`;
+    const ymd = normalizeDateKey(r.date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) continue;
+    if (getMondayYMD(ymd) === ymd && r.assigned_target && r.assigned_target > 0) {
+      const key = `${ymd}_${r.contract_type}_${r.vehicle_type}`;
       if (!map.has(key)) map.set(key, r.assigned_target);
     }
   }
@@ -1306,7 +1304,7 @@ export async function getMonthlyMetrics(
   const monthStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
   const monthEnd   = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
-  const weekStartStr = format(startOfWeek(monthStart, { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const weekStartStr = getMondayYMD(`${year}-${String(month).padStart(2, "0")}-01`);
 
   const [allRaw, appeals, monthLeaves] = await Promise.all([
     getRawData(hubName),
@@ -1349,9 +1347,9 @@ export async function getMonthlyMetrics(
 
   // Hitung target setiap shift berdasarkan hari Senin di minggu shift tersebut (Senin–Minggu)
   const getShiftTarget = (r: { date: string; contract_type: string; vehicle_type: string }): number => {
-    const d = parseDate(r.date);
-    const shiftWeekStart = d
-      ? format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd")
+    const dKey = normalizeDateKey(r.date);
+    const shiftWeekStart = /^\d{4}-\d{2}-\d{2}$/.test(dKey)
+      ? getMondayYMD(dKey)
       : weekStartStr;
     return resolveTarget(r, shiftWeekStart, appealMap, mondayMap);
   };
@@ -1615,9 +1613,9 @@ export async function getMonthlyMetrics(
 
   const weekMap: Record<string, { delivered: number; shifts: number }> = {};
   allMonthActive.forEach((r) => {
-    const d = parseDate(r.date);
-    if (!d) return;
-    const wk = format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd");
+    const dKey = normalizeDateKey(r.date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dKey)) return;
+    const wk = getMondayYMD(dKey);
     if (!weekMap[wk]) weekMap[wk] = { delivered: 0, shifts: 0 };
     weekMap[wk].delivered += r.delivered || 0;
     weekMap[wk].shifts++;
@@ -1951,11 +1949,7 @@ export async function getDailyProductivityByHubs(
   const result = new Map<string, HubDailyProductivity>();
   if (hubNames.length === 0 || !targetDateYMD) return result;
 
-  const targetDateObj = new Date(targetDateYMD + "T00:00:00+07:00");
-  const weekStart = format(
-    startOfWeek(targetDateObj, { weekStartsOn: 1 }),
-    "yyyy-MM-dd"
-  );
+  const weekStart = getMondayYMD(targetDateYMD);
 
   const sheetNames: string[] = [];
   for (const hub of hubNames) {
@@ -2187,7 +2181,7 @@ export async function getAllHubsProductivitySummary(
   };
   const monthStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
   const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
-  const monthFallbackWeek = format(startOfWeek(monthStart, { weekStartsOn: 1 }), "yyyy-MM-dd");
+  const monthFallbackWeek = getMondayYMD(`${year}-${String(month).padStart(2, "0")}-01`);
 
   const sheetNames: string[] = [];
   for (const hub of hubNames) {
@@ -2290,9 +2284,9 @@ export async function getAllHubsProductivitySummary(
       : allMonthActive;
 
     const getShiftTarget = (r: { date: string; contract_type: string; vehicle_type: string }): number => {
-      const d = parseDate(r.date);
-      const shiftWeekStart = d
-        ? format(startOfWeek(d, { weekStartsOn: 1 }), "yyyy-MM-dd")
+      const dKey = normalizeDateKey(r.date);
+      const shiftWeekStart = /^\d{4}-\d{2}-\d{2}$/.test(dKey)
+        ? getMondayYMD(dKey)
         : monthFallbackWeek;
       return resolveTarget(r, shiftWeekStart, appealMap, mondayMap);
     };
