@@ -349,12 +349,12 @@ function DashboardContent() {
             }`}
           >
             {/* Page Header — Captain's Logbook Command */}
-            <div className="dash-hero relative overflow-hidden bg-gradient-to-r from-[#fffdf9] via-[#f8fafd] to-[#eef4f9] dark:from-[#121d2f] dark:via-[#142338] dark:to-[#10293a] border border-slate-200/90 dark:border-slate-700/80 border-l-4 border-l-amber-600 dark:border-l-amber-400 text-slate-900 dark:text-white rounded-2xl px-5 py-4 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)]">
+            <div className="dash-hero relative overflow-hidden bg-gradient-to-r from-[#fffdf9] via-[#f8fafd] to-[#eef4f9] dark:from-[#121d2f] dark:via-[#142338] dark:to-[#10293a] border border-slate-200/90 dark:border-slate-700/80 border-l-4 border-l-amber-600 dark:border-l-amber-400 text-slate-900 dark:text-white rounded-2xl px-4 sm:px-5 py-3 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.14)] dark:shadow-[0_10px_28px_-10px_rgba(0,0,0,0.45)]">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-amber-500/75 via-amber-300/60 to-transparent" />
               <NauticalChartBackdrop />
 
-              <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-3.5 sm:gap-5">
+              <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                   <div className="flex items-center gap-3.5">
                     <LighthouseBeaconIcon />
                     <div>
@@ -393,19 +393,19 @@ function DashboardContent() {
                         aria-hidden="true"
                         className="hidden sm:block h-10 w-[1.5px] bg-gradient-to-b from-transparent via-amber-500/60 dark:via-amber-400/50 to-transparent"
                       />
-                      <div className="flex flex-wrap items-center gap-2.5">
+                      <div className="inline-flex flex-col items-stretch gap-1">
                         <button
                           type="button"
                           onClick={handleOpenSummaryToday}
                           disabled={isLoadingSummaryToday}
                           title={`Lihat summary closing & productivity ${hubName} (${formatDate(selectedDate)})`}
-                          className="group inline-flex items-center gap-2.5 pl-2 pr-3.5 py-1.5 rounded-xl text-sm font-bold bg-gradient-to-b from-white to-[#fcf7ec] hover:from-[#fffdf7] hover:to-[#faeecd] text-slate-800 border border-amber-300/80 hover:border-amber-500/85 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.1),inset_0_1px_0_rgba(255,255,255,0.9)] dark:from-[#16263f] dark:to-[#101c2f] dark:hover:from-[#1c304f] dark:hover:to-[#14233b] dark:text-amber-50 dark:border-amber-400/40 dark:hover:border-amber-300/80 dark:shadow-[inset_0_1px_0_rgba(253,230,138,0.12)] transition-all duration-150 cursor-pointer disabled:opacity-60"
+                          className="group inline-flex items-center gap-1.5 pl-1 pr-2.5 py-[3px] rounded-lg text-[11px] leading-tight font-bold bg-gradient-to-b from-white to-[#fcf7ec] hover:from-[#fffdf7] hover:to-[#faeecd] text-slate-800 border border-amber-300/80 hover:border-amber-500/85 shadow-[0_1px_4px_-1px_rgba(15,23,42,0.1),inset_0_1px_0_rgba(255,255,255,0.9)] dark:from-[#16263f] dark:to-[#101c2f] dark:hover:from-[#1c304f] dark:hover:to-[#14233b] dark:text-amber-50 dark:border-amber-400/40 dark:hover:border-amber-300/80 dark:shadow-[inset_0_1px_0_rgba(253,230,138,0.12)] transition-all duration-150 cursor-pointer disabled:opacity-60 whitespace-nowrap"
                         >
-                          <span className="w-7 h-7 rounded-lg bg-amber-100/90 dark:bg-amber-400/15 border border-amber-300/70 dark:border-amber-400/35 text-amber-700 dark:text-amber-300 flex items-center justify-center flex-shrink-0">
+                          <span className="w-[18px] h-[18px] rounded bg-amber-100/90 dark:bg-amber-400/15 border border-amber-300/70 dark:border-amber-400/35 text-amber-700 dark:text-amber-300 flex items-center justify-center flex-shrink-0">
                             {isLoadingSummaryToday ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
-                              <ClipboardList className="h-3.5 w-3.5" />
+                              <ClipboardList className="h-3 w-3" />
                             )}
                           </span>
                           <span>Summary Today</span>
@@ -421,30 +421,30 @@ function DashboardContent() {
                                 ? `Confirm Closing diblokir: ${loadedUserCompleteness.issues.join(" ")}`
                                 : `Ambil screenshot Summary Today ${hubName} (${formatDate(selectedDate)}) & kirim ke grup SeaTalk`
                             }
-                            className={`group inline-flex items-center gap-2.5 pl-2 pr-3.5 py-1.5 rounded-xl text-sm font-bold border transition-all duration-150 cursor-pointer disabled:opacity-60 ${
+                            className={`group inline-flex items-center gap-1.5 pl-1 pr-2.5 py-[3px] rounded-lg text-[11px] leading-tight font-bold border transition-all duration-150 cursor-pointer disabled:opacity-60 whitespace-nowrap ${
                               isConfirmBlocked
-                                ? "bg-gradient-to-b from-rose-950/90 to-red-950 hover:from-rose-900 hover:to-red-900 text-rose-50 border-rose-400/60 hover:border-rose-300 shadow-[0_4px_12px_-4px_rgba(190,18,60,0.45)]"
-                                : "bg-gradient-to-b from-[#1a2b46] to-[#0f1b2e] hover:from-[#213659] hover:to-[#132238] text-amber-50 border-amber-400/55 hover:border-amber-300/85 shadow-[0_4px_12px_-4px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(253,230,138,0.2)]"
+                                ? "bg-gradient-to-b from-rose-950/90 to-red-950 hover:from-rose-900 hover:to-red-900 text-rose-50 border-rose-400/60 hover:border-rose-300 shadow-[0_2px_8px_-3px_rgba(190,18,60,0.45)]"
+                                : "bg-gradient-to-b from-[#1a2b46] to-[#0f1b2e] hover:from-[#213659] hover:to-[#132238] text-amber-50 border-amber-400/55 hover:border-amber-300/85 shadow-[0_2px_8px_-3px_rgba(15,23,42,0.45),inset_0_1px_0_rgba(253,230,138,0.2)]"
                             }`}
                           >
                             <span
-                              className={`w-7 h-7 rounded-lg border flex items-center justify-center flex-shrink-0 ${
+                              className={`w-[18px] h-[18px] rounded border flex items-center justify-center flex-shrink-0 ${
                                 isConfirmBlocked
                                   ? "bg-rose-500/20 border-rose-300/45 text-rose-200"
                                   : "bg-amber-400/15 border-amber-300/40 text-amber-300"
                               }`}
                             >
                               {isSendingSeaTalk ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-3 w-3 animate-spin" />
                               ) : isConfirmBlocked ? (
-                                <Lock className="h-3.5 w-3.5" />
+                                <Lock className="h-3 w-3" />
                               ) : (
-                                <Send className="h-3.5 w-3.5" />
+                                <Send className="h-3 w-3" />
                               )}
                             </span>
                             <span>Confirm Closing &amp; Send Seatalk</span>
                             {isConfirmBlocked && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/25 border border-rose-300/40 text-rose-100">
+                              <span className="ml-auto px-1.5 py-[1px] rounded text-[9px] font-extrabold uppercase tracking-wider bg-rose-500/25 border border-rose-300/40 text-rose-100">
                                 Belum Lengkap
                               </span>
                             )}
