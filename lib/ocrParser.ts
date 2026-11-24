@@ -632,6 +632,23 @@ function extractFleetHeadCounts(text: string): {
     const mHdr = hcNorm.match(new RegExp(`(?:M[il1]?[tvr]{1,2}a|Mia|M[aei1]ra|W[il]s)\\b(?![^\\n]*Actual)[^\\n]*\\n\\s*(\\d{1,3})(?!\\s*\\/)\\b`, "i"));
     if (mHdr) mitraTotal = parseInt(mHdr[1], 10);
   }
+  // Jika baris label Dedicated / Kurir Plus / Mitra sejajar dan sebagian angka header di baris bawahnya rusak (mis. `1"  1"  6`), ekstrak per posisi kolom
+  if (dedicatedTotal === null || kurirPlusTotal === null || mitraTotal === null) {
+    const hdrLabelRe = new RegExp(
+      `De[a-z]{3,8}\\b[^\\n]*${KP_PAT}[^\\n]*(?:M[il1]?[tvr]{1,2}a|Mia|M[aei1]ra|W[il]s)\\b(?![^\\n]*Actual)[^\\n]*\\r?\\n([^\\r\\n]+)`,
+      "i"
+    );
+    const multiHdr = hcNorm.match(hdrLabelRe);
+    if (multiHdr) {
+      const hdrCells = multiHdr[1].trim().split(/\s{2,}/).filter(Boolean);
+      if (hdrCells.length >= 3) {
+        const numOrNull = (s: string) => (/^\d{1,3}$/.test(s.trim()) ? parseInt(s.trim(), 10) : null);
+        if (dedicatedTotal === null) dedicatedTotal = numOrNull(hdrCells[0]);
+        if (kurirPlusTotal === null) kurirPlusTotal = numOrNull(hdrCells[1]);
+        if (mitraTotal === null) mitraTotal = numOrNull(hdrCells[2]);
+      }
+    }
+  }
 
   // Parse satu sel rasio: dukung "X/Y", "-/-", dan kasus OCR kehilangan "/" (mis. "1818" -> 18, "22" -> 2, "272" -> 2)
   const parseHeadCountCell = (cell: string, colMaxHint?: number | null): number | null => {
@@ -649,10 +666,14 @@ function extractFleetHeadCounts(text: string): {
         return left;
       }
     }
-    if (token.length === 3 && token[0] === token[2] && parseInt(token, 10) > (colMaxHint ?? 200)) {
+    if (token.length === 3 && token[0] === token[2] && parseInt(token, 10) > (colMaxHint ?? 99)) {
       return parseInt(token[0], 10);
     }
-    if (token.length === 2 && token[0] === token[1] && colMaxHint != null && parseInt(token, 10) > colMaxHint) {
+    if (
+      token.length === 2 &&
+      token[0] === token[1] &&
+      (colMaxHint == null || parseInt(token, 10) > colMaxHint)
+    ) {
       return parseInt(token[0], 10);
     }
     const n = parseInt(token, 10);
@@ -752,15 +773,15 @@ function extractFleetHeadCounts(text: string): {
     const ded4Hint =
       dedicatedTotal !== null && result.dedicated_2wh !== null
         ? Math.max(0, dedicatedTotal - result.dedicated_2wh)
-        : dedicatedTotal;
+        : null;
     const kp4Hint =
       kurirPlusTotal !== null && result.kurir_plus_2wh !== null
         ? Math.max(0, kurirPlusTotal - result.kurir_plus_2wh)
-        : kurirPlusTotal;
+        : null;
     const m4Hint =
       mitraTotal !== null && result.mitra_2wh !== null
         ? Math.max(0, mitraTotal - result.mitra_2wh)
-        : mitraTotal;
+        : null;
     const row4Clean = normalizeRatioTokens(
       m4wh[1].split(/\n+/).map((l) => l.trim()).find(Boolean) ?? ""
     );
@@ -895,6 +916,44 @@ function extractFleetHeadCounts(text: string): {
       kurir_plus_4wh !== null && kurirPlusTotal >= kurir_plus_4wh
         ? kurirPlusTotal - kurir_plus_4wh
         : kurirPlusTotal;
+  }
+
+  // Koreksi angka digit kembar ("11" dari "1/1" tanpa "/") bila jumlah 2WH + 4WH melebihi total header
+  const isRepeatedDigitOf = (val: number, expected: number): boolean => {
+    const s = String(val);
+    return (
+      expected >= 0 &&
+      expected <= 9 &&
+      (s === `${expected}${expected}` || s === `${expected}${expected}${expected}`)
+    );
+  };
+  if (
+    dedicatedTotal !== null &&
+    result.dedicated_2wh !== null &&
+    result.dedicated_4wh !== null &&
+    result.dedicated_2wh + result.dedicated_4wh > dedicatedTotal
+  ) {
+    const rem4 = dedicatedTotal - result.dedicated_2wh;
+    const rem2 = dedicatedTotal - result.dedicated_4wh;
+    if (rem4 >= 0 && isRepeatedDigitOf(result.dedicated_4wh, rem4)) {
+      result.dedicated_4wh = rem4;
+    } else if (rem2 >= 0 && isRepeatedDigitOf(result.dedicated_2wh, rem2)) {
+      result.dedicated_2wh = rem2;
+    }
+  }
+  if (
+    mitraTotal !== null &&
+    result.mitra_2wh !== null &&
+    result.mitra_4wh !== null &&
+    result.mitra_2wh + result.mitra_4wh > mitraTotal
+  ) {
+    const rem2 = mitraTotal - result.mitra_4wh;
+    const rem4 = mitraTotal - result.mitra_2wh;
+    if (rem2 >= 0 && isRepeatedDigitOf(result.mitra_2wh, rem2)) {
+      result.mitra_2wh = rem2;
+    } else if (rem4 >= 0 && isRepeatedDigitOf(result.mitra_4wh, rem4)) {
+      result.mitra_4wh = rem4;
+    }
   }
 
   // 3. Jika Fleet Head Counts bernilai "-/-" / belum ada kurir ("Attendance Rate -%" tanpa rasio aktif > 0):
