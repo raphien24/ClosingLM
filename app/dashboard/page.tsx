@@ -474,7 +474,7 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* 5 Operational Insight Cards */}
+            {/* 6 Operational Insight Cards */}
             <div className="dash-insights">
               <ClosingInsightCards
                 data={closingData}

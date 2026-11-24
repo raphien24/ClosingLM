@@ -555,21 +555,43 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             }
             // Crop terisolasi kartu kiri Fleet Head Counts bebas dari Fleet Productivity kanan -> otoritatif menimpa angka order kanan (mis. 308/216/39)
             if (isFhcLeft && !/Delivered\s*\/\s*Handed|\b\d+\s*Orders?\b/i.test(cropText)) {
-              for (const fhcKey of [
+              const fhcKeysList = [
                 "dedicated_actual_2wh",
                 "kurir_plus_actual_2wh",
                 "dedicated_actual_4wh",
                 "mitra_actual_2wh",
                 "mitra_actual_4wh",
-              ] as const) {
+              ] as const;
+              // Deteksi bila pass penuh sebelumnya tercemar angka order dari kartu kanan Fleet Productivity (jauh lebih besar dari hasil crop kiri)
+              const fullPagePolluted =
+                !hasFhcLeftCrop &&
+                fhcKeysList.some((fk) => {
+                  const prevVal = parsed.row[fk];
+                  const cropVal = cropParsed.row[fk];
+                  return (
+                    prevVal != null &&
+                    cropVal != null &&
+                    prevVal > Math.max(20, cropVal * 2)
+                  );
+                });
+              if (fullPagePolluted) {
+                for (const fk of fhcKeysList) {
+                  if (cropParsed.row[fk] == null) {
+                    parsed.row[fk] = undefined;
+                  }
+                }
+              }
+              let anyCropVal = false;
+              for (const fhcKey of fhcKeysList) {
                 const cVal = cropParsed.row[fhcKey];
                 if (cVal == null) continue;
+                anyCropVal = true;
                 if (!hasFhcLeftCrop || (parsed.row[fhcKey] === 0 && cVal > 0)) {
                   parsed.row[fhcKey] = cVal;
                   cropTouchKeys.add(fhcKey);
                 }
               }
-              hasFhcLeftCrop = true;
+              if (anyCropVal) hasFhcLeftCrop = true;
             }
             // Bila crop 3x membaca rasio 2WH eksplisit sementara full-page hanya menurunkan dari total header (atau terbaca 0), utamakan crop
             if (
@@ -647,6 +669,7 @@ const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
             "mitra_actual_2wh",
             "mitra_actual_4wh",
           ] as const) {
+            if (cropTouchKeys.has(fhcKey)) continue;
             const altVal = altParsed.row[fhcKey];
             if (parsed.row[fhcKey] === 0 && altVal != null && altVal > 0) {
               parsed.row[fhcKey] = altVal;

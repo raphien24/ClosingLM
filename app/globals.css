@@ -767,6 +767,10 @@ html.dark .hover-lift:hover {
   opacity: 0;
   transform: translate3d(105px, 44px, 0) rotate(2deg) scale(0.91);
 }
+.dashboard-assemble-pre .dash-insights > div > *:nth-child(6) {
+  opacity: 0;
+  transform: translate3d(115px, 36px, 0) rotate(2deg) scale(0.91);
+}
 
 .dashboard-assemble-pre .dash-filter {
   opacity: 0;
@@ -797,6 +801,7 @@ html.dark .hover-lift:hover {
 .dashboard-assemble-enter .dash-insights > div > *:nth-child(3) { transition-delay: 180ms; }
 .dashboard-assemble-enter .dash-insights > div > *:nth-child(4) { transition-delay: 250ms; }
 .dashboard-assemble-enter .dash-insights > div > *:nth-child(5) { transition-delay: 200ms; }
+.dashboard-assemble-enter .dash-insights > div > *:nth-child(6) { transition-delay: 220ms; }
 .dashboard-assemble-enter .dash-filter { transition-delay: 320ms; }
 .dashboard-assemble-enter .dash-table { transition-delay: 390ms; }
 

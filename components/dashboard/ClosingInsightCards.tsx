@@ -9,6 +9,7 @@ import {
   Zap,
   PauseCircle,
   CheckCircle2,
+  Edit3,
 } from "lucide-react";
 
 interface Props {
@@ -40,8 +41,8 @@ const REQUIRED_CLOSING_KEYS: (keyof ClosingData)[] = [
 export function ClosingInsightCards({ data, isLoading, onSelectHub }: Props) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
             className="h-56 bg-white rounded-2xl border border-slate-200/80 p-4 animate-pulse"
@@ -127,8 +128,25 @@ export function ClosingInsightCards({ data, isLoading, onSelectHub }: Props) {
     .filter((r) => (r.fleet_oh_volume ?? 0) > 0)
     .sort((a, b) => (b.fleet_oh_volume ?? 0) - (a.fleet_oh_volume ?? 0));
 
+  // 6. Daftar Hub dengan jumlah field input manual (urut terbanyak ke paling sedikit)
+  const manualInputHubs = data
+    .map((r) => {
+      const fields = Array.from(new Set((r.manual_fields || []).filter(Boolean)));
+      return {
+        row: r,
+        nama_hub: r.nama_hub,
+        manualCount: fields.length,
+        fields,
+      };
+    })
+    .filter((item) => item.manualCount > 0)
+    .sort(
+      (a, b) =>
+        b.manualCount - a.manualCount || a.nama_hub.localeCompare(b.nama_hub)
+    );
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
       {/* Card 1: Hub Belum Mengisi Report */}
       <div className="hover-lift bg-gradient-to-br from-[#fff9fa] to-[#fdf0f2] dark:from-[#1e293b] dark:to-[#281921] rounded-2xl border border-rose-200/80 dark:border-slate-700/80 border-t-[3px] border-t-rose-500 shadow-sm p-4 flex flex-col">
         <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
@@ -414,6 +432,65 @@ export function ClosingInsightCards({ data, isLoading, onSelectHub }: Props) {
                 </span>
                 <span className="flex-shrink-0 font-extrabold text-purple-800 bg-purple-100 px-2 py-0.5 rounded-md">
                   {formatNumber(r.fleet_oh_volume)} vol
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Card 6: Hub dengan Jumlah Field Input Manual */}
+      <div className="hover-lift bg-gradient-to-br from-[#f6faff] to-[#e9f2fe] dark:from-[#1e293b] dark:to-[#152238] rounded-2xl border border-sky-200/80 dark:border-slate-700/80 border-t-[3px] border-t-sky-600 shadow-sm p-4 flex flex-col">
+        <div className="flex items-start justify-between gap-2 pb-3 border-b border-slate-100">
+          <div>
+            <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wide">
+              Input Manual Hub
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Jumlah field input manual terbanyak
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-extrabold ${
+                manualInputHubs.length > 0
+                  ? "bg-blue-100 text-blue-800"
+                  : "bg-emerald-100 text-emerald-700"
+              }`}
+            >
+              {manualInputHubs.length} Hub
+            </span>
+            <Edit3 className="h-4 w-4 text-blue-600" />
+          </div>
+        </div>
+
+        <div className="mt-3 flex-1 max-h-48 overflow-y-auto space-y-1.5 pr-1">
+          {manualInputHubs.length === 0 ? (
+            <div className="h-32 flex flex-col items-center justify-center text-center text-emerald-600 gap-1">
+              <CheckCircle2 className="h-6 w-6" />
+              <span className="text-xs font-semibold">
+                Tidak Ada Input Manual (0)!
+              </span>
+            </div>
+          ) : (
+            manualInputHubs.map((item) => (
+              <div
+                key={item.nama_hub}
+                onClick={() => onSelectHub?.(item.row)}
+                title={
+                  onSelectHub
+                    ? `Klik untuk detail ${item.nama_hub} (${item.manualCount} field manual: ${item.fields.join(", ")})`
+                    : `${item.manualCount} field manual: ${item.fields.join(", ")}`
+                }
+                className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-blue-50/70 border border-blue-100 dark:border-blue-800/40 text-xs transition-all ${
+                  onSelectHub ? "cursor-pointer hover:brightness-95" : ""
+                }`}
+              >
+                <span className="font-semibold text-slate-800 truncate">
+                  {item.nama_hub}
+                </span>
+                <span className="flex-shrink-0 font-extrabold text-blue-800 bg-blue-100 px-2 py-0.5 rounded-md">
+                  {formatNumber(item.manualCount)} field
                 </span>
               </div>
             ))
