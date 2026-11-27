@@ -1,6 +1,7 @@
 import { todayWIB } from "./dateUtils";
 import { getMonitorSamedayData } from "./samedayService";
 import {
+  checkWibCronWindow,
   sendSeaTalkImageMessage,
   sendSeaTalkTextMessage,
 } from "./seatalkReportService";
@@ -56,6 +57,21 @@ export async function runStdMonitorReportJob(options?: {
   dryRun?: boolean;
 }) {
   const targetDate = todayWIB();
+
+  const windowCheck = checkWibCronWindow(
+    options,
+    "Monitor STD 09:00",
+    "08:45",
+    "10:30"
+  );
+  if (!windowCheck.allowed) {
+    return {
+      skipped: true,
+      reason: windowCheck.reason,
+      currentWIB: windowCheck.currentWIB,
+      targetDate,
+    };
+  }
 
   if (!options?.force && !options?.dryRun) {
     const lastSent = await getSetting(LAST_STD_REPORT_KEY, { skipCache: true });

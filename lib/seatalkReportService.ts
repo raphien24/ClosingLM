@@ -30,6 +30,44 @@ export function shiftYMD(ymd: string, deltaDays: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
+function parseHHMMToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/**
+ * Guard jendela waktu WIB untuk mencegah cron eksternal yang telat berjam-jam
+ * mengirim laporan/reminder di luar jam semestinya.
+ * Dilewati bila `force=1` atau `dryRun=1`.
+ */
+export function checkWibCronWindow(
+  options: { force?: boolean; dryRun?: boolean } | undefined,
+  jobLabel: string,
+  startHHMM: string,
+  endHHMM: string,
+  now: Date = new Date()
+): { allowed: true } | { allowed: false; currentWIB: string; reason: string } {
+  if (options?.force || options?.dryRun) {
+    return { allowed: true };
+  }
+  const wib = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const hh = wib.getUTCHours();
+  const mm = wib.getUTCMinutes();
+  const nowMinutes = hh * 60 + mm;
+  const startMinutes = parseHHMMToMinutes(startHHMM);
+  const endMinutes = parseHHMMToMinutes(endHHMM);
+  const currentWIB = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+
+  if (nowMinutes < startMinutes || nowMinutes > endMinutes) {
+    return {
+      allowed: false,
+      currentWIB,
+      reason: `Di luar jendela waktu ${jobLabel} (${startHHMM}–${endHHMM} WIB). Saat ini ${currentWIB} WIB.`,
+    };
+  }
+  return { allowed: true };
+}
+
 /**
  * Validasi otorisasi untuk cron endpoints:
  * Menerima x-api-key, Authorization: Bearer <CRON_SECRET>, ?api_key=..., atau sesi Owner login.
@@ -254,6 +292,21 @@ export async function runClosingReminderJob(options?: {
 }) {
   const targetDate = normalizeToYMD(options?.targetDate || todayWIB());
 
+  const windowCheck = checkWibCronWindow(
+    options,
+    "Reminder Closing 23:20",
+    "23:00",
+    "23:58"
+  );
+  if (!windowCheck.allowed) {
+    return {
+      skipped: true,
+      reason: windowCheck.reason,
+      currentWIB: windowCheck.currentWIB,
+      targetDate,
+    };
+  }
+
   if (!options?.force && !options?.dryRun) {
     const lastSent = await getSetting(LAST_REMINDER_KEY, { skipCache: true });
     if (lastSent?.value === targetDate) {
@@ -351,6 +404,21 @@ export async function runDailySummaryJob(options?: {
   // Jam 00:05 WIB merangkum operasional hari kemarin (H-1) secara default
   const defaultDate = shiftYMD(todayWIB(), -1);
   const targetDate = normalizeToYMD(options?.targetDate || defaultDate);
+
+  const windowCheck = checkWibCronWindow(
+    options,
+    "Daily Summary 00:05",
+    "00:00",
+    "02:00"
+  );
+  if (!windowCheck.allowed) {
+    return {
+      skipped: true,
+      reason: windowCheck.reason,
+      currentWIB: windowCheck.currentWIB,
+      targetDate,
+    };
+  }
 
   if (!options?.force && !options?.dryRun) {
     const lastSent = await getSetting(LAST_SUMMARY_KEY, { skipCache: true });
@@ -791,6 +859,22 @@ export async function runAutoConfirmSokoJob(options?: {
   dryRun?: boolean;
 }) {
   const targetDate = todayWIB();
+
+  const windowCheck = checkWibCronWindow(
+    options,
+    "Auto Confirm Soko 23:19",
+    "23:00",
+    "23:58"
+  );
+  if (!windowCheck.allowed) {
+    return {
+      skipped: true,
+      reason: windowCheck.reason,
+      currentWIB: windowCheck.currentWIB,
+      targetDate,
+      hub: AUTO_CONFIRM_SOKO_HUB,
+    };
+  }
 
   if (!options?.force && !options?.dryRun) {
     const lastSent = await getSetting(LAST_SOKO_CONFIRM_KEY, { skipCache: true });

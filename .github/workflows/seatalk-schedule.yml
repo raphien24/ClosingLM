@@ -1,15 +1,8 @@
 name: SeaTalk Scheduled Closing Reports
 
 on:
-  schedule:
-    # 23:19 WIB = 16:19 UTC -> Auto Confirm Closing Soko Hub
-    - cron: "19 16 * * *"
-    # 23:20 WIB = 16:20 UTC -> Reminder Closing Harian
-    - cron: "20 16 * * *"
-    # 00:05 WIB = 17:05 UTC -> Daily Summary Keseluruhan Hub + PIC
-    - cron: "5 17 * * *"
-    # 09:00 WIB = 02:00 UTC -> Monitor STD Report
-    - cron: "0 2 * * *"
+  # Jadwal otomatis dinonaktifkan karena antrean schedule GitHub Actions sering delay 5-10 jam.
+  # Gunakan cron eksternal presisi (mis. cron-job.org) dengan timezone Asia/Jakarta.
   workflow_dispatch:
     inputs:
       job:
@@ -23,6 +16,11 @@ on:
           - daily-summary
           - std-report
           - all
+      force:
+        description: "Paksa kirim di luar jendela waktu & abaikan anti-duplikat harian"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   trigger-seatalk-report:
@@ -30,42 +28,43 @@ jobs:
     env:
       BASE_URL: ${{ vars.APP_BASE_URL || 'https://closing-lm.vercel.app' }}
       API_KEY: ${{ secrets.AUTO_UPLOAD_API_KEY }}
+      QS: ${{ github.event.inputs.force == 'true' && '?force=1' || '' }}
     steps:
       - name: Run 23:19 WIB Auto Confirm Closing Soko Hub
-        if: github.event.schedule == '19 16 * * *' || github.event.inputs.job == 'auto-confirm-soko' || github.event.inputs.job == 'all'
+        if: github.event.inputs.job == 'auto-confirm-soko' || github.event.inputs.job == 'all'
         run: |
           KEY="${API_KEY:-spx-soko-jtt08-secure-2026}"
-          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/auto-confirm-soko")
+          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/auto-confirm-soko${QS}")
           BODY=$(echo "$RES" | sed '$d')
           CODE=$(echo "$RES" | tail -n1)
           echo "HTTP $CODE: $BODY"
           test "$CODE" -ge 200 && test "$CODE" -lt 300
 
       - name: Run 23:20 WIB Reminder Closing
-        if: github.event.schedule == '20 16 * * *' || github.event.inputs.job == 'reminder-closing' || github.event.inputs.job == 'all'
+        if: github.event.inputs.job == 'reminder-closing' || github.event.inputs.job == 'all'
         run: |
           KEY="${API_KEY:-spx-soko-jtt08-secure-2026}"
-          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/reminder-closing")
+          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/reminder-closing${QS}")
           BODY=$(echo "$RES" | sed '$d')
           CODE=$(echo "$RES" | tail -n1)
           echo "HTTP $CODE: $BODY"
           test "$CODE" -ge 200 && test "$CODE" -lt 300
 
       - name: Run 00:05 WIB Daily Summary Report
-        if: github.event.schedule == '5 17 * * *' || github.event.inputs.job == 'daily-summary' || github.event.inputs.job == 'all'
+        if: github.event.inputs.job == 'daily-summary' || github.event.inputs.job == 'all'
         run: |
           KEY="${API_KEY:-spx-soko-jtt08-secure-2026}"
-          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/daily-summary")
+          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/daily-summary${QS}")
           BODY=$(echo "$RES" | sed '$d')
           CODE=$(echo "$RES" | tail -n1)
           echo "HTTP $CODE: $BODY"
           test "$CODE" -ge 200 && test "$CODE" -lt 300
 
       - name: Run 09:00 WIB Monitor STD Report
-        if: github.event.schedule == '0 2 * * *' || github.event.inputs.job == 'std-report' || github.event.inputs.job == 'all'
+        if: github.event.inputs.job == 'std-report' || github.event.inputs.job == 'all'
         run: |
           KEY="${API_KEY:-spx-soko-jtt08-secure-2026}"
-          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/std-report")
+          RES=$(curl -sS -w "\n%{http_code}" -X POST -H "x-api-key: ${KEY}" "${BASE_URL}/api/cron/std-report${QS}")
           BODY=$(echo "$RES" | sed '$d')
           CODE=$(echo "$RES" | tail -n1)
           echo "HTTP $CODE: $BODY"

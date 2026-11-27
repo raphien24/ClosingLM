@@ -431,7 +431,7 @@ function setupSeatalkScheduleTriggers() {
                   Jadwal Laporan &amp; Reminder Otomatis SeaTalk
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Otomatis berjalan via GitHub Actions &amp; Google Apps Script pada jam WIB. Anti-duplikat harian aktif.
+                  Otomatis berjalan sesuai jadwal WIB (cron eksternal / Google Apps Script) dengan guard jendela waktu &amp; anti-duplikat harian.
                 </p>
               </div>
             </div>
