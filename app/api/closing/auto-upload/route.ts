@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
 
       const ohVolume = Number(progress.lm_hub_onhold_in_system_inbound_lt_hub_cot_order_qty_td) || 0;
       const ohTotal =
+        Number(progress.lm_hub_total_return_to_hub_inbound_lt_hub_cot_order_qty_eod) ||
         Number(progress.lm_hub_total_onhold_order_qty_eod) ||
         Number(progress.lm_hub_total_onhold_order_qty_td) ||
         Number(progress.lm_hub_onhold_order_qty_eod) ||

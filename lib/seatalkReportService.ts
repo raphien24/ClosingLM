@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { auth } from "./auth";
-import { isOwnerAdminEmail } from "./authConstants";
+import { isOwnerAdminEmail, OWNER_ADMIN_EMAIL } from "./authConstants";
 import { normalizeToYMD, parseTimestamp, todayWIB } from "./dateUtils";
 import { getDailyProductivityByHubs, HubDailyProductivity } from "./productivityService";
 import { getSeaTalkWebhookUrl, getSetting, setSetting } from "./settingsService";
@@ -896,7 +896,7 @@ export async function runAutoConfirmSokoJob(options?: {
   const prepared = await prepareConfirmClosingForHub({
     hubName: AUTO_CONFIRM_SOKO_HUB,
     targetDate,
-    confirmedByLabel: "Auto Confirm 23:19 WIB",
+    confirmedByLabel: OWNER_ADMIN_EMAIL,
   });
 
   const hubImage = await generateHubConfirmImageBase64(prepared.combinedRow);
